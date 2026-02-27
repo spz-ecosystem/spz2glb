@@ -22,7 +22,7 @@ endif()
 
 find_package(ZLIB REQUIRED)
 
-cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR ".." "third_party" "fastgltf" OUTPUT_VARIABLE FASTGLTF_DIR)
+set(FASTGLTF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
 
 if(NOT EXISTS "${FASTGLTF_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "fastgltf not found at: ${FASTGLTF_DIR}")
