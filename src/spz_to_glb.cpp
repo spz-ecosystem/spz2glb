@@ -97,9 +97,9 @@ std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedDat
 
     z_stream strm = {};
     strm.next_in = const_cast<uint8_t*>(compressedData.data());
-    strm.avail_in = compressedData.size();
+    strm.avail_in = static_cast<uInt>(compressedData.size());
     strm.next_out = decompressed.data();
-    strm.avail_out = decompressed.size();
+    strm.avail_out = static_cast<uInt>(decompressed.size());
 
     if (inflateInit2(&strm, 16 + MAX_WBITS) != Z_OK) {
         throw std::runtime_error("Failed to initialize zlib decompression");
@@ -111,7 +111,7 @@ std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedDat
             size_t oldSize = decompressed.size();
             decompressed.resize(oldSize * 2);
             strm.next_out = decompressed.data() + oldSize;
-            strm.avail_out = oldSize;
+            strm.avail_out = static_cast<uInt>(oldSize);
         }
         ret = inflate(&strm, Z_NO_FLUSH);
     } while (ret == Z_OK);
