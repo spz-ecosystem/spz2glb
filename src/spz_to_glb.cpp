@@ -138,11 +138,10 @@ fastgltf::Asset createGltfAsset(std::vector<uint8_t>& spzData, const SpzHeader& 
     asset.extensionsRequired.emplace_back("KHR_gaussian_splatting");
     asset.extensionsRequired.emplace_back("KHR_gaussian_splatting_compression_spz_2");
 
-    asset.assetInfo = fastgltf::AssetInfo{
-        .gltfVersion = "2.0",
-        .copyright = "",
-        .generator = "spz_to_glb_fastgltf"
-    };
+    asset.assetInfo = fastgltf::AssetInfo();
+    asset.assetInfo.gltfVersion = "2.0";
+    asset.assetInfo.copyright = "";
+    asset.assetInfo.generator = "spz_to_glb_fastgltf";
 
     size_t spzSize = spzData.size();
 
@@ -154,9 +153,8 @@ fastgltf::Asset createGltfAsset(std::vector<uint8_t>& spzData, const SpzHeader& 
     }
 
     fastgltf::Buffer buffer;
-    buffer.data = fastgltf::sources::Vector{
-        .bytes = std::move(byteData)
-    };
+    buffer.data = fastgltf::sources::Vector();
+    buffer.data.bytes = std::move(byteData);
     buffer.byteLength = spzSize;
     asset.buffers.emplace_back(std::move(buffer));
 
