@@ -44,14 +44,12 @@ jobs:
       - name: Install dependencies (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          # Use vcpkg for ZLIB
-          git clone https://github.com/microsoft/vcpkg.git C:/vcpkg --depth 1
-          C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
-          C:/vcpkg/vcpkg install zlib:x64-windows
+          # Windows MSVC runners typically have ZLIB, let CMake find it naturally
+          # If not found, we'll handle it in the configure step
 
       - name: Configure CMake
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build spz2glb
         run: |
