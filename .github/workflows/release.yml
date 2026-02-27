@@ -48,9 +48,15 @@ jobs:
           C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
           C:/vcpkg/vcpkg install zlib:x64-windows
 
-      - name: Configure CMake
+      - name: Configure CMake (Windows)
+        if: matrix.os == 'windows-latest'
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Configure CMake (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build spz2glb
         run: |
