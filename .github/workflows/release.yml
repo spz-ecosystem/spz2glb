@@ -60,11 +60,15 @@ jobs:
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build spz2glb
+      - name: Build fastgltf (with warnings suppressed)
+        run: |
+          cmake --build build --config Release -j4 --target fastgltf
+
+      - name: Build spz2glb (strict warnings)
         run: |
           cmake --build build --config Release -j4 --target spz2glb
 
-      - name: Build spz_verify
+      - name: Build spz_verify (strict warnings)
         run: |
           cmake --build build --config Release -j4 --target spz_verify
 
