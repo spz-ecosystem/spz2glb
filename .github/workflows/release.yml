@@ -53,11 +53,11 @@ jobs:
 
       - name: Build spz2glb
         run: |
-          cmake --build build --config Release -j$(nproc) --target spz2glb
+          cmake --build build --config Release -j$(sysctl -n hw.ncpu 2>/dev/null || echo 4) --target spz2glb
 
       - name: Build spz_verify
         run: |
-          cmake --build build --config Release -j$(nproc) --target spz_verify
+          cmake --build build --config Release -j$(sysctl -n hw.ncpu 2>/dev/null || echo 4) --target spz_verify
 
       - name: Rename artifacts (Windows)
         if: matrix.os == 'windows-latest'
