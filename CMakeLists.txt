@@ -44,7 +44,15 @@ if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(fastgltf PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
 endif()
 
-install(TARGETS spz2glb
+add_executable(spz_verify
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+)
+
+target_link_libraries(spz_verify PRIVATE
+    ZLIB::ZLIB
+)
+
+install(TARGETS spz2glb spz_verify
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
