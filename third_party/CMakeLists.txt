@@ -1,3 +1,16 @@
+# Check if tests/examples directories exist and are non-empty, skip if empty
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt)
+    # tests dir exists with CMakeLists - would be processed
+else()
+    message(STATUS "tests directory is empty or missing - skipping")
+endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/CMakeLists.txt)
+    # examples dir exists with CMakeLists - would be processed
+else()
+    message(STATUS "examples directory is empty or missing - skipping")
+endif()
+
 cmake_minimum_required(VERSION 3.13)
 
 project(fastgltf VERSION 0.9.0 LANGUAGES C CXX)
