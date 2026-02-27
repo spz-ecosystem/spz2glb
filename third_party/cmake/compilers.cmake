@@ -1,3 +1,9 @@
+function(fastgltf_add_compile_options TARGET)
+    if(TARGET ${TARGET})
+        fastgltf_compiler_flags(${TARGET})
+    endif()
+endfunction()
+
 macro(fastgltf_compiler_flags TARGET)
     if (NOT ${TARGET} STREQUAL "" AND TARGET ${TARGET})
         # Note that simdjson automatically figures out which SIMD intrinsics to use at runtime based on
