@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.13)
 
 project(fastgltf VERSION 0.9.0 LANGUAGES C CXX)
 
+message(STATUS "=== fastgltf CMakeLists.txt ===")
+message(STATUS "CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
+
 option(FASTGLTF_USE_CUSTOM_SMALLVECTOR "Uses a custom SmallVector type optimised for small arrays" OFF)
 option(FASTGLTF_ENABLE_TESTS "Enables test targets for fastgltf" OFF)
 option(FASTGLTF_ENABLE_EXAMPLES "Enables example targets for fastgltf" OFF)
@@ -24,10 +27,16 @@ else()
     set(FASTGLTF_COMPILE_TARGET cxx_std_17)
 endif()
 
+message(STATUS "Including cmake/add_source_directory.cmake...")
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/add_source_directory.cmake)
+
+message(STATUS "Including cmake/compilers.cmake...")
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/compilers.cmake)
 
 set(SIMDJSON_DL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/simdjson")
+message(STATUS "SIMDJSON_DL_DIR: ${SIMDJSON_DL_DIR}")
+
+message(STATUS "Including cmake/dependencies.cmake...")
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/dependencies.cmake)
 
 set(FASTGLTF_HEADERS
@@ -47,12 +56,14 @@ set(FASTGLTF_SOURCES
         "src/io.cpp"
 )
 
+message(STATUS "Creating fastgltf static library...")
 add_library(fastgltf STATIC)
 target_sources(fastgltf PRIVATE ${FASTGLTF_SOURCES})
 target_sources(fastgltf PUBLIC FILE_SET HEADERS SET BASE_HEADERS ${FASTGLTF_HEADERS})
 target_include_directories(fastgltf PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>")
 target_compile_features(fastgltf PUBLIC ${FASTGLTF_COMPILE_TARGET})
 
+message(STATUS "Adding source directories...")
 fastgltf_add_source_directory(TARGET fastgltf FOLDER src)
 fastgltf_add_source_directory(TARGET fastgltf FOLDER deps/simdjson)
 fastgltf_add_source_directory(TARGET fastgltf FOLDER include)
@@ -69,4 +80,7 @@ set_target_properties(fastgltf PROPERTIES
         SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 
+message(STATUS "Applying compile options...")
 fastgltf_add_compile_options(fastgltf)
+
+message(STATUS "=== fastgltf configured successfully ===")
