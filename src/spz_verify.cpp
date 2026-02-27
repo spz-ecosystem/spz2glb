@@ -199,8 +199,8 @@ bool layer2VerifyLossless(const std::string& spzPath, const std::string& glbPath
     std::cout << "    Extracted from GLB: " << extractedData.size() << " bytes\n";
     
     std::cout << "\n[2] Computing MD5 hashes...\n";
-    std::string originalMd5 = Md5Hash::hash(originalData.data(), originalData.size());
-    std::string extractedMd5 = Md5Hash::hash(extractedData.data(), extractedData.size());
+    std::string originalMd5 = Md5Hash::hash(reinterpret_cast<const uint8_t*>(originalData.data()), originalData.size());
+    std::string extractedMd5 = Md5Hash::hash(reinterpret_cast<const uint8_t*>(extractedData.data()), extractedData.size());
     
     std::cout << "    Original MD5:  " << originalMd5 << "\n";
     std::cout << "    Extracted MD5: " << extractedMd5 << "\n";
@@ -227,7 +227,9 @@ bool layer3VerifyDecoding(const std::string& spzPath, const std::string& glbPath
     auto spzData = readFileBytes(spzPath);
     std::cout << "    Size: " << spzData.size() << " bytes\n";
     
-    bool isGzip = spzData.size() >= 2 && spzData[0] == 0x1f && spzData[1] == 0x8b;
+    bool isGzip = spzData.size() >= 2 && 
+                  static_cast<uint8_t>(spzData[0]) == 0x1f && 
+                  static_cast<uint8_t>(spzData[1]) == 0x8b;
     std::cout << "    Gzip: " << (isGzip ? "yes" : "no") << "\n";
     
     std::cout << "\n[2] Verifying GLB...\n";
