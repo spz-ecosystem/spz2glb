@@ -72,7 +72,6 @@ set(FASTGLTF_SOURCES
 message(STATUS "Creating fastgltf static library...")
 add_library(fastgltf STATIC)
 target_sources(fastgltf PRIVATE ${FASTGLTF_SOURCES})
-target_sources(fastgltf PUBLIC FILE_SET HEADERS SET BASE_HEADERS ${FASTGLTF_HEADERS})
 target_include_directories(fastgltf PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>")
 target_compile_features(fastgltf PUBLIC ${FASTGLTF_COMPILE_TARGET})
 
