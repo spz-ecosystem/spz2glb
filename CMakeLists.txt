@@ -30,8 +30,23 @@ endif()
 
 add_subdirectory(${FASTGLTF_DIR} fastgltf_build)
 
+set_target_properties(fastgltf PROPERTIES
+    COMPILE_WARNING_AS_ERROR OFF
+)
+
+if(MSVC)
+    target_compile_options(fastgltf PRIVATE /W0)
+else()
+    target_compile_options(fastgltf PRIVATE -w)
+endif()
+
 add_executable(spz2glb 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
+)
+
+target_compile_options(spz2glb PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/WX>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Werror>
 )
 
 target_link_libraries(spz2glb PRIVATE
@@ -46,6 +61,11 @@ endif()
 
 add_executable(spz_verify
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+)
+
+target_compile_options(spz_verify PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/WX>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Werror>
 )
 
 target_link_libraries(spz_verify PRIVATE
