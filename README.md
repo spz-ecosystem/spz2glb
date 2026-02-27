@@ -19,23 +19,20 @@
 - Windows: `spz2glb-windows-x64.exe`
 - Linux: `spz2glb-linux-x64`
 - macOS x64: `spz2glb-macos-x64`
-- macOS ARM: `spz2glb-macos-arm64`
 
-### 方式二：从源码编译
+### 方式二：从源码编译 (一键)
 
 ```bash
 # 克隆仓库
 git clone https://github.com/spz-ecosystem/spz2glb.git
 cd spz2glb
 
-# 创建构建目录
+# 一键编译 (无需手动安装依赖)
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-
-# 编译
 cmake --build build --config Release -j$(nproc)
 
 # 运行
-./build/spz2glb <input.spz> <output.glb>
+./build/spz2glb input.spz output.glb
 ```
 
 ### 依赖
@@ -43,6 +40,8 @@ cmake --build build --config Release -j$(nproc)
 - CMake 3.15+
 - C++20 编译器
 - ZLIB
+
+> **注意**: 本项目使用定制版 fastgltf，内置 simdjson v4.3.1，无需额外下载或配置。
 
 ## 使用方法
 
@@ -70,17 +69,21 @@ spz2glb input.spz output.glb
 
 ## 三层验证
 
-项目包含完整的验证脚本确保转换的正确性：
+项目包含完整的 C++ 验证工具确保转换的正确性：
+
+```bash
+# 运行所有验证
+./build/spz_verify all input.spz output.glb
+
+# 单独运行
+./build/spz_verify layer1 output.glb      # GLB 结构验证
+./build/spz_verify layer2 input.spz output.glb  # 二进制无损验证
+./build/spz_verify layer3 input.spz output.glb  # 解码一致性验证
+```
 
 ### Layer 1: GLB 结构验证
 
 验证生成的 GLB 文件符合规范：
-
-```bash
-python layer1_validate.py output.glb
-```
-
-验证项：
 - Magic number (glTF)
 - 版本号 (2)
 - extensionsUsed 包含 KHR_gaussian_splatting 和 KHR_gaussian_splatting_compression_spz_2
@@ -89,21 +92,11 @@ python layer1_validate.py output.glb
 
 ### Layer 2: 二进制无损验证
 
-确保 SPZ 数据在转换过程中没有丢失：
-
-```bash
-python layer2_lossless.py input.spz output.glb ./spz2glb
-```
-
-验证原始 SPZ 文件和从 GLB 提取的数据 MD5 完全一致。
+确保 SPZ 数据在转换过程中没有丢失：原始 SPZ 文件和从 GLB 提取的数据 MD5 完全一致。
 
 ### Layer 3: 解码一致性验证
 
-验证 GLB 结构和扩展完整性：
-
-```bash
-python layer3_decode_verify.py input.spz output.glb
-```
+验证 GLB 结构和扩展完整性。
 
 ## 技术细节
 
@@ -146,14 +139,16 @@ spz2glb/
 ├── CMakeLists.txt          # 构建配置
 ├── LICENSE                 # MIT 许可证
 ├── src/
-│   └── spz_to_glb.cpp      # 主程序源码
-├── third_party/           # 依赖 (fastgltf + simdjson)
-├── layer1_validate.py      # GLB 结构验证
-├── layer2_lossless.py      # 二进制无损验证
-├── layer3_decode_verify.py # 解码一致性验证
+│   ├── spz_to_glb.cpp     # 主程序源码
+│   └── spz_verify.cpp     # 三层验证工具
+├── third_party/            # 定制版 fastgltf + simdjson
+│   ├── CMakeLists.txt
+│   ├── include/fastgltf/  # fastgltf 头文件
+│   ├── src/               # fastgltf 源码
+│   └── deps/simdjson/    # simdjson v4.3.1 (内置)
 └── .github/
     └── workflows/
-        └── release.yml     # CI/CD 工作流
+        └── release.yml    # CI/CD 工作流
 ```
 
 ## 许可证
@@ -162,6 +157,15 @@ MIT License - 详见 [LICENSE](LICENSE)
 
 ## 相关项目
 
-- [fastgltf](https://github.com/spycrab/fastgltf) - 高性能 glTF 库
-- [simdjson](https://github.com/simdjson/simdjson) - 极速 JSON 解析库
+- [fastgltf](https://github.com/spycrab/fastgltf) - 高性能 glTF 库 (官方版本)
+- [simdjson](https://github.com/simdjson/simdjson) - 极速 JSON 解析库 v4.3.1
 - [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting 扩展
+- [spz-entropy](https://github.com/spz-ecosystem/spz-entropy) - SPZ 熵编码压缩工具
+
+## 定制说明
+
+本项目使用 **定制版 fastgltf**，包含以下修改：
+
+1. **simdjson v4.3.1 内置**: 不查找系统库，不从网络下载，使用内置源码
+2. **KHR_gaussian_splatting_compression_spz_2 扩展**: 支持 SPZ_2 压缩格式
+3. **一键编译**: 只需 `cmake && cmake --build`，无需手动配置依赖
