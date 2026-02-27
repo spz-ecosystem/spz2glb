@@ -216,7 +216,7 @@ int main(int argc, char** argv) {
         std::cout << "[INFO] SPZ version: " << (int)header.version << std::endl;
         std::cout << "[INFO] Num points: " << header.numPoints << std::endl;
         std::cout << "[INFO] SH degree: " << (int)header.shDegree << std::endl;
-        std::cout << "[INFO] SPZ size (raw compressed): " << spzData.size() / 1024 / 1024 << " MB" << std::endl;
+        std::cout << "[INFO] SPZ size (raw compressed): " << (spzData.size() / 1024 / 1024) << " MB" << std::endl;
 
         std::cout << "[INFO] Creating glTF Asset with KHR extensions" << std::endl;
         auto asset = createGltfAsset(spzData, header);
