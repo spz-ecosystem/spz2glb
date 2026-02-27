@@ -1,9 +1,11 @@
+# 自动构建和发布
+
 name: Release
 
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -25,26 +27,61 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install deps (Ubuntu)
+      - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev
 
-      - name: Install deps (macOS)
+      - name: Install dependencies (macOS)
         if: matrix.os == 'macos-latest'
-        run: brew install zlib
+        run: |
+          brew install zlib
 
-      - name: Build
+      - name: Configure CMake
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release -j$(nproc)
 
-      - name: Upload
+      - name: Build spz2glb
+        run: |
+          cmake --build build --config Release -j$(nproc) --target spz2glb
+
+      - name: Build spz_verify
+        run: |
+          cmake --build build --config Release -j$(nproc) --target spz_verify
+
+      - name: Rename artifacts (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cp build/spz2glb.exe ${{ matrix.artifact }}
+          cp build/spz_verify.exe spz_verify-windows-x64.exe
+
+      - name: Rename artifacts (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cp build/spz2glb ${{ matrix.artifact }}
+          cp build/spz_verify spz_verify-linux-x64
+
+      - name: Rename artifacts (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cp build/spz2glb ${{ matrix.artifact }}
+          cp build/spz_verify spz_verify-macos-x64
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: build/spz2glb${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+          path: ${{ matrix.artifact }}
+
+      - name: Upload verify artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-verify
+          path: spz_verify*
 
   release:
     needs: build
@@ -52,11 +89,15 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - uses: softprops/action-gh-release@v1
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
           files: artifacts/**/*
           generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
