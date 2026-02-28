@@ -76,6 +76,13 @@ install(TARGETS spz2glb spz_verify
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+# 可选：启用测试
+option(BUILD_TESTS "Build tests" OFF)
+if(BUILD_TESTS)
+    message(STATUS "Building tests...")
+    add_subdirectory(tests)
+endif()
+
 message(STATUS "")
 message(STATUS "========================================")
 message(STATUS "spz2glb - SPZ to GLB Converter v${PROJECT_VERSION}")
@@ -83,4 +90,5 @@ message(STATUS "========================================")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "KHR Gaussian Splatting: ${ENABLE_KHR_GAUSSIAN_SPLATTING}")
+message(STATUS "Build tests: ${BUILD_TESTS}")
 message(STATUS "========================================")
