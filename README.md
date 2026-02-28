@@ -9,8 +9,9 @@
 - **无损转换**: 压缩流模式，保持原始 SPZ 数据完整
 - **跨平台**: 支持 Windows、Linux、macOS (x64 + ARM)
 - **自动构建**: GitHub Actions 提供预编译二进制
+- **三层验证**: 完整的 C++ 验证工具确保转换正确性
 
-## 安装
+## 快速开始
 
 ### 方式一：下载预编译版本
 
@@ -18,60 +19,59 @@
 
 - Windows: `spz2glb-windows-x64.exe`
 - Linux: `spz2glb-linux-x64`
-- macOS x64: `spz2glb-macos-x64`
+- macOS: `spz2glb-macos-x64`
 
-### 方式二：从源码编译 (一键)
+### 方式二：从源码编译（一键编译）
 
 ```bash
-# 克隆仓库
+# 1. 克隆仓库
 git clone https://github.com/spz-ecosystem/spz2glb.git
 cd spz2glb
 
-# 一键编译 (无需手动安装依赖)
+# 2. 一键编译（自动处理所有依赖）
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 
-# 运行
+# 3. 运行
 ./build/spz2glb input.spz output.glb
 ```
 
-### 依赖
+**平台特定依赖安装**（编译前）：
 
-- CMake 3.15+
-- C++17 编译器
-- ZLIB (系统包管理器自动安装)
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y zlib1g-dev
 
-> **注意**: 
-> - Windows: 自动通过 vcpkg 安装 ZLIB
-> - Linux: `sudo apt-get install zlib1g-dev`
-> - macOS: `brew install zlib`
-> - 本项目使用定制版 fastgltf，内置 simdjson v4.3.1，无需额外下载或配置。
-> - **spz_verify** 只依赖 ZLIB，无需 fastgltf。
+# macOS
+brew install zlib
 
-### 依赖说明
-
-**spz2glb**:
-- ZLIB: gzip 压缩/解压缩
-- fastgltf (定制版): GLB 导出
-- simdjson v4.3.1 (嵌入式): JSON 解析
-
-**spz_verify**:
-- ZLIB: gzip 解压缩
-- 无其他依赖
+# Windows
+# 无需手动安装，CI 使用 vcpkg 自动安装
+```
 
 ## 使用方法
 
+### 转换器 (spz2glb)
+
 ```bash
-spz2glb input.spz output.glb
+spz2glb <input.spz> <output.glb>
 ```
 
-### 示例
+**完整示例**：
 
 ```bash
-# 转换文件
-./spz2glb model.spz model.glb
+# 转换单个文件
+./build/spz2glb model.spz model.glb
 
-# 输出
+# 批量转换
+for file in *.spz; do
+    ./build/spz2glb "$file" "${file%.spz}.glb"
+done
+```
+
+**输出示例**：
+
+```
 [INFO] Loading SPZ: model.spz
 [INFO] SPZ version: 2
 [INFO] Num points: 100000
@@ -83,47 +83,178 @@ spz2glb input.spz output.glb
 [INFO] GLB size: 16 MB
 ```
 
-## 三层验证
-
-项目包含完整的 C++ 验证工具 `spz_verify`，替代原有的 Python 脚本：
+### 三层验证工具 (spz_verify)
 
 ```bash
-# 运行所有验证
-./spz_verify all input.spz output.glb
-
-# 单独运行
-./spz_verify layer1 output.glb      # GLB 结构验证
-./spz_verify layer2 input.spz output.glb  # 二进制无损验证 (MD5)
-./spz_verify layer3 input.spz output.glb  # 解码一致性验证
+spz_verify <command> [options]
 ```
 
-**优势**：
-- ✅ 零依赖（仅需 ZLIB）
-- ✅ 跨平台（Windows/Linux/macOS）
-- ✅ 高性能（原生 C++ 实现）
-- ✅ 严格质量（零警告编译）
+**命令**：
 
-**已废弃的 Python 脚本**：
-- ~~layer1_validate.py~~ → 使用 `spz_verify layer1`
-- ~~layer2_lossless.py~~ → 使用 `spz_verify layer2`
-- ~~layer3_decode_verify.py~~ → 使用 `spz_verify layer3`
+```bash
+# 运行全部三层验证
+spz_verify all <input.spz> <output.glb>
 
-### Layer 1: GLB 结构验证
+# 单独运行某层验证
+spz_verify layer1 <output.glb>              # GLB 结构验证
+spz_verify layer2 <input.spz> <output.glb>  # 二进制无损验证 (MD5)
+spz_verify layer3 <input.spz> <output.glb>  # 解码一致性验证
+```
 
-验证生成的 GLB 文件符合规范：
-- Magic number (glTF)
-- 版本号 (2)
-- extensionsUsed 包含 KHR_gaussian_splatting 和 KHR_gaussian_splatting_compression_spz_2
-- buffers 配置正确
-- 压缩流模式 (attributes 为空)
+**完整示例**：
 
-### Layer 2: 二进制无损验证
+```bash
+# 1. 转换文件
+./build/spz2glb model.spz model.glb
 
-确保 SPZ 数据在转换过程中没有丢失：原始 SPZ 文件和从 GLB 提取的数据 MD5 完全一致。
+# 2. 运行所有验证
+./build/spz_verify all model.spz model.glb
 
-### Layer 3: 解码一致性验证
+# 或者单独验证
+./build/spz_verify layer1 model.glb
+./build/spz_verify layer2 model.spz model.glb
+./build/spz_verify layer3 model.spz model.glb
+```
 
-验证 GLB 结构和扩展完整性。
+**验证输出**：
+
+```
+Layer 1: GLB Structure Validation
+  ✓ Magic number: 0x46546C67 ("glTF")
+  ✓ Version: 2
+  ✓ extensionsUsed contains KHR_gaussian_splatting
+  ✓ extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
+  ✓ buffers configuration correct
+  ✓ Compression stream mode (attributes empty)
+  [PASS] Layer 1 validation passed
+
+Layer 2: Lossless Binary Validation
+  ✓ Original SPZ MD5: abc123...
+  ✓ Extracted data MD5: abc123...
+  ✓ MD5 match confirmed
+  [PASS] Layer 2 validation passed
+
+Layer 3: Decode Consistency Validation
+  ✓ GLB structure valid
+  ✓ Extension integrity check passed
+  [PASS] Layer 3 validation passed
+
+[SUCCESS] All 3 layers validation passed!
+```
+
+## 自动化验证脚本（推荐）
+
+创建 `verify.sh` 或 `verify.bat` 脚本自动执行转换 + 验证：
+
+**Linux/macOS** (`verify.sh`)：
+
+```bash
+#!/bin/bash
+set -e
+
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <input.spz>"
+    exit 1
+fi
+
+INPUT="$1"
+OUTPUT="${INPUT%.spz}.glb"
+SPZ2GLB="./build/spz2glb"
+VERIFY="./build/spz_verify"
+
+echo "=== SPZ to GLB Conversion & Verification ==="
+echo "Input:  $INPUT"
+echo "Output: $OUTPUT"
+echo ""
+
+# Step 1: Convert
+echo "[1/2] Converting SPZ to GLB..."
+$SPZ2GLB "$INPUT" "$OUTPUT"
+echo ""
+
+# Step 2: Verify
+echo "[2/2] Running 3-layer verification..."
+$VERIFY all "$INPUT" "$OUTPUT"
+echo ""
+
+echo "=== Complete ==="
+```
+
+**Windows** (`verify.bat`)：
+
+```batch
+@echo off
+setlocal enabledelayedexpansion
+
+if "%~1"=="" (
+    echo Usage: %~0 ^<input.spz^>
+    exit /b 1
+)
+
+set INPUT=%~1
+set OUTPUT=%INPUT:.spz=.glb%
+set SPZ2GLB=build\spz2glb.exe
+set VERIFY=build\spz_verify.exe
+
+echo === SPZ to GLB Conversion ^& Verification ===
+echo Input:  %INPUT%
+echo Output: %OUTPUT%
+echo.
+
+echo [1/2] Converting SPZ to GLB...
+%SPZ2GLB% "%INPUT%" "%OUTPUT%"
+echo.
+
+echo [2/2] Running 3-layer verification...
+%VERIFY% all "%INPUT%" "%OUTPUT%"
+echo.
+
+echo === Complete ===
+```
+
+**使用脚本**：
+
+```bash
+# Linux/macOS
+chmod +x verify.sh
+./verify.sh model.spz
+
+# Windows
+verify.bat model.spz
+```
+
+## 依赖
+
+- CMake 3.15+
+- C++17 编译器
+- ZLIB (系统包管理器自动安装)
+
+**依赖说明**：
+
+| 工具 | 依赖 | 用途 |
+|------|------|------|
+| spz2glb | ZLIB, fastgltf, simdjson | SPZ 转 GLB |
+| spz_verify | ZLIB only | 三层验证 |
+
+## 项目结构
+
+```
+spz2glb/
+├── CMakeLists.txt          # 构建配置
+├── LICENSE                 # MIT 许可证
+├── README.md               # 本文档
+├── src/
+│   ├── spz_to_glb.cpp     # 转换器源码
+│   └── spz_verify.cpp     # 三层验证工具源码
+├── third_party/            # 定制版 fastgltf + simdjson
+│   ├── CMakeLists.txt
+│   ├── include/fastgltf/
+│   ├── src/
+│   └── deps/simdjson/     # simdjson v4.3.1 (内置)
+└── .github/
+    └── workflows/
+        └── release.yml    # CI/CD 工作流
+```
 
 ## 技术细节
 
@@ -134,7 +265,7 @@ spz2glb input.spz output.glb
 - 不定义 accessors 或 attributes
 - 需要 SPZ 解码器的渲染器才能解析
 
-优势：
+**优势**：
 - **无损**: 不重新编码，直接复制 SPZ 流
 - **最小体积**: SPZ 压缩率约 10x
 - **最快加载**: 无需额外编解码开销
@@ -150,7 +281,7 @@ GLB Header (12 bytes)
 JSON Chunk
 ├── chunkLength
 ├── chunkType: 0x4E4F534A ("JSON")
-└── glTF JSON ( padded to 4-byte boundary)
+└── glTF JSON (padded to 4-byte boundary)
     └── KHR_gaussian_splatting_compression_spz_2 extension
 
 BIN Chunk
@@ -159,35 +290,15 @@ BIN Chunk
 └── Raw SPZ compressed data
 ```
 
-## 项目结构
-
-```
-spz2glb/
-├── CMakeLists.txt          # 构建配置
-├── LICENSE                 # MIT 许可证
-├── src/
-│   ├── spz_to_glb.cpp     # 主程序源码
-│   └── spz_verify.cpp     # 三层验证工具
-├── third_party/            # 定制版 fastgltf + simdjson
-│   ├── CMakeLists.txt
-│   ├── include/fastgltf/  # fastgltf 头文件
-│   ├── src/               # fastgltf 源码
-│   └── deps/simdjson/    # simdjson v4.3.1 (内置)
-└── .github/
-    └── workflows/
-        └── release.yml    # CI/CD 工作流
-```
-
 ## 许可证
 
 MIT License - 详见 [LICENSE](LICENSE)
 
 ## 相关项目
 
-- [fastgltf](https://github.com/spycrab/fastgltf) - 高性能 glTF 库 (官方版本)
+- [fastgltf](https://github.com/spycrab/fastgltf) - 高性能 glTF 库
 - [simdjson](https://github.com/simdjson/simdjson) - 极速 JSON 解析库 v4.3.1
 - [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting 扩展
-- [spz-entropy](https://github.com/spz-ecosystem/spz-entropy) - SPZ 熵编码压缩工具
 
 ## 定制说明
 
