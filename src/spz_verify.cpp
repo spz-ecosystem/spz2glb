@@ -447,7 +447,7 @@ void Md5Hash::update(const uint8_t* data, size_t len) {
 std::string Md5Hash::finalize() {
     uint8_t bits[8];
     for (int i = 0; i < 8; i++) {
-        bits[i] = (count * 8) >> (i * 8);
+        bits[i] = static_cast<uint8_t>((count * 8) >> (i * 8));
     }
     
     uint8_t pad = 0x80;
