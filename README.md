@@ -46,6 +46,18 @@ cmake --build build --config Release -j$(nproc)
 > - Linux: `sudo apt-get install zlib1g-dev`
 > - macOS: `brew install zlib`
 > - 本项目使用定制版 fastgltf，内置 simdjson v4.3.1，无需额外下载或配置。
+> - **spz_verify** 只依赖 ZLIB，无需 fastgltf。
+
+### 依赖说明
+
+**spz2glb**:
+- ZLIB: gzip 压缩/解压缩
+- fastgltf (定制版): GLB 导出
+- simdjson v4.3.1 (嵌入式): JSON 解析
+
+**spz_verify**:
+- ZLIB: gzip 解压缩
+- 无其他依赖
 
 ## 使用方法
 
