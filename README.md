@@ -38,10 +38,14 @@ cmake --build build --config Release -j$(nproc)
 ### 依赖
 
 - CMake 3.15+
-- C++20 编译器
-- ZLIB
+- C++17 编译器
+- ZLIB (系统包管理器自动安装)
 
-> **注意**: 本项目使用定制版 fastgltf，内置 simdjson v4.3.1，无需额外下载或配置。
+> **注意**: 
+> - Windows: 自动通过 vcpkg 安装 ZLIB
+> - Linux: `sudo apt-get install zlib1g-dev`
+> - macOS: `brew install zlib`
+> - 本项目使用定制版 fastgltf，内置 simdjson v4.3.1，无需额外下载或配置。
 
 ## 使用方法
 
