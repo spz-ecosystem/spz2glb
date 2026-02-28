@@ -72,23 +72,30 @@ jobs:
         run: |
           cmake --build build --config Release -j4 --target spz_verify
 
+      - name: Find built executables
+        run: |
+          find . -name "spz2glb*" -type f
+          find . -name "spz_verify*" -type f
+        shell: bash
+
       - name: Rename artifacts (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          cp build/spz2glb.exe ${{ matrix.artifact }}
-          cp build/spz_verify.exe spz_verify-windows-x64.exe
+          Get-ChildItem -Recurse -Filter "spz2glb.exe" | ForEach-Object { Copy-Item $_.FullName "$PWD/${{ matrix.artifact }}" }
+          Get-ChildItem -Recurse -Filter "spz_verify.exe" | ForEach-Object { Copy-Item $_.FullName "$PWD/spz_verify-windows-x64.exe" }
+        shell: pwsh
 
       - name: Rename artifacts (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          cp build/spz2glb ${{ matrix.artifact }}
-          cp build/spz_verify spz_verify-linux-x64
+          find . -name "spz2glb" -type f -exec cp {} ${{ matrix.artifact }} \;
+          find . -name "spz_verify" -type f -exec cp {} spz_verify-linux-x64 \;
 
       - name: Rename artifacts (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          cp build/spz2glb ${{ matrix.artifact }}
-          cp build/spz_verify spz_verify-macos-x64
+          find . -name "spz2glb" -type f -exec cp {} ${{ matrix.artifact }} \;
+          find . -name "spz_verify" -type f -exec cp {} spz_verify-macos-x64 \;
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
