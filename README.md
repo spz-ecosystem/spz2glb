@@ -85,17 +85,28 @@ spz2glb input.spz output.glb
 
 ## 三层验证
 
-项目包含完整的 C++ 验证工具确保转换的正确性：
+项目包含完整的 C++ 验证工具 `spz_verify`，替代原有的 Python 脚本：
 
 ```bash
 # 运行所有验证
-./build/spz_verify all input.spz output.glb
+./spz_verify all input.spz output.glb
 
 # 单独运行
-./build/spz_verify layer1 output.glb      # GLB 结构验证
-./build/spz_verify layer2 input.spz output.glb  # 二进制无损验证
-./build/spz_verify layer3 input.spz output.glb  # 解码一致性验证
+./spz_verify layer1 output.glb      # GLB 结构验证
+./spz_verify layer2 input.spz output.glb  # 二进制无损验证 (MD5)
+./spz_verify layer3 input.spz output.glb  # 解码一致性验证
 ```
+
+**优势**：
+- ✅ 零依赖（仅需 ZLIB）
+- ✅ 跨平台（Windows/Linux/macOS）
+- ✅ 高性能（原生 C++ 实现）
+- ✅ 严格质量（零警告编译）
+
+**已废弃的 Python 脚本**：
+- ~~layer1_validate.py~~ → 使用 `spz_verify layer1`
+- ~~layer2_lossless.py~~ → 使用 `spz_verify layer2`
+- ~~layer3_decode_verify.py~~ → 使用 `spz_verify layer3`
 
 ### Layer 1: GLB 结构验证
 
