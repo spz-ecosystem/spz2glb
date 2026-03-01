@@ -2,6 +2,20 @@
 
 将 SPZ (Gaussian Splatting Compression) 文件转换为 glTF 2.0 GLB 格式的工具。
 
+## 📚 文档
+
+- **Wiki**: https://github.com/spz-ecosystem/spz2glb/wiki
+  - [安装指南](https://github.com/spz-ecosystem/spz2glb/wiki/Installation)
+  - [快速开始](https://github.com/spz-ecosystem/spz2glb/wiki/Quick-Start)
+  - [使用方法](https://github.com/spz-ecosystem/spz2glb/wiki/Usage)
+  - [三层验证](https://github.com/spz-ecosystem/spz2glb/wiki/Verification)
+  - [批量处理](https://github.com/spz-ecosystem/spz2glb/wiki/Batch-Processing)
+  - [性能优化](https://github.com/spz-ecosystem/spz2glb/wiki/Performance)
+  - [故障排除](https://github.com/spz-ecosystem/spz2glb/wiki/Troubleshooting)
+  - [常见问题](https://github.com/spz-ecosystem/spz2glb/wiki/FAQ)
+  - [构建指南](https://github.com/spz-ecosystem/spz2glb/wiki/Building)
+  - [贡献指南](https://github.com/spz-ecosystem/spz2glb/wiki/Contributing)
+
 ## 特性
 
 - **SPZ 转 GLB**: 支持将压缩的 SPZ 文件转换为标准 GLB 格式
