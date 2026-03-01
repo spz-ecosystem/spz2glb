@@ -1,0 +1,327 @@
+# spz2glb - SPZ to GLB Converter
+
+A tool to convert SPZ (Gaussian Splatting Compression) files to glTF 2.0 GLB format.
+
+## 📚 Documentation
+
+- **Wiki**: https://github.com/spz-ecosystem/spz2glb/wiki
+  - [Installation Guide](https://github.com/spz-ecosystem/spz2glb/wiki/Installation)
+  - [Quick Start](https://github.com/spz-ecosystem/spz2glb/wiki/Quick-Start)
+  - [Usage](https://github.com/spz-ecosystem/spz2glb/wiki/Usage)
+  - [Three-Layer Verification](https://github.com/spz-ecosystem/spz2glb/wiki/Verification)
+  - [Batch Processing](https://github.com/spz-ecosystem/spz2glb/wiki/Batch-Processing)
+  - [Performance Optimization](https://github.com/spz-ecosystem/spz2glb/wiki/Performance)
+  - [Troubleshooting](https://github.com/spz-ecosystem/spz2glb/wiki/Troubleshooting)
+  - [FAQ](https://github.com/spz-ecosystem/spz2glb/wiki/FAQ)
+  - [Building Guide](https://github.com/spz-ecosystem/spz2glb/wiki/Building)
+  - [Contributing](https://github.com/spz-ecosystem/spz2glb/wiki/Contributing)
+
+## Features
+
+- **SPZ to GLB**: Convert compressed SPZ files to standard GLB format
+- **KHR_gaussian_splatting_compression_spz_2**: Integrated SPZ_2 compression extension
+- **Lossless Conversion**: Compression stream mode preserves original SPZ data integrity
+- **Cross-Platform**: Supports Windows, Linux, macOS (x64 + ARM)
+- **Automated Builds**: Pre-compiled binaries via GitHub Actions
+- **Three-Layer Verification**: Complete C++ verification tools ensure correct conversion
+
+## Quick Start
+
+### Option 1: Download Pre-compiled Binaries
+
+Download binaries for your platform from [Releases](https://github.com/spz-ecosystem/spz2glb/releases):
+
+- Windows: `spz2glb-windows-x64.exe`
+- Linux: `spz2glb-linux-x64`
+- macOS: `spz2glb-macos-x64`
+
+### Option 2: Build from Source (One-Click Build)
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/spz-ecosystem/spz2glb.git
+cd spz2glb
+
+# 2. One-click build (handles all dependencies automatically)
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j$(nproc)
+
+# 3. Run
+./build/spz2glb input.spz output.glb
+```
+
+**Platform-Specific Dependencies** (install before building):
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y zlib1g-dev
+
+# macOS
+brew install zlib
+
+# Windows
+# No manual installation required, CI uses vcpkg to install automatically
+```
+
+## Usage
+
+### Converter (spz2glb)
+
+```bash
+spz2glb <input.spz> <output.glb>
+```
+
+**Complete Examples**:
+
+```bash
+# Convert a single file
+./build/spz2glb model.spz model.glb
+
+# Batch conversion
+for file in *.spz; do
+    ./build/spz2glb "$file" "${file%.spz}.glb"
+done
+```
+
+**Output Example**:
+
+```
+[INFO] Loading SPZ: model.spz
+[INFO] SPZ version: 2
+[INFO] Num points: 100000
+[INFO] SH degree: 3
+[INFO] SPZ size (raw compressed): 15 MB
+[INFO] Creating glTF Asset with KHR extensions
+[INFO] Exporting GLB...
+[SUCCESS] GLB exported: model.glb
+[INFO] GLB size: 16 MB
+```
+
+### Three-Layer Verification Tool (spz_verify)
+
+```bash
+spz_verify <command> [options]
+```
+
+**Commands**:
+
+```bash
+# Run all three layers of verification
+spz_verify all <input.spz> <output.glb>
+
+# Run individual layer verification
+spz_verify layer1 <output.glb>              # GLB structure validation
+spz_verify layer2 <input.spz> <output.glb>  # Lossless binary validation (MD5)
+spz_verify layer3 <input.spz> <output.glb>  # Decode consistency validation
+```
+
+**Complete Examples**:
+
+```bash
+# 1. Convert file
+./build/spz2glb model.spz model.glb
+
+# 2. Run all verifications
+./build/spz_verify all model.spz model.glb
+
+# Or verify individually
+./build/spz_verify layer1 model.glb
+./build/spz_verify layer2 model.spz model.glb
+./build/spz_verify layer3 model.spz model.glb
+```
+
+**Verification Output**:
+
+```
+Layer 1: GLB Structure Validation
+  ✓ Magic number: 0x46546C67 ("glTF")
+  ✓ Version: 2
+  ✓ extensionsUsed contains KHR_gaussian_splatting
+  ✓ extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
+  ✓ buffers configuration correct
+  ✓ Compression stream mode (attributes empty)
+  [PASS] Layer 1 validation passed
+
+Layer 2: Lossless Binary Validation
+  ✓ Original SPZ MD5: abc123...
+  ✓ Extracted data MD5: abc123...
+  ✓ MD5 match confirmed
+  [PASS] Layer 2 validation passed
+
+Layer 3: Decode Consistency Validation
+  ✓ GLB structure valid
+  ✓ Extension integrity check passed
+  [PASS] Layer 3 validation passed
+
+[SUCCESS] All 3 layers validation passed!
+```
+
+## Automated Verification Script (Recommended)
+
+Create `verify.sh` or `verify.bat` script to automate conversion + verification:
+
+**Linux/macOS** (`verify.sh`):
+
+```bash
+#!/bin/bash
+set -e
+
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <input.spz>"
+    exit 1
+fi
+
+INPUT="$1"
+OUTPUT="${INPUT%.spz}.glb"
+SPZ2GLB="./build/spz2glb"
+VERIFY="./build/spz_verify"
+
+echo "=== SPZ to GLB Conversion & Verification ==="
+echo "Input:  $INPUT"
+echo "Output: $OUTPUT"
+echo ""
+
+# Step 1: Convert
+echo "[1/2] Converting SPZ to GLB..."
+$SPZ2GLB "$INPUT" "$OUTPUT"
+echo ""
+
+# Step 2: Verify
+echo "[2/2] Running 3-layer verification..."
+$VERIFY all "$INPUT" "$OUTPUT"
+echo ""
+
+echo "=== Complete ==="
+```
+
+**Windows** (`verify.bat`):
+
+```batch
+@echo off
+setlocal enabledelayedexpansion
+
+if "%~1"=="" (
+    echo Usage: %~0 ^<input.spz^>
+    exit /b 1
+)
+
+set INPUT=%~1
+set OUTPUT=%INPUT:.spz=.glb%
+set SPZ2GLB=build\spz2glb.exe
+set VERIFY=build\spz_verify.exe
+
+echo === SPZ to GLB Conversion ^& Verification ===
+echo Input:  %INPUT%
+echo Output: %OUTPUT%
+echo.
+
+echo [1/2] Converting SPZ to GLB...
+%SPZ2GLB% "%INPUT%" "%OUTPUT%"
+echo.
+
+echo [2/2] Running 3-layer verification...
+%VERIFY% all "%INPUT%" "%OUTPUT%"
+echo.
+
+echo === Complete ===
+```
+
+**Using the Script**:
+
+```bash
+# Linux/macOS
+chmod +x verify.sh
+./verify.sh model.spz
+
+# Windows
+verify.bat model.spz
+```
+
+## Dependencies
+
+- CMake 3.15+
+- C++17 compiler
+- ZLIB (automatically installed via system package manager)
+
+**Dependency Details**:
+
+| Tool | Dependencies | Purpose |
+|------|--------------|---------|
+| spz2glb | ZLIB, fastgltf, simdjson | SPZ to GLB conversion |
+| spz_verify | ZLIB only | Three-layer verification |
+
+## Project Structure
+
+```
+spz2glb/
+├── CMakeLists.txt          # Build configuration
+├── LICENSE                 # MIT License
+├── README.md               # This document
+├── README_EN.md            # English version
+├── src/
+│   ├── spz_to_glb.cpp     # Converter source code
+│   └── spz_verify.cpp     # Three-layer verification tool source code
+├── third_party/            # Customized fastgltf + simdjson
+│   ├── CMakeLists.txt
+│   ├── include/fastgltf/
+│   ├── src/
+│   └── deps/simdjson/     # simdjson v4.3.1 (built-in)
+└── .github/
+    └── workflows/
+        └── release.yml    # CI/CD workflow
+```
+
+## Technical Details
+
+### Compression Stream Mode
+
+This tool uses SPZ_2 specification compression stream mode:
+- SPZ compressed data stored directly in bufferView
+- No accessors or attributes defined
+- Requires renderer with SPZ decoder to parse
+
+**Advantages**:
+- **Lossless**: No re-encoding, direct copy of SPZ stream
+- **Minimal Size**: SPZ compression ratio ~10x
+- **Fastest Loading**: No additional codec overhead
+
+**Compatibility Note**:
+> Any SPZ-derived algorithm that is 100% compatible with the original SPZ format and strictly follows the SPZ_2 extension specification is perfectly supported by this converter.
+
+### GLB Structure
+
+```
+GLB Header (12 bytes)
+├── magic: 0x46546C67 ("glTF")
+├── version: 2
+└── length: total file size
+
+JSON Chunk
+├── chunkLength
+├── chunkType: 0x4E4F534A ("JSON")
+└── glTF JSON (padded to 4-byte boundary)
+    └── KHR_gaussian_splatting_compression_spz_2 extension
+
+BIN Chunk
+├── chunkLength
+├── chunkType: 0x004E4942 ("BIN\0")
+└── Raw SPZ compressed data
+```
+
+## License
+
+MIT License - See [LICENSE](LICENSE) for details
+
+## Related Projects
+
+- [fastgltf](https://github.com/spycrab/fastgltf) - High-performance glTF library
+- [simdjson](https://github.com/simdjson/simdjson) - Ultra-fast JSON parsing library v4.3.1
+- [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting Extension
+
+## Customization Notes
+
+This project uses a **customized version of fastgltf** with the following modifications:
+
+1. **simdjson v4.3.1 Built-in**: Does not search for system libraries, does not download from network, uses built-in source code
+2. **KHR_gaussian_splatting_compression_spz_2 Extension**: Supports SPZ_2 compression format
+3. **One-Click Build**: Just `cmake && cmake --build`, no manual dependency configuration required
