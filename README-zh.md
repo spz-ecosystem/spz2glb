@@ -256,7 +256,8 @@ verify.bat model.spz
 spz2glb/
 ├── CMakeLists.txt          # 构建配置
 ├── LICENSE                 # MIT 许可证
-├── README.md               # 本文档
+├── README.md               # 英文版文档
+├── README-zh.md            # 中文版文档
 ├── src/
 │   ├── spz_to_glb.cpp     # 转换器源码
 │   └── spz_verify.cpp     # 三层验证工具源码
@@ -306,6 +307,16 @@ BIN Chunk
 ├── chunkType: 0x004E4942 ("BIN\0")
 └── Raw SPZ compressed data
 ```
+
+## 免责声明
+
+**本项目为个人独立开发项目。**
+
+- 本项目由作者以个人身份独立开发
+- 本项目**不隶属于**任何院校、机构或雇主
+- 本项目**非职务成果**，非院校教学成果
+- 本项目观点仅代表作者个人立场
+- MIT License 授权 - 详见 [LICENSE](LICENSE)
 
 ## 许可证
 
