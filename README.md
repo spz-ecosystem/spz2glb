@@ -1,56 +1,56 @@
 # spz2glb - SPZ to GLB Converter
 
-A tool to convert SPZ (Gaussian Splatting Compression) files to glTF 2.0 GLB format.
+将 SPZ (Gaussian Splatting Compression) 文件转换为 glTF 2.0 GLB 格式的工具。
 
-## 📚 Documentation
+## 📚 文档
 
 - **Wiki**: https://github.com/spz-ecosystem/spz2glb/wiki
-  - [Installation Guide](https://github.com/spz-ecosystem/spz2glb/wiki/Installation)
-  - [Quick Start](https://github.com/spz-ecosystem/spz2glb/wiki/Quick-Start)
-  - [Usage](https://github.com/spz-ecosystem/spz2glb/wiki/Usage)
-  - [Three-Layer Verification](https://github.com/spz-ecosystem/spz2glb/wiki/Verification)
-  - [Batch Processing](https://github.com/spz-ecosystem/spz2glb/wiki/Batch-Processing)
-  - [Performance Optimization](https://github.com/spz-ecosystem/spz2glb/wiki/Performance)
-  - [Troubleshooting](https://github.com/spz-ecosystem/spz2glb/wiki/Troubleshooting)
-  - [FAQ](https://github.com/spz-ecosystem/spz2glb/wiki/FAQ)
-  - [Building Guide](https://github.com/spz-ecosystem/spz2glb/wiki/Building)
-  - [Contributing](https://github.com/spz-ecosystem/spz2glb/wiki/Contributing)
+  - [安装指南](https://github.com/spz-ecosystem/spz2glb/wiki/Installation)
+  - [快速开始](https://github.com/spz-ecosystem/spz2glb/wiki/Quick-Start)
+  - [使用方法](https://github.com/spz-ecosystem/spz2glb/wiki/Usage)
+  - [三层验证](https://github.com/spz-ecosystem/spz2glb/wiki/Verification)
+  - [批量处理](https://github.com/spz-ecosystem/spz2glb/wiki/Batch-Processing)
+  - [性能优化](https://github.com/spz-ecosystem/spz2glb/wiki/Performance)
+  - [故障排除](https://github.com/spz-ecosystem/spz2glb/wiki/Troubleshooting)
+  - [常见问题](https://github.com/spz-ecosystem/spz2glb/wiki/FAQ)
+  - [构建指南](https://github.com/spz-ecosystem/spz2glb/wiki/Building)
+  - [贡献指南](https://github.com/spz-ecosystem/spz2glb/wiki/Contributing)
 
-## Features
+## 特性
 
-- **SPZ to GLB**: Convert compressed SPZ files to standard GLB format
-- **KHR_gaussian_splatting_compression_spz_2**: Integrated SPZ_2 compression extension
-- **Lossless Conversion**: Compression stream mode preserves original SPZ data integrity
-- **Cross-Platform**: Supports Windows, Linux, macOS (x64 + ARM)
-- **Automated Builds**: Pre-compiled binaries via GitHub Actions
-- **Three-Layer Verification**: Complete C++ verification tools ensure correct conversion
+- **SPZ 转 GLB**: 支持将压缩的 SPZ 文件转换为标准 GLB 格式
+- **KHR_gaussian_splatting_compression_spz_2**: 集成 SPZ_2 压缩扩展
+- **无损转换**: 压缩流模式，保持原始 SPZ 数据完整
+- **跨平台**: 支持 Windows、Linux、macOS (x64 + ARM)
+- **自动构建**: GitHub Actions 提供预编译二进制
+- **三层验证**: 完整的 C++ 验证工具确保转换正确性
 
-## Quick Start
+## 快速开始
 
-### Option 1: Download Pre-compiled Binaries
+### 方式一：下载预编译版本
 
-Download binaries for your platform from [Releases](https://github.com/spz-ecosystem/spz2glb/releases):
+从 [Releases](https://github.com/spz-ecosystem/spz2glb/releases) 下载对应平台的二进制文件：
 
 - Windows: `spz2glb-windows-x64.exe`
 - Linux: `spz2glb-linux-x64`
 - macOS: `spz2glb-macos-x64`
 
-### Option 2: Build from Source (One-Click Build)
+### 方式二：从源码编译（一键编译）
 
 ```bash
-# 1. Clone the repository
+# 1. 克隆仓库
 git clone https://github.com/spz-ecosystem/spz2glb.git
 cd spz2glb
 
-# 2. One-click build (handles all dependencies automatically)
+# 2. 一键编译（自动处理所有依赖）
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 
-# 3. Run
+# 3. 运行
 ./build/spz2glb input.spz output.glb
 ```
 
-**Platform-Specific Dependencies** (install before building):
+**平台特定依赖安装**（编译前）：
 
 ```bash
 # Ubuntu/Debian
@@ -60,30 +60,30 @@ sudo apt-get install -y zlib1g-dev
 brew install zlib
 
 # Windows
-# No manual installation required, CI uses vcpkg to install automatically
+# 无需手动安装，CI 使用 vcpkg 自动安装
 ```
 
-## Usage
+## 使用方法
 
-### Converter (spz2glb)
+### 转换器 (spz2glb)
 
 ```bash
 spz2glb <input.spz> <output.glb>
 ```
 
-**Complete Examples**:
+**完整示例**：
 
 ```bash
-# Convert a single file
+# 转换单个文件
 ./build/spz2glb model.spz model.glb
 
-# Batch conversion
+# 批量转换
 for file in *.spz; do
     ./build/spz2glb "$file" "${file%.spz}.glb"
 done
 ```
 
-**Output Example**:
+**输出示例**：
 
 ```
 [INFO] Loading SPZ: model.spz
@@ -97,40 +97,40 @@ done
 [INFO] GLB size: 16 MB
 ```
 
-### Three-Layer Verification Tool (spz_verify)
+### 三层验证工具 (spz_verify)
 
 ```bash
 spz_verify <command> [options]
 ```
 
-**Commands**:
+**命令**：
 
 ```bash
-# Run all three layers of verification
+# 运行全部三层验证
 spz_verify all <input.spz> <output.glb>
 
-# Run individual layer verification
-spz_verify layer1 <output.glb>              # GLB structure validation
-spz_verify layer2 <input.spz> <output.glb>  # Lossless binary validation (MD5)
-spz_verify layer3 <input.spz> <output.glb>  # Decode consistency validation
+# 单独运行某层验证
+spz_verify layer1 <output.glb>              # GLB 结构验证
+spz_verify layer2 <input.spz> <output.glb>  # 二进制无损验证 (MD5)
+spz_verify layer3 <input.spz> <output.glb>  # 解码一致性验证
 ```
 
-**Complete Examples**:
+**完整示例**：
 
 ```bash
-# 1. Convert file
+# 1. 转换文件
 ./build/spz2glb model.spz model.glb
 
-# 2. Run all verifications
+# 2. 运行所有验证
 ./build/spz_verify all model.spz model.glb
 
-# Or verify individually
+# 或者单独验证
 ./build/spz_verify layer1 model.glb
 ./build/spz_verify layer2 model.spz model.glb
 ./build/spz_verify layer3 model.spz model.glb
 ```
 
-**Verification Output**:
+**验证输出**：
 
 ```
 Layer 1: GLB Structure Validation
@@ -156,11 +156,11 @@ Layer 3: Decode Consistency Validation
 [SUCCESS] All 3 layers validation passed!
 ```
 
-## Automated Verification Script (Recommended)
+## 自动化验证脚本（推荐）
 
-Create `verify.sh` or `verify.bat` script to automate conversion + verification:
+创建 `verify.sh` 或 `verify.bat` 脚本自动执行转换 + 验证：
 
-**Linux/macOS** (`verify.sh`):
+**Linux/macOS** (`verify.sh`)：
 
 ```bash
 #!/bin/bash
@@ -194,7 +194,7 @@ echo ""
 echo "=== Complete ==="
 ```
 
-**Windows** (`verify.bat`):
+**Windows** (`verify.bat`)：
 
 ```batch
 @echo off
@@ -226,7 +226,7 @@ echo.
 echo === Complete ===
 ```
 
-**Using the Script**:
+**使用脚本**：
 
 ```bash
 # Linux/macOS
@@ -237,58 +237,57 @@ chmod +x verify.sh
 verify.bat model.spz
 ```
 
-## Dependencies
+## 依赖
 
 - CMake 3.15+
-- C++17 compiler
-- ZLIB (automatically installed via system package manager)
+- C++17 编译器
+- ZLIB (系统包管理器自动安装)
 
-**Dependency Details**:
+**依赖说明**：
 
-| Tool | Dependencies | Purpose |
-|------|--------------|---------|
-| spz2glb | ZLIB, fastgltf, simdjson | SPZ to GLB conversion |
-| spz_verify | ZLIB only | Three-layer verification |
+| 工具 | 依赖 | 用途 |
+|------|------|------|
+| spz2glb | ZLIB, fastgltf, simdjson | SPZ 转 GLB |
+| spz_verify | ZLIB only | 三层验证 |
 
-## Project Structure
+## 项目结构
 
 ```
 spz2glb/
-├── CMakeLists.txt          # Build configuration
-├── LICENSE                 # MIT License
-├── README.md               # This document
-├── README_EN.md            # English version
+├── CMakeLists.txt          # 构建配置
+├── LICENSE                 # MIT 许可证
+├── README.md               # 本文档
 ├── src/
-│   ├── spz_to_glb.cpp     # Converter source code
-│   └── spz_verify.cpp     # Three-layer verification tool source code
-├── third_party/            # Customized fastgltf + simdjson
+│   ├── spz_to_glb.cpp     # 转换器源码
+│   └── spz_verify.cpp     # 三层验证工具源码
+├── third_party/            # 定制版 fastgltf + simdjson
 │   ├── CMakeLists.txt
 │   ├── include/fastgltf/
 │   ├── src/
-│   └── deps/simdjson/     # simdjson v4.3.1 (built-in)
+│   └── deps/simdjson/     # simdjson v4.3.1 (内置)
 └── .github/
     └── workflows/
-        └── release.yml    # CI/CD workflow
+        └── release.yml    # CI/CD 工作流
 ```
 
-## Technical Details
+## 技术细节
 
-### Compression Stream Mode
+### 压缩流模式
 
-This tool uses SPZ_2 specification compression stream mode:
-- SPZ compressed data stored directly in bufferView
-- No accessors or attributes defined
-- Requires renderer with SPZ decoder to parse
+本工具使用 SPZ_2 规范的压缩流模式：
+- SPZ 压缩数据直接存储在 bufferView 中
+- 不定义 accessors 或 attributes
+- 需要 SPZ 解码器的渲染器才能解析
 
-**Advantages**:
-- **Lossless**: No re-encoding, direct copy of SPZ stream
-- **Minimal Size**: SPZ compression ratio ~10x
-- **Fastest Loading**: No additional codec overhead
+**优势**：
+- **无损**: 不重新编码，直接复制 SPZ 流
+- **最小体积**: SPZ 压缩率约 10x
+- **最快加载**: 无需额外编解码开销
 
-**Compatibility Note**:
-> Any SPZ-derived algorithm that is 100% compatible with the original SPZ format and strictly follows the SPZ_2 extension specification is perfectly supported by this converter.
+**兼容性说明**：
+> 任何 SPZ 衍生算法，只要 100% 兼容原版 SPZ 格式，严格遵守 SPZ_2 扩展规范，本转换器就完美支持。
 
-### GLB Structure
+### GLB 结构
 
 ```
 GLB Header (12 bytes)
@@ -308,20 +307,30 @@ BIN Chunk
 └── Raw SPZ compressed data
 ```
 
-## License
+## Disclaimer
 
-MIT License - See [LICENSE](LICENSE) for details
+**This is a personal independent development project.**
 
-## Related Projects
+- This project is developed independently by the author in their personal capacity
+- This project is **not affiliated** with any university, institution, or employer
+- This is **not a work-for-hire** or institutional teaching achievement
+- The views and opinions expressed in this project are solely those of the author
+- MIT License applies - see [LICENSE](LICENSE) for details
 
-- [fastgltf](https://github.com/spycrab/fastgltf) - High-performance glTF library
-- [simdjson](https://github.com/simdjson/simdjson) - Ultra-fast JSON parsing library v4.3.1
-- [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting Extension
+## 许可证
 
-## Customization Notes
+MIT License - 详见 [LICENSE](LICENSE)
 
-This project uses a **customized version of fastgltf** with the following modifications:
+## 相关项目
 
-1. **simdjson v4.3.1 Built-in**: Does not search for system libraries, does not download from network, uses built-in source code
-2. **KHR_gaussian_splatting_compression_spz_2 Extension**: Supports SPZ_2 compression format
-3. **One-Click Build**: Just `cmake && cmake --build`, no manual dependency configuration required
+- [fastgltf](https://github.com/spycrab/fastgltf) - 高性能 glTF 库
+- [simdjson](https://github.com/simdjson/simdjson) - 极速 JSON 解析库 v4.3.1
+- [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting 扩展
+
+## 定制说明
+
+本项目使用 **定制版 fastgltf**，包含以下修改：
+
+1. **simdjson v4.3.1 内置**: 不查找系统库，不从网络下载，使用内置源码
+2. **KHR_gaussian_splatting_compression_spz_2 扩展**: 支持 SPZ_2 压缩格式
+3. **一键编译**: 只需 `cmake && cmake --build`，无需手动配置依赖
