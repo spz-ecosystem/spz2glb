@@ -25,6 +25,37 @@
 - **自动构建**: GitHub Actions 提供预编译二进制
 - **三层验证**: 完整的 C++ 验证工具确保转换正确性
 
+## 🎬 演示
+
+### 基本转换
+
+```bash
+# 转换 SPZ 到 GLB
+./build/spz2glb model.spz model.glb
+```
+
+### 三层验证
+
+```bash
+# 运行所有验证
+./build/spz_verify all model.spz model.glb
+
+# 输出：
+# Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
+# Layer 2: Binary Lossless Verification - PASSED (100% MD5 match)
+# Layer 3: Decoding Consistency Verification - PASSED (Size match)
+# [SUCCESS] All verifications PASSED!
+```
+
+### 批量处理
+
+```bash
+# 批量转换所有 SPZ 文件
+for file in *.spz; do
+    ./build/spz2glb "$file" "${file%.spz}.glb"
+done
+```
+
 ## 快速开始
 
 ### 方式一：下载预编译版本
@@ -133,27 +164,41 @@ spz_verify layer3 <input.spz> <output.glb>  # 解码一致性验证
 **验证输出**：
 
 ```
-Layer 1: GLB Structure Validation
-  ✓ Magic number: 0x46546C67 ("glTF")
-  ✓ Version: 2
-  ✓ extensionsUsed contains KHR_gaussian_splatting
-  ✓ extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
-  ✓ buffers configuration correct
-  ✓ Compression stream mode (attributes empty)
-  [PASS] Layer 1 validation passed
+Layer 1: GLB Structure & SPZ_2 Specification Validation
+  [PASS] Magic: glTF (0x46546C67)
+  [PASS] Version: 2
+  [PASS] extensionsUsed: KHR_gaussian_splatting
+  [PASS] extensionsUsed: KHR_gaussian_splatting_compression_spz_2
+  [PASS] buffers: present
+  [PASS] attributes: empty (compression stream mode)
+  [PASS] accessors: 0 or empty (compression stream mode)
 
-Layer 2: Lossless Binary Validation
-  ✓ Original SPZ MD5: abc123...
-  ✓ Extracted data MD5: abc123...
-  ✓ MD5 match confirmed
-  [PASS] Layer 2 validation passed
+Passed: 7/7
+[PASSED] Layer 1: All validation checks passed!
 
-Layer 3: Decode Consistency Validation
-  ✓ GLB structure valid
-  ✓ Extension integrity check passed
-  [PASS] Layer 3 validation passed
+Layer 2: Binary Lossless Verification
+  [1] Reading original SPZ...
+      Size: 18143098 bytes
+  [2] Computing MD5 hashes...
+      Original MD5:  f9037978d3d6602ace30e5f1cf125f20
+      Extracted MD5: f9037978d3d6602ace30e5f1cf125f20
+  [3] Comparing...
+  [PASSED] Layer 2: Binary lossless! 100% match!
 
-[SUCCESS] All 3 layers validation passed!
+Layer 3: Decoding Consistency Verification
+  [1] Reading SPZ...
+      Size: 18143098 bytes
+  [2] Verifying GLB...
+      [PASS] Valid GLB format
+      [PASS] SPZ_2 extension present
+      [PASS] Buffer size: 18143098 bytes
+  [PASSED] Layer 3: Size match - 18143098 bytes
+
+Summary:
+  Layer 1 (GLB Structure): PASSED
+  Layer 2 (Binary Lossless): PASSED
+  Layer 3 (Decoding): PASSED
+All verifications PASSED!
 ```
 
 ## 自动化验证脚本（推荐）
