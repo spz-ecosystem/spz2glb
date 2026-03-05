@@ -73,17 +73,22 @@ bool layer1ValidateGlbStructure(const std::string& glbPath) {
     GlbHeader header;
     file.read(reinterpret_cast<char*>(&header), sizeof(header));
     
+    int passed = 0;
+    int total = 7;
+    
     if (header.magic != 0x46546C67) {
         std::cerr << "[ERROR] Invalid GLB magic: 0x" << std::hex << header.magic << "\n";
         return false;
     }
     std::cout << "    [PASS] Magic: glTF (0x46546C67)\n";
+    passed++;
     
     if (header.version != 2) {
         std::cerr << "[ERROR] Invalid version: " << header.version << "\n";
         return false;
     }
     std::cout << "    [PASS] Version: 2\n";
+    passed++;
     
     GlbChunk jsonChunk;
     file.read(reinterpret_cast<char*>(&jsonChunk), sizeof(jsonChunk));
@@ -99,9 +104,6 @@ bool layer1ValidateGlbStructure(const std::string& glbPath) {
     if (nullPos != std::string::npos) {
         jsonStr = jsonStr.substr(0, nullPos);
     }
-    
-    int passed = 0;
-    int total = 6;
     
     if (jsonStr.find("KHR_gaussian_splatting") != std::string::npos) {
         std::cout << "    [PASS] extensionsUsed: KHR_gaussian_splatting\n";
@@ -120,11 +122,16 @@ bool layer1ValidateGlbStructure(const std::string& glbPath) {
     
     if (jsonStr.find("\"attributes\"") != std::string::npos) {
         size_t attrsStart = jsonStr.find("\"attributes\"");
-        size_t attrsEnd = jsonStr.find("}", attrsStart);
-        std::string attrsSection = jsonStr.substr(attrsStart, attrsEnd - attrsStart);
-        if (attrsSection.find(": {}") != std::string::npos || attrsSection.find(":{}") != std::string::npos) {
-            std::cout << "    [PASS] attributes: empty (compression stream mode)\n";
-            passed++;
+        size_t colonPos = jsonStr.find(":", attrsStart);
+        if (colonPos != std::string::npos) {
+            size_t openBrace = jsonStr.find("{", colonPos);
+            if (openBrace != std::string::npos && openBrace == colonPos + 1) {
+                size_t closeBrace = jsonStr.find("}", openBrace);
+                if (closeBrace != std::string::npos && closeBrace == openBrace + 1) {
+                    std::cout << "    [PASS] attributes: empty (compression stream mode)\n";
+                    passed++;
+                }
+            }
         }
     }
     
