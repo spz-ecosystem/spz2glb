@@ -37,8 +37,8 @@
 ### 三层验证
 
 ```bash
-# 运行所有验证
-./build/spz_verify all model.spz model.glb
+# 运行所有验证（提供你自己的 SPZ 和 GLB 文件）
+./build/spz_verify all input.spz output.glb
 
 # 输出：
 # Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
@@ -46,6 +46,10 @@
 # Layer 3: Decoding Consistency Verification - PASSED (Size match)
 # [SUCCESS] All verifications PASSED!
 ```
+
+> **注意**: 路径应该是相对路径或绝对路径指向你的文件。不要使用硬编码路径。
+
+> **Demo**: Demo 演示视频将于第一个稳定版发布之后放出，敬请期待！
 
 ### 批量处理
 
@@ -130,6 +134,12 @@ done
 
 ### 三层验证工具 (spz_verify)
 
+> **重要说明**:
+> - **独立工具**: spz_verify 是独立的验证工具，不是生产转换流程的一部分
+> - **开发/测试用途**: 设计用于质量保证、调试和测试工作流
+> - **日常使用不需要**: 一旦转换被验证，生产环境只需要 spz2glb
+> - **Layer 2 会解压**: Layer 2 验证会提取并解压数据来计算 MD5 哈希值（比 Layer 1/3 慢）
+
 ```bash
 spz_verify <command> [options]
 ```
@@ -141,9 +151,9 @@ spz_verify <command> [options]
 spz_verify all <input.spz> <output.glb>
 
 # 单独运行某层验证
-spz_verify layer1 <output.glb>              # GLB 结构验证
-spz_verify layer2 <input.spz> <output.glb>  # 二进制无损验证 (MD5)
-spz_verify layer3 <input.spz> <output.glb>  # 解码一致性验证
+spz_verify layer1 <output.glb>              # GLB 结构验证 (快速)
+spz_verify layer2 <input.spz> <output.glb>  # 二进制无损验证 (MD5, 较慢)
+spz_verify layer3 <input.spz> <output.glb>  # 解码一致性验证 (快速)
 ```
 
 **完整示例**：
