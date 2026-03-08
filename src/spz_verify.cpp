@@ -24,15 +24,30 @@
 #include <sys/stat.h>
 #endif
 
+/**
+ * GLB 文件头结构（12 字节）
+ * 
+ * GLB 是 glTF 的二进制格式，结构如下：
+ * - Magic: "glTF" (0x46546C67)
+ * - Version: 版本号（固定为 2）
+ * - Length: 整个文件长度（字节）
+ */
 struct GlbHeader {
-    uint32_t magic;
-    uint32_t version;
-    uint32_t length;
+    uint32_t magic;      // 魔术数字：0x46546C67 ("glTF")
+    uint32_t version;    // GLTF 版本号：固定为 2
+    uint32_t length;     // 整个 GLB 文件的长度（字节）
 };
 
+/**
+ * GLB Chunk 头结构（8 字节）
+ * 
+ * GLB 包含两个 Chunk：
+ * 1. JSON Chunk: 包含 glTF JSON 数据
+ * 2. BIN Chunk: 包含二进制数据（Buffer）
+ */
 struct GlbChunk {
-    uint32_t chunkLength;
-    uint32_t chunkType;
+    uint32_t chunkLength;  // Chunk 数据长度（不包括这个头的 8 字节）
+    uint32_t chunkType;    // Chunk 类型：0x4E4F534A ("JSON") 或 0x004E4942 ("BIN")
 };
 
 class Md5Hash {
@@ -58,24 +73,48 @@ void printDivider() {
     std::cout << "============================================================\n";
 }
 
+/**
+ * Layer 1: GLB 结构验证与 SPZ_2 规范验证
+ * 
+ * @param glbPath GLB 文件路径
+ * @return true 如果所有检查通过，false 否则
+ * 
+ * 验证项目（7 项）：
+ * 1. GLB 魔术数字（0x46546C67）
+ * 2. GLB 版本号（必须为 2）
+ * 3. extensionsUsed: KHR_gaussian_splatting
+ * 4. extensionsUsed: KHR_gaussian_splatting_compression_spz_2
+ * 5. buffers 字段存在
+ * 6. attributes 为空（压缩流模式）
+ * 7. accessors 为 0 或空（压缩流模式）
+ * 
+ * 压缩流模式特点：
+ * - 没有顶点属性（attributes 为空）
+ * - 没有 accessors（数据在 SPZ 压缩流中）
+ * - 渲染器需要 SPZ 解码器
+ */
 bool layer1ValidateGlbStructure(const std::string& glbPath) {
     std::cout << "\n";
     printDivider();
     std::cout << "Layer 1: GLB Structure & SPZ_2 Specification Validation\n";
     printDivider();
     
+    // 打开 GLB 文件（二进制模式）
     std::ifstream file(glbPath, std::ios::binary);
     if (!file) {
         std::cerr << "[ERROR] Cannot open file: " << glbPath << "\n";
         return false;
     }
     
+    // 读取 GLB 头部（12 字节）
     GlbHeader header;
     file.read(reinterpret_cast<char*>(&header), sizeof(header));
     
+    // 统计通过的检查项
     int passed = 0;
     int total = 7;
     
+    // 检查 1: GLB 魔术数字
     if (header.magic != 0x46546C67) {
         std::cerr << "[ERROR] Invalid GLB magic: 0x" << std::hex << header.magic << "\n";
         return false;
@@ -83,6 +122,7 @@ bool layer1ValidateGlbStructure(const std::string& glbPath) {
     std::cout << "    [PASS] Magic: glTF (0x46546C67)\n";
     passed++;
     
+    // 检查 2: GLB 版本号
     if (header.version != 2) {
         std::cerr << "[ERROR] Invalid version: " << header.version << "\n";
         return false;
@@ -90,41 +130,50 @@ bool layer1ValidateGlbStructure(const std::string& glbPath) {
     std::cout << "    [PASS] Version: 2\n";
     passed++;
     
+    // 读取 JSON Chunk 头（8 字节）
     GlbChunk jsonChunk;
     file.read(reinterpret_cast<char*>(&jsonChunk), sizeof(jsonChunk));
     
+    // 读取 JSON 数据
     std::vector<char> jsonData(jsonChunk.chunkLength);
     file.read(jsonData.data(), jsonChunk.chunkLength);
     
+    // 跳过 JSON 填充字节（4 字节对齐）
     size_t padding = (4 - (jsonChunk.chunkLength % 4)) % 4;
     file.seekg(padding, std::ios::cur);
     
+    // 转换为字符串并移除 null 终止符
     std::string jsonStr(jsonData.data(), jsonChunk.chunkLength);
     size_t nullPos = jsonStr.find('\0');
     if (nullPos != std::string::npos) {
         jsonStr = jsonStr.substr(0, nullPos);
     }
     
+    // 检查 3: KHR_gaussian_splatting 扩展
     if (jsonStr.find("KHR_gaussian_splatting") != std::string::npos) {
         std::cout << "    [PASS] extensionsUsed: KHR_gaussian_splatting\n";
         passed++;
     }
     
+    // 检查 4: KHR_gaussian_splatting_compression_spz_2 扩展
     if (jsonStr.find("KHR_gaussian_splatting_compression_spz_2") != std::string::npos) {
         std::cout << "    [PASS] extensionsUsed: KHR_gaussian_splatting_compression_spz_2\n";
         passed++;
     }
     
+    // 检查 5: buffers 字段存在
     if (jsonStr.find("\"buffers\"") != std::string::npos) {
         std::cout << "    [PASS] buffers: present\n";
         passed++;
     }
     
+    // 检查 6: attributes 为空（压缩流模式的关键特征）
     if (jsonStr.find("\"attributes\"") != std::string::npos) {
         size_t attrsStart = jsonStr.find("\"attributes\"");
         size_t colonPos = jsonStr.find(":", attrsStart);
         if (colonPos != std::string::npos) {
             size_t openBrace = jsonStr.find("{", colonPos);
+            // 检查是否为空对象 {}
             if (openBrace != std::string::npos && openBrace == colonPos + 1) {
                 size_t closeBrace = jsonStr.find("}", openBrace);
                 if (closeBrace != std::string::npos && closeBrace == openBrace + 1) {
@@ -135,6 +184,7 @@ bool layer1ValidateGlbStructure(const std::string& glbPath) {
         }
     }
     
+    // 检查 7: accessors 为 0 或空（压缩流模式的关键特征）
     if (jsonStr.find("\"accessors\"") == std::string::npos || 
         jsonStr.find("\"accessors\": []") != std::string::npos) {
         std::cout << "    [PASS] accessors: 0 or empty (compression stream mode)\n";
@@ -143,6 +193,7 @@ bool layer1ValidateGlbStructure(const std::string& glbPath) {
     
     std::cout << "\nPassed: " << passed << "/" << total << "\n";
     
+    // 所有检查通过
     if (passed == total) {
         std::cout << "\n[PASSED] Layer 1: All validation checks passed!\n";
         return true;
