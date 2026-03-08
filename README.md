@@ -37,8 +37,8 @@ A tool to convert SPZ (Gaussian Splatting Compression) files to glTF 2.0 GLB for
 ### Three-Layer Verification
 
 ```bash
-# Run all verifications
-./build/spz_verify all model.spz model.glb
+# Run all verifications (provide your own SPZ and GLB files)
+./build/spz_verify all input.spz output.glb
 
 # Output:
 # Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
@@ -46,6 +46,10 @@ A tool to convert SPZ (Gaussian Splatting Compression) files to glTF 2.0 GLB for
 # Layer 3: Decoding Consistency Verification - PASSED (Size match)
 # [SUCCESS] All verifications PASSED!
 ```
+
+> **Note**: Paths should be relative or absolute paths to your files. Do not use hardcoded paths.
+
+> **Demo**: Demo videos will be released after the first stable version. Stay tuned!
 
 ### Batch Processing
 
@@ -130,6 +134,12 @@ done
 
 ### Three-Layer Verification Tool (spz_verify)
 
+> **Important Notes**:
+> - **Independent Tool**: spz_verify is a standalone verification tool, NOT part of the production conversion pipeline
+> - **Development/Testing Use**: Designed for quality assurance, debugging, and testing workflows
+> - **Not Required for Daily Use**: Once conversion is verified, you only need spz2glb for production
+> - **Layer 2 Performs Decompression**: Layer 2 verification extracts and decompresses data to compute MD5 hashes (slower than Layer 1/3)
+
 ```bash
 spz_verify <command> [options]
 ```
@@ -141,9 +151,9 @@ spz_verify <command> [options]
 spz_verify all <input.spz> <output.glb>
 
 # Run individual layer verification
-spz_verify layer1 <output.glb>              # GLB structure validation
-spz_verify layer2 <input.spz> <output.glb>  # Lossless binary validation (MD5)
-spz_verify layer3 <input.spz> <output.glb>  # Decode consistency validation
+spz_verify layer1 <output.glb>              # GLB structure validation (fast)
+spz_verify layer2 <input.spz> <output.glb>  # Lossless binary validation (MD5, slower)
+spz_verify layer3 <input.spz> <output.glb>  # Decode consistency validation (fast)
 ```
 
 **Complete Examples**:
