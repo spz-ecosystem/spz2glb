@@ -1,5 +1,7 @@
 # Copyright (c) 2026 Pu Junhan
 # SPDX-License-Identifier: MIT
+# Project: SPZ-ecosystem
+# Repository: https://github.com/spz-ecosystem/spz2glb
 #
 cmake_minimum_required(VERSION 3.15)
 project(spz2glb VERSION 1.0.1 LANGUAGES CXX)

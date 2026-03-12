@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Pu Junhan
 // SPDX-License-Identifier: MIT
+// Project: SPZ-ecosystem
+// Repository: https://github.com/spz-ecosystem/spz2glb
 //
 /**
  * SPZ 到 GLB 转换器
