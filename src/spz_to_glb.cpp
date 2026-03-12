@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 spz-ecosystem contributors
+// SPDX-License-Identifier: MIT
+//
 /**
  * SPZ 到 GLB 转换器
  * 

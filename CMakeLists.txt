@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 spz-ecosystem contributors
+# SPDX-License-Identifier: MIT
+#
 cmake_minimum_required(VERSION 3.15)
 project(spz2glb VERSION 1.0.1 LANGUAGES CXX)
 
