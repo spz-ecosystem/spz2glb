@@ -1,4 +1,4 @@
-// Copyright (c) 2024-2026 gugu23456789
+// Copyright (c) 2026 spz-ecosystem
 // SPDX-License-Identifier: MIT
 //
 /**
