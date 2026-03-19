@@ -49,7 +49,10 @@ else()
   endif()
 endif()
 
-set(FASTGLTF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
+# 指向根目录的 third_party（fastgltf 源码）
+# CMAKE_CURRENT_SOURCE_DIR = tools/spz_to_glb
+# 所以 ../../third_party = repo_root/third_party
+set(FASTGLTF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party")
 
 if(NOT EXISTS "${FASTGLTF_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "fastgltf not found at: ${FASTGLTF_DIR}")
