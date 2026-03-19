@@ -137,7 +137,7 @@ jobs:
 
       - name: Copy WASM output
         run: |
-          cp tools/spz_to_glb/dist/* .
+          cp dist/* .
 
       - name: List output files
         run: |
