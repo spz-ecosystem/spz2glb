@@ -128,12 +128,12 @@ jobs:
       - name: Configure WASM build
         run: |
           cd tools/spz_to_glb
-          emcmake cmake -S ../../ -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
+          emcmake cmake -S ../ -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
 
       - name: Build WASM
         run: |
           cd tools/spz_to_glb
-          emmake cmake --build build_wasm --config Release
+          emmake cmake --build build_wasm --config Release --target spz2glb-wasm
 
       - name: Copy WASM output
         run: |
