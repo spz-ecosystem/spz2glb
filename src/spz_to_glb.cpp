@@ -31,6 +31,11 @@
 #include <fastgltf/core.hpp>
 #include <fastgltf/types.hpp>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/bind.h>
+#include "emscripten_utils.h"
+#endif
+
 /**
  * SPZ 文件格式头结构（16 字节）
  * 
@@ -247,7 +252,7 @@ std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedDat
  * - 没有 attributes（数据在压缩流中）
  * - 渲染器需要 SPZ 解码器
  */
-fastgltf::Asset createGltfAsset(std::vector<uint8_t>& spzData, const SpzHeader& header) {
+fastgltf::Asset createGltfAsset(const std::vector<uint8_t>& spzData, const SpzHeader& header) {
     (void)header; // 头部信息预留未来使用（如验证点数等）
     
     fastgltf::Asset asset;
@@ -323,15 +328,15 @@ fastgltf::Asset createGltfAsset(std::vector<uint8_t>& spzData, const SpzHeader& 
 
 /**
  * 程序入口：SPZ 到 GLB 转换器
- * 
+ *
  * 使用方法：spz_to_glb <input.spz> <output.glb>
- * 
+ *
  * 转换流程：
  * 1. 读取 SPZ 文件（保持 gzip 压缩状态）
  * 2. 解压副本用于解析头部（获取元数据）
  * 3. 创建 glTF 资产（包含 SPZ 压缩扩展）
  * 4. 导出 GLB 二进制文件
- * 
+ *
  * 输出信息：
  * - SPZ 版本号
  * - 高斯点数量
@@ -339,6 +344,98 @@ fastgltf::Asset createGltfAsset(std::vector<uint8_t>& spzData, const SpzHeader& 
  * - SPZ 文件大小（压缩后）
  * - GLB 文件大小
  */
+
+/**
+ * 核心转换函数（桌面版和 WASM 共用）
+ *
+ * @param spzData SPZ 压缩数据
+ * @param glbData 输出 GLB 数据
+ * @return true 如果转换成功
+ *
+ * 转换流程：
+ * 1. 解压副本用于解析头部
+ * 2. 解析 SPZ 头部
+ * 3. 创建 glTF 资产
+ * 4. 导出 GLB
+ */
+bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_t>& glbData) {
+    // 步骤 1: 解压副本用于解析头部
+    auto decompressedData = decompressSpzData(spzData);
+
+    // 步骤 2: 解析 SPZ 头部
+    SpzHeader header;
+    if (!parseSpzHeader(decompressedData, header)) {
+        std::cerr << "[ERROR] Failed to parse SPZ header" << std::endl;
+        return false;
+    }
+
+    // 步骤 3: 打印 SPZ 元数据
+    std::cout << "[INFO] SPZ version: " << (int)header.version << std::endl;
+    std::cout << "[INFO] Num points: " << header.numPoints << std::endl;
+    std::cout << "[INFO] SH degree: " << (int)header.shDegree << std::endl;
+    std::cout << "[INFO] SPZ size (raw compressed): " << (spzData.size() / 1024 / 1024) << " MB" << std::endl;
+
+    // 步骤 4: 创建 glTF 资产
+    std::cout << "[INFO] Creating glTF Asset with KHR extensions" << std::endl;
+    auto asset = createGltfAsset(spzData, header);
+
+    // 步骤 5: 导出 GLB
+    std::cout << "[INFO] Exporting GLB..." << std::endl;
+    fastgltf::Exporter exporter;
+
+    auto result = exporter.writeGltfBinary(asset);
+    if (result.error() != fastgltf::Error::None) {
+        std::cerr << "[ERROR] GLB export failed: " << std::string(fastgltf::getErrorMessage(result.error())) << std::endl;
+        return false;
+    }
+
+    // 步骤 6: 获取 GLB 数据
+    const auto& output = result.get().output;
+    glbData.assign(output.begin(), output.end());
+
+    return true;
+}
+
+#ifdef __EMSCRIPTEN__
+
+/**
+ * WASM 导出函数：SPZ 转 GLB
+ *
+ * @param spzBuffer JavaScript Uint8Array (SPZ 文件数据)
+ * @return JavaScript Uint8Array (GLB 文件数据)，失败返回 null
+ *
+ * JavaScript 使用示例：
+ * const Module = await createSpz2GlbModule();
+ * const spzData = new Uint8Array([...]);
+ * const glbData = Module.convertSpzToGlb(spzData);
+ */
+emscripten::val convertSpzToGlb(const emscripten::val& spzBuffer) {
+    try {
+        // 1. JavaScript Uint8Array 转 C++ vector
+        std::vector<uint8_t> spzData = spz2glb::vectorFromJsArray(spzBuffer);
+
+        // 2. 调用核心转换函数
+        std::vector<uint8_t> glbData;
+        if (!convertSpzToGlbCore(spzData, glbData)) {
+            return emscripten::val::null();
+        }
+
+        // 3. C++ vector 转 JavaScript Uint8Array
+        return spz2glb::jsUint8ArrayFromVector(glbData);
+
+    } catch (const std::exception& e) {
+        emscripten::val console = emscripten::val::global("console");
+        console.call<void>("error", std::string("SPZ2GLB Error: ") + e.what());
+        return emscripten::val::null();
+    }
+}
+
+EMSCRIPTEN_BINDINGS(spz2glb_module) {
+    emscripten::function("convertSpzToGlb", &convertSpzToGlb);
+}
+
+#else  // __EMSCRIPTEN__
+
 int main(int argc, char** argv) {
     // 参数检查：需要输入文件和输出文件两个参数
     if (argc != 3) {
@@ -355,46 +452,24 @@ int main(int argc, char** argv) {
         std::cout << "[INFO] Loading SPZ: " << inputPath << std::endl;
         auto spzData = loadSpzFile(inputPath);
 
-        // 步骤 2: 解压副本用于解析头部（原始数据保持压缩状态）
-        auto decompressedData = decompressSpzData(spzData);
-
-        // 步骤 3: 解析 SPZ 头部
-        SpzHeader header;
-        if (!parseSpzHeader(decompressedData, header)) {
-            throw std::runtime_error("Failed to parse SPZ header");
+        // 步骤 2: 调用核心转换函数
+        std::vector<uint8_t> glbData;
+        if (!convertSpzToGlbCore(spzData, glbData)) {
+            throw std::runtime_error("Conversion failed");
         }
 
-        // 步骤 4: 打印 SPZ 元数据
-        std::cout << "[INFO] SPZ version: " << (int)header.version << std::endl;
-        std::cout << "[INFO] Num points: " << header.numPoints << std::endl;
-        std::cout << "[INFO] SH degree: " << (int)header.shDegree << std::endl;
-        std::cout << "[INFO] SPZ size (raw compressed): " << (spzData.size() / 1024 / 1024) << " MB" << std::endl;
-
-        // 步骤 5: 创建 glTF 资产
-        std::cout << "[INFO] Creating glTF Asset with KHR extensions" << std::endl;
-        auto asset = createGltfAsset(spzData, header);
-
-        // 步骤 6: 导出 GLB 二进制
-        std::cout << "[INFO] Exporting GLB..." << std::endl;
-        fastgltf::Exporter exporter;
-
-        auto result = exporter.writeGltfBinary(asset);
-        if (result.error() != fastgltf::Error::None) {
-            throw std::runtime_error("GLB export failed: " + std::string(fastgltf::getErrorMessage(result.error())));
-        }
-
-        // 步骤 7: 写入文件
+        // 步骤 3: 写入文件
+        std::cout << "[INFO] Writing GLB: " << outputPath << std::endl;
         std::ofstream file(outputPath, std::ios::binary);
         if (!file) {
             throw std::runtime_error("Cannot open output file: " + outputPath);
         }
 
-        const auto& output = result.get().output;
-        file.write(reinterpret_cast<const char*>(output.data()), output.size());
+        file.write(reinterpret_cast<const char*>(glbData.data()), glbData.size());
 
-        // 步骤 8: 打印成功信息
+        // 步骤 4: 打印成功信息
         std::cout << "[SUCCESS] GLB exported: " << outputPath << std::endl;
-        std::cout << "[INFO] GLB size: " << output.size() / 1024 / 1024 << " MB" << std::endl;
+        std::cout << "[INFO] GLB size: " << (glbData.size() / 1024 / 1024) << " MB" << std::endl;
 
         return 0;  // 成功退出
 
@@ -404,3 +479,5 @@ int main(int argc, char** argv) {
         return 1;
     }
 }
+
+#endif  // __EMSCRIPTEN__
