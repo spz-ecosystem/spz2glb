@@ -43,7 +43,10 @@ if(SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
   # Emscripten 使用端口版本的 ZLIB，无需 find_package
   message(STATUS "Using Emscripten port of ZLIB")
 else()
-  find_package(ZLIB REQUIRED)
+  find_package(ZLIB QUIET)
+  if(NOT ZLIB_FOUND)
+    message(FATAL_ERROR "ZLIB not found. Install zlib-dev or use Emscripten for WASM build.")
+  endif()
 endif()
 
 set(FASTGLTF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
