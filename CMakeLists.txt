@@ -89,17 +89,19 @@ if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(fastgltf PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
 endif()
 
-add_executable(spz_verify
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
-)
+if(NOT SPZ2GLB_BUILD_WASM)
+  add_executable(spz_verify
+      ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+  )
 
-target_compile_options(spz_verify PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/WX>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Werror>
-)
+  target_compile_options(spz_verify PRIVATE
+      $<$<CXX_COMPILER_ID:MSVC>:/WX>
+      $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Werror>
+  )
 
-if(NOT SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-  target_link_libraries(spz_verify PRIVATE ZLIB::ZLIB)
+  if(NOT SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
+    target_link_libraries(spz_verify PRIVATE ZLIB::ZLIB)
+  endif()
 endif()
 
 install(TARGETS spz2glb spz_verify
