@@ -25,7 +25,11 @@ Get the latest release from: [https://github.com/spz-ecosystem/spz2glb/releases]
 
 ### Web Demo
 
-Open `index.html` in a browser to use the WASM version without installation.
+**Important**: For the WASM version, you must download **both** files:
+1. `spz2glb.js`
+2. `index.html`
+
+Place them in the same directory and open `index.html` in your browser.
 
 ## Quick Start
 
@@ -188,9 +192,9 @@ spz2glb/
 ├── README.md               # English documentation
 ├── README-zh.md           # Chinese documentation
 ├── src/
-│   ├── spz_to_glb.cpp    # Converter source code
-│   ├── spz_verify.cpp     # Verification tool source code
-│   └── emscripten_utils.h # Emscripten utilities (for WASM)
+│   ├── spz_to_glb.cpp     # Converter source code
+│   ├── spz_verify.cpp      # Verification tool source code
+│   └── emscripten_utils.h  # Emscripten utilities (for WASM)
 ├── third_party/            # Dependencies
 │   └── (fastgltf, simdjson)
 ├── dist/                   # WASM build output
@@ -198,6 +202,16 @@ spz2glb/
     └── workflows/
         └── release.yml    # CI/CD workflow
 ```
+
+## Disclaimer
+
+**This is a personal independent development project.**
+
+- This project is developed independently by the author in their personal capacity
+- This project is **not affiliated** with any university, institution, or employer
+- This is **not a work-for-hire** or institutional teaching achievement
+- The views and opinions expressed in this project are solely those of the author
+- MIT License applies - see [LICENSE](LICENSE) for details
 
 ## License
 
