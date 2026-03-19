@@ -154,7 +154,9 @@ if(SPZ2GLB_BUILD_WASM)
   endif()
 
   # Emscripten ZLIB 配置
-  # -sUSE_ZLIB=1 已经处理了 zlib 链接
+  # 需要同时使用 compile 和 link 选项
+  target_compile_options(spz2glb-wasm PRIVATE --use-port=zlib)
+  target_link_options(spz2glb-wasm PRIVATE --use-port=zlib)
 
   # WASM 链接选项
   target_link_options(spz2glb-wasm PRIVATE
