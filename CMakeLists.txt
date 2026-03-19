@@ -66,6 +66,8 @@ else()
     target_compile_options(fastgltf PRIVATE -w)
 endif()
 
+if(NOT SPZ2GLB_BUILD_WASM)
+endif()
 add_executable(spz2glb 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
 )
