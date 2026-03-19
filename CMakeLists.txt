@@ -20,7 +20,6 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 # ============================================================
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   set(SPZ2GLB_BUILD_WASM ON)
-  set(SPZ2GLB_USE_EMSCRIPTEN_ZLIB ON)
   message(STATUS "Emscripten detected: WASM build enabled")
 endif()
 
