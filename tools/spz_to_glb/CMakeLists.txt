@@ -50,9 +50,8 @@ else()
 endif()
 
 # 指向根目录的 third_party（fastgltf 源码）
-# CMAKE_CURRENT_SOURCE_DIR = tools/spz_to_glb
-# 所以 ../../third_party = repo_root/third_party
-set(FASTGLTF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party")
+# CMAKE_SOURCE_DIR = 仓库根目录 (spz_ecosystem_simplified)
+set(FASTGLTF_DIR "${CMAKE_SOURCE_DIR}/third_party")
 
 if(NOT EXISTS "${FASTGLTF_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "fastgltf not found at: ${FASTGLTF_DIR}")
@@ -151,9 +150,7 @@ if(SPZ2GLB_BUILD_WASM)
   endif()
 
   # Emscripten ZLIB 配置
-  if(SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-    target_link_options(spz2glb-wasm PRIVATE "-sUSE_ZLIB=1")
-  endif()
+  # 注意：-sUSE_ZLIB=1 在下面的 WASM 链接选项中已设置
 
   # WASM 链接选项（完全复用 Niantic 官方配置）
   target_link_options(spz2glb-wasm PRIVATE
