@@ -154,10 +154,7 @@ if(SPZ2GLB_BUILD_WASM)
   endif()
 
   # Emscripten ZLIB 配置
-  # Emscripten 端口需要显式设置 include 目录
-  target_include_directories(spz2glb-wasm PRIVATE
-    "\${EMSCRIPTEN_SYSROOT}/system/lib/libz-prefix/include"
-  )
+  # -sUSE_ZLIB=1 已经处理了 zlib 链接
 
   # WASM 链接选项
   target_link_options(spz2glb-wasm PRIVATE
