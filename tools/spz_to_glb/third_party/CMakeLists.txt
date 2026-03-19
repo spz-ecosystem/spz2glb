@@ -72,7 +72,11 @@ set(FASTGLTF_SOURCES
 message(STATUS "Creating fastgltf static library...")
 add_library(fastgltf STATIC)
 target_sources(fastgltf PRIVATE ${FASTGLTF_SOURCES})
-target_include_directories(fastgltf PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>")
+target_include_directories(fastgltf PUBLIC 
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/deps/simdjson>"
+    "$<INSTALL_INTERFACE:include>"
+)
 target_compile_features(fastgltf PUBLIC ${FASTGLTF_COMPILE_TARGET})
 
 message(STATUS "Adding source directories...")
