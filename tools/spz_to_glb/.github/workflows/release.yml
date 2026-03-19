@@ -4,6 +4,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -28,7 +30,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
 
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -44,58 +48,117 @@ jobs:
       - name: Install dependencies (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          choco install zlib -y
+          git clone https://github.com/microsoft/vcpkg.git C:/vcpkg --depth 1
+          C:/vcpkg/bootstrap-vcpkg.bat -disableMetrics
+          C:/vcpkg/vcpkg install zlib:x64-windows
 
-      - name: Configure CMake
+      - name: Configure CMake (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Configure CMake (Unix)
+        if: matrix.os != 'windows-latest'
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build spz2glb
+      - name: Build fastgltf (with warnings suppressed)
         run: |
-          cmake --build build --config Release -j$(nproc) --target spz2glb
+          cmake --build build --config Release -j4 --target fastgltf
 
-      - name: Build spz_verify
+      - name: Build spz2glb (strict warnings)
         run: |
-          cmake --build build --config Release -j$(nproc) --target spz_verify
+          cmake --build build --config Release -j4 --target spz2glb
+
+      - name: Build spz_verify (strict warnings)
+        run: |
+          cmake --build build --config Release -j4 --target spz_verify
+
+      - name: Find built executables
+        run: |
+          find . -name "spz2glb*" -type f
+          find . -name "spz_verify*" -type f
+        shell: bash
 
       - name: Rename artifacts (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          cp build/spz2glb.exe ${{ matrix.artifact }}
-          cp build/spz_verify.exe spz_verify-windows-x64.exe
+          Get-ChildItem -Recurse -Filter "spz2glb.exe" | ForEach-Object { Copy-Item $_.FullName "$PWD/${{ matrix.artifact }}" }
+          Get-ChildItem -Recurse -Filter "spz_verify.exe" | ForEach-Object { Copy-Item $_.FullName "$PWD/spz_verify-windows-x64.exe" }
+        shell: pwsh
 
       - name: Rename artifacts (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          cp build/spz2glb ${{ matrix.artifact }}
-          cp build/spz_verify spz_verify-linux-x64
+          find . -name "spz2glb" -type f -exec cp {} ${{ matrix.artifact }} \;
+          find . -name "spz_verify" -type f -exec cp {} spz_verify-linux-x64 \;
 
       - name: Rename artifacts (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          cp build/spz2glb ${{ matrix.artifact }}
-          cp build/spz_verify spz_verify-macos-x64
+          find . -name "spz2glb" -type f -exec cp {} ${{ matrix.artifact }} \;
+          find . -name "spz_verify" -type f -exec cp {} spz_verify-macos-x64 \;
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
 
       - name: Upload verify artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.os }}-verify
           path: spz_verify*
 
+  wasm-build:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Configure WASM build
+        run: |
+          cd tools/spz_to_glb
+          emcmake cmake -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
+
+      - name: Build WASM
+        run: |
+          cd tools/spz_to_glb
+          emmake cmake --build build_wasm --config Release
+
+      - name: Copy WASM output
+        run: |
+          cp tools/spz_to_glb/dist/* .
+
+      - name: List output files
+        run: |
+          ls -la
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: spz2glb-wasm
+          path: |
+            spz2glb.js
+            index.html
+
   release:
-    needs: build
+    needs: [build, wasm-build]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
 
