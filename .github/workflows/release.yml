@@ -109,8 +109,46 @@ jobs:
           name: ${{ matrix.os }}-verify
           path: spz_verify*
 
+  wasm-build:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Configure WASM build
+        run: |
+          cd tools/spz_to_glb
+          emcmake cmake -B build_wasm -DSPZ2GLB_BUILD_WASM=ON
+
+      - name: Build WASM
+        run: |
+          cd tools/spz_to_glb
+          emmake cmake --build build_wasm --config Release
+
+      - name: Copy WASM output
+        run: |
+          cp tools/spz_to_glb/dist/* .
+
+      - name: List output files
+        run: |
+          ls -la
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: spz2glb-wasm
+          path: |
+            spz2glb.js
+            index.html
+
   release:
-    needs: build
+    needs: [build, wasm-build]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
 
