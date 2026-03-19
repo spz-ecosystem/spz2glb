@@ -154,9 +154,12 @@ if(SPZ2GLB_BUILD_WASM)
   endif()
 
   # Emscripten ZLIB 配置
-  # 注意：-sUSE_ZLIB=1 在下面的 WASM 链接选项中已设置
+  # Emscripten 端口需要显式设置 include 目录
+  target_include_directories(spz2glb-wasm PRIVATE
+    "\${EMSCRIPTEN_SYSROOT}/system/lib/libz-prefix/include"
+  )
 
-  # WASM 链接选项（完全复用 Niantic 官方配置）
+  # WASM 链接选项
   target_link_options(spz2glb-wasm PRIVATE
     "-O3"                              # 优化级别
     "-sUSE_ZLIB=1"                     # 使用 ZLIB
