@@ -104,9 +104,11 @@ if(NOT SPZ2GLB_BUILD_WASM)
   endif()
 endif()
 
-install(TARGETS spz2glb spz_verify
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
+if(NOT SPZ2GLB_BUILD_WASM)
+  install(TARGETS spz2glb spz_verify
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  )
+endif()
 
 # 可选：启用测试
 option(BUILD_TESTS "Build tests" OFF)
