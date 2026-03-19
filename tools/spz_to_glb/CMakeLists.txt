@@ -152,6 +152,8 @@ if(SPZ2GLB_BUILD_WASM)
 
   # Emscripten ZLIB 配置
   if(SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
+    find_path(EMSCRIPTEN_ZLIB_INCLUDE_DIRS zlib.h)
+    target_include_directories(spz2glb-wasm PRIVATE ${EMSCRIPTEN_ZLIB_INCLUDE_DIRS})
     target_compile_options(spz2glb-wasm PUBLIC --use-port=zlib)
     target_link_options(spz2glb-wasm PUBLIC --use-port=zlib)
   endif()
