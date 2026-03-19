@@ -159,7 +159,7 @@ if(SPZ2GLB_BUILD_WASM)
   # WASM 链接选项
   target_link_options(spz2glb-wasm PRIVATE
     "-O3"                              # 优化级别
-    "-sUSE_ZLIB=1"                     # 使用 ZLIB
+    "--use-port=zlib"                  # 使用完整的 Emscripten zlib 端口（处理编译和链接）
     "--bind"                           # Emscripten bindings
     "-sMODULARIZE=1"                   # 模块化输出
     "-sEXPORT_NAME=createSpz2GlbModule" # 导出函数名
