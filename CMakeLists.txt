@@ -20,6 +20,9 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 # ============================================================
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   set(SPZ2GLB_BUILD_WASM ON)
+  if(NOT DEFINED SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
+    set(SPZ2GLB_USE_EMSCRIPTEN_ZLIB ON)
+  endif()
   message(STATUS "Emscripten detected: WASM build enabled")
 endif()
 
@@ -48,7 +51,9 @@ else()
   endif()
 endif()
 
-set(FASTGLTF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
+# 指向 tools/third_party/fastgltf（fastgltf 源码）
+# CMAKE_SOURCE_DIR = 仓库根目录 (spz_ecosystem_simplified)
+set(FASTGLTF_DIR "${CMAKE_SOURCE_DIR}/tools/third_party/fastgltf")
 
 if(NOT EXISTS "${FASTGLTF_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "fastgltf not found at: ${FASTGLTF_DIR}")
@@ -67,7 +72,6 @@ else()
 endif()
 
 if(NOT SPZ2GLB_BUILD_WASM)
-endif()
 add_executable(spz2glb 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
 )
@@ -91,25 +95,22 @@ if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(fastgltf PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
 endif()
 
-if(NOT SPZ2GLB_BUILD_WASM)
-  add_executable(spz_verify
-      ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
-  )
+add_executable(spz_verify
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+)
 
-  target_compile_options(spz_verify PRIVATE
-      $<$<CXX_COMPILER_ID:MSVC>:/WX>
-      $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Werror>
-  )
+target_compile_options(spz_verify PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/WX>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Werror>
+)
 
-  if(NOT SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-    target_link_libraries(spz_verify PRIVATE ZLIB::ZLIB)
-  endif()
+if(NOT SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
+  target_link_libraries(spz_verify PRIVATE ZLIB::ZLIB)
 endif()
 
-if(NOT SPZ2GLB_BUILD_WASM)
-  install(TARGETS spz2glb spz_verify
-      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  )
+install(TARGETS spz2glb spz_verify
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
 endif()
 
 # 可选：启用测试
@@ -153,10 +154,7 @@ if(SPZ2GLB_BUILD_WASM)
   endif()
 
   # Emscripten ZLIB 配置
-  if(SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-    target_compile_options(spz2glb-wasm PUBLIC --use-port=zlib)
-    target_link_options(spz2glb-wasm PUBLIC --use-port=zlib)
-  endif()
+  # 注意：-sUSE_ZLIB=1 在下面的 WASM 链接选项中已设置
 
   # WASM 链接选项（完全复用 Niantic 官方配置）
   target_link_options(spz2glb-wasm PRIVATE
