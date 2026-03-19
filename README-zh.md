@@ -25,7 +25,11 @@
 
 ### 网页演示
 
-打开浏览器中的 `index.html` 即可使用 WASM 版本，无需安装。
+**重要**: WASM 版本需要下载**两个文件**:
+1. `spz2glb.js`
+2. `index.html`
+
+将两个文件放在同一目录，然后在浏览器中打开 `index.html`。
 
 ## 快速开始
 
@@ -188,9 +192,9 @@ spz2glb/
 ├── README.md               # 英文文档
 ├── README-zh.md           # 中文文档
 ├── src/
-│   ├── spz_to_glb.cpp    # 转换器源码
-│   ├── spz_verify.cpp      # 验证工具源码
-│   └── emscripten_utils.h  # Emscripten 工具（用于 WASM）
+│   ├── spz_to_glb.cpp     # 转换器源码
+│   ├── spz_verify.cpp     # 验证工具源码
+│   └── emscripten_utils.h # Emscripten 工具（用于 WASM）
 ├── third_party/           # 依赖库
 │   └── (fastgltf, simdjson)
 ├── dist/                   # WASM 构建输出
@@ -198,6 +202,16 @@ spz2glb/
     └── workflows/
         └── release.yml    # CI/CD 工作流
 ```
+
+## 免责声明
+
+**这是一个个人独立开发项目。**
+
+- 本项目由作者以个人身份独立开发
+- 本项目**不隶属于**任何大学、机构或雇主
+- 本项目**不是**雇佣工作或机构教学成果
+- 本项目中表达的观点和意见仅代表作者本人
+- 采用 MIT 许可证 - 详见 [LICENSE](LICENSE)
 
 ## 许可证
 
