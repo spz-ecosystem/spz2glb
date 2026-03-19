@@ -20,7 +20,9 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 # ============================================================
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
   set(SPZ2GLB_BUILD_WASM ON)
-  set(SPZ2GLB_USE_EMSCRIPTEN_ZLIB ON)
+  if(NOT DEFINED SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
+    set(SPZ2GLB_USE_EMSCRIPTEN_ZLIB ON)
+  endif()
   message(STATUS "Emscripten detected: WASM build enabled")
 endif()
 
@@ -49,9 +51,9 @@ else()
   endif()
 endif()
 
-# 指向根目录的 third_party（fastgltf 源码）
+# 指向 tools/third_party/fastgltf（fastgltf 源码）
 # CMAKE_SOURCE_DIR = 仓库根目录 (spz_ecosystem_simplified)
-set(FASTGLTF_DIR "${CMAKE_SOURCE_DIR}/third_party")
+set(FASTGLTF_DIR "${CMAKE_SOURCE_DIR}/tools/third_party/fastgltf")
 
 if(NOT EXISTS "${FASTGLTF_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "fastgltf not found at: ${FASTGLTF_DIR}")
@@ -69,6 +71,7 @@ else()
     target_compile_options(fastgltf PRIVATE -w)
 endif()
 
+if(NOT SPZ2GLB_BUILD_WASM)
 add_executable(spz2glb 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
 )
@@ -108,6 +111,7 @@ endif()
 install(TARGETS spz2glb spz_verify
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+endif()
 
 # 可选：启用测试
 option(BUILD_TESTS "Build tests" OFF)
