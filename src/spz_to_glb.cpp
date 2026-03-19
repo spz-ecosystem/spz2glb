@@ -391,7 +391,8 @@ bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_
 
     // 步骤 6: 获取 GLB 数据
     const auto& output = result.get().output;
-    glbData.assign(output.begin(), output.end());
+    glbData.resize(output.size());
+    std::memcpy(glbData.data(), output.data(), output.size());
 
     return true;
 }
