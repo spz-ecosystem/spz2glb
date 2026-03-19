@@ -150,8 +150,9 @@ if(SPZ2GLB_BUILD_WASM)
     target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  # Emscripten ZLIB 配置（--use-port=zlib 自动处理 include 路径）
+  # Emscripten ZLIB 配置
   if(SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
+    target_include_directories(spz2glb-wasm SYSTEM PRIVATE ${EMSCRIPTEN_SYSROOT}/system/include)
     target_compile_options(spz2glb-wasm PUBLIC --use-port=zlib)
     target_link_options(spz2glb-wasm PUBLIC --use-port=zlib)
   endif()
