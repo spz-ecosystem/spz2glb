@@ -152,9 +152,7 @@ if(SPZ2GLB_BUILD_WASM)
 
   # Emscripten ZLIB 配置
   if(SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-    target_include_directories(spz2glb-wasm SYSTEM PRIVATE ${EMSCRIPTEN_SYSROOT}/system/include)
-    target_compile_options(spz2glb-wasm PUBLIC --use-port=zlib)
-    target_link_options(spz2glb-wasm PUBLIC --use-port=zlib)
+    target_link_options(spz2glb-wasm PRIVATE "-sUSE_ZLIB=1")
   endif()
 
   # WASM 链接选项（完全复用 Niantic 官方配置）
