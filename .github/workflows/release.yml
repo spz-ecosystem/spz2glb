@@ -151,19 +151,13 @@ jobs:
       - name: List WASM output files
         run: |
           pwd
-          ls -la tools/spz_to_glb/dist/ 2>/dev/null || (echo "dist not found" && find . -name "*.wasm" 2>/dev/null | head -10)
+          ls -la tools/spz_to_glb/dist/ 2>/dev/null || ls -la tools/spz_to_glb/
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v5
         with:
           name: wasm-modules
-          path: |
-            tools/spz_to_glb/dist/spz2glb.js
-            tools/spz_to_glb/dist/spz2glb.wasm
-            tools/spz_to_glb/dist/spz2glb.data
-            tools/spz_to_glb/dist/spz_verify.js
-            tools/spz_to_glb/dist/spz_verify.wasm
-            tools/spz_to_glb/dist/spz_verify.data
+          path: tools/spz_to_glb/dist/
 
   release:
     needs: [build, wasm-build]
