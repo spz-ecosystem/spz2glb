@@ -388,7 +388,12 @@ fastgltf::Asset createGltfAsset(const std::vector<uint8_t>& spzData, const SpzHe
  */
 bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_t>& glbData) {
     // 步骤 1: 解压副本用于解析头部
-    auto decompressedData = decompressSpzData(spzData);
+    auto decompressResult = decompressSpzData(spzData);
+    if (!decompressResult.success) {
+        std::cerr << "[ERROR] " << decompressResult.errorMessage << std::endl;
+        return false;
+    }
+    auto& decompressedData = decompressResult.data;
 
     // 步骤 2: 解析 SPZ 头部
     SpzHeader header;
