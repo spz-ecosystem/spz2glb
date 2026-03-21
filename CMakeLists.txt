@@ -204,7 +204,6 @@ if(SPZ2GLB_BUILD_WASM)
     "-sDISABLE_EXCEPTION_CATCHING=1"
     "-sDISABLE_EXCEPTION_THROWING=1"
     "-sMALLOC=emmalloc"
-    "-sOPTIMIZE=3"
 
     # 文件拆分（减小 30% 体积）
     "-sSINGLE_FILE=0"
@@ -266,7 +265,6 @@ if(SPZ2GLB_BUILD_WASM)
     "-sDISABLE_EXCEPTION_CATCHING=1"
     "-sDISABLE_EXCEPTION_THROWING=1"
     "-sMALLOC=emmalloc"
-    "-sOPTIMIZE=3"
     "-sSINGLE_FILE=0"
   )
 
