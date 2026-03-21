@@ -158,12 +158,12 @@ if(SPZ2GLB_BUILD_WASM)
   target_compile_options(spz2glb-wasm PRIVATE --use-port=zlib)
   target_link_options(spz2glb-wasm PRIVATE --use-port=zlib)
 
-  # C++ 编译时优化（之前缺失的关键配置）
+  # C++ 编译时优化
+  # 注意：不使用 -fno-exceptions 和 -fno-rtti，因为 Embind 需要 RTTI
+  # 异常处理通过链接选项 -sDISABLE_EXCEPTION_CATCHING=1 禁用
   target_compile_options(spz2glb-wasm PRIVATE
     "-O3"
     "-flto"
-    "-fno-exceptions"
-    "-fno-rtti"
   )
 
   # WASM 链接优化配置
@@ -235,11 +235,10 @@ if(SPZ2GLB_BUILD_WASM)
   target_compile_options(spz_verify-wasm PRIVATE --use-port=zlib)
 
   # C++ 编译优化
+  # 注意：不使用 -fno-exceptions 和 -fno-rtti，因为 Embind 需要 RTTI
   target_compile_options(spz_verify-wasm PRIVATE
     "-O3"
     "-flto"
-    "-fno-exceptions"
-    "-fno-rtti"
   )
 
   # 完整链接优化
