@@ -26,6 +26,7 @@
 #include <string>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <zlib.h>
 
 #include <fastgltf/core.hpp>
@@ -35,6 +36,29 @@
 #include <emscripten/bind.h>
 #include "emscripten_utils.h"
 #endif
+
+enum class SpzErrorCode {
+    Success = 0,
+    CannotOpenSpzFile = 1,
+    FailedToReadSpzFile = 2,
+    FailedToInitZlib = 3,
+    FailedToDecompress = 4,
+    ConversionFailed = 5,
+    CannotOpenOutputFile = 6
+};
+
+struct SpzResult {
+    bool success;
+    std::string errorMessage;
+    std::vector<uint8_t> data;
+
+    static SpzResult ok(std::vector<uint8_t> data) {
+        return {true, "", std::move(data)};
+    }
+    static SpzResult error(SpzErrorCode code, const std::string& msg) {
+        return {false, msg, {}};
+    }
+};
 
 /**
  * SPZ 文件格式头结构（16 字节）
@@ -128,11 +152,12 @@ int getAccessorCount(int shDegree) {
  * - GLB 存储压缩数据，加载时由 SPZ 解码器解压
  * - 符合 SPZ_2 规范的压缩流模式
  */
-std::vector<uint8_t> loadSpzFile(const std::string& spzPath) {
+SpzResult loadSpzFile(const std::string& spzPath) {
     // 以二进制模式打开文件，ios::ate 将读取位置定位到文件末尾
     std::ifstream file(spzPath, std::ios::binary | std::ios::ate);
     if (!file) {
-        throw std::runtime_error("Cannot open SPZ file: " + spzPath);
+        return SpzResult::error(SpzErrorCode::CannotOpenSpzFile,
+            "Cannot open SPZ file: " + spzPath);
     }
 
     // 获取文件大小（tellg 返回当前位置，即文件末尾）
@@ -146,13 +171,14 @@ std::vector<uint8_t> loadSpzFile(const std::string& spzPath) {
 
     // 一次性读取整个文件到缓冲区
     if (!file.read(reinterpret_cast<char*>(rawBuffer.data()), size)) {
-        throw std::runtime_error("Failed to read SPZ file");
+        return SpzResult::error(SpzErrorCode::FailedToReadSpzFile,
+            "Failed to read SPZ file");
     }
 
     // 返回原始 SPZ 数据（保持 gzip 压缩状态）
     // 重要：不要解压！GLB 必须存储原始压缩数据
     // SPZ 解码器在加载时会自动解压
-    return rawBuffer;
+    return SpzResult::ok(std::move(rawBuffer));
 }
 
 /**
@@ -176,11 +202,11 @@ std::vector<uint8_t> loadSpzFile(const std::string& spzPath) {
  * 4. 循环解压直到 Z_STREAM_END
  * 5. 调整最终大小并返回
  */
-std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedData) {
+SpzResult decompressSpzData(const std::vector<uint8_t>& compressedData) {
     // 检查 gzip 魔数：前两个字节必须是 0x1f 0x8b
     if (compressedData.size() < 2 || compressedData[0] != 0x1f || compressedData[1] != 0x8b) {
         // 不是 gzip 压缩，直接返回原始数据
-        return compressedData;
+        return SpzResult::ok(const_cast<std::vector<uint8_t>&>(compressedData));
     }
 
     // 预分配解压缓冲区（假设压缩率约 10 倍）
@@ -196,7 +222,8 @@ std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedDat
 
     // 初始化解压：16 + MAX_WBITS 表示使用 gzip 格式（而不是 zlib）
     if (inflateInit2(&strm, 16 + MAX_WBITS) != Z_OK) {
-        throw std::runtime_error("Failed to initialize zlib decompression");
+        return SpzResult::error(SpzErrorCode::FailedToInitZlib,
+            "Failed to initialize zlib decompression");
     }
 
     // 循环解压直到完成
@@ -217,7 +244,8 @@ std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedDat
     // 检查解压结果：必须是 Z_STREAM_END
     if (ret != Z_STREAM_END) {
         inflateEnd(&strm);
-        throw std::runtime_error("Failed to decompress SPZ file");
+        return SpzResult::error(SpzErrorCode::FailedToDecompress,
+            "Failed to decompress SPZ file");
     }
 
     // 调整到实际解压的大小
@@ -225,7 +253,7 @@ std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedDat
     // 释放 zlib 资源
     inflateEnd(&strm);
 
-    return decompressed;
+    return SpzResult::ok(std::move(decompressed));
 }
 
 /**
@@ -448,37 +476,36 @@ int main(int argc, char** argv) {
     std::string inputPath = argv[1];   // 输入 SPZ 文件路径
     std::string outputPath = argv[2];  // 输出 GLB 文件路径
 
-    try {
-        // 步骤 1: 加载 SPZ 文件
-        std::cout << "[INFO] Loading SPZ: " << inputPath << std::endl;
-        auto spzData = loadSpzFile(inputPath);
-
-        // 步骤 2: 调用核心转换函数
-        std::vector<uint8_t> glbData;
-        if (!convertSpzToGlbCore(spzData, glbData)) {
-            throw std::runtime_error("Conversion failed");
-        }
-
-        // 步骤 3: 写入文件
-        std::cout << "[INFO] Writing GLB: " << outputPath << std::endl;
-        std::ofstream file(outputPath, std::ios::binary);
-        if (!file) {
-            throw std::runtime_error("Cannot open output file: " + outputPath);
-        }
-
-        file.write(reinterpret_cast<const char*>(glbData.data()), glbData.size());
-
-        // 步骤 4: 打印成功信息
-        std::cout << "[SUCCESS] GLB exported: " << outputPath << std::endl;
-        std::cout << "[INFO] GLB size: " << (glbData.size() / 1024 / 1024) << " MB" << std::endl;
-
-        return 0;  // 成功退出
-
-    } catch (const std::exception& e) {
-        // 异常处理：打印错误信息并返回错误码
-        std::cerr << "[ERROR] " << e.what() << std::endl;
+    // 步骤 1: 加载 SPZ 文件
+    std::cout << "[INFO] Loading SPZ: " << inputPath << std::endl;
+    auto spzResult = loadSpzFile(inputPath);
+    if (!spzResult.success) {
+        std::cerr << "[ERROR] " << spzResult.errorMessage << std::endl;
         return 1;
     }
+
+    // 步骤 2: 调用核心转换函数
+    std::vector<uint8_t> glbData;
+    if (!convertSpzToGlbCore(spzResult.data, glbData)) {
+        std::cerr << "[ERROR] Conversion failed" << std::endl;
+        return 1;
+    }
+
+    // 步骤 3: 写入文件
+    std::cout << "[INFO] Writing GLB: " << outputPath << std::endl;
+    std::ofstream file(outputPath, std::ios::binary);
+    if (!file) {
+        std::cerr << "[ERROR] Cannot open output file: " << outputPath << std::endl;
+        return 1;
+    }
+
+    file.write(reinterpret_cast<const char*>(glbData.data()), glbData.size());
+
+    // 步骤 4: 打印成功信息
+    std::cout << "[SUCCESS] GLB exported: " << outputPath << std::endl;
+    std::cout << "[INFO] GLB size: " << (glbData.size() / 1024 / 1024) << " MB" << std::endl;
+
+    return 0;  // 成功退出
 }
 
 #endif  // __EMSCRIPTEN__
