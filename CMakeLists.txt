@@ -42,7 +42,8 @@ endif()
 # ZLIB 配置（支持 Emscripten WASM）
 # ============================================================
 if(SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-  # Emscripten 使用端口版本的 ZLIB，无需 find_package
+  # Emscripten 使用端口版本的 ZLIB
+  # Emscripten 会自动配置 zlib 路径，但需要确保 include 目录正确
   message(STATUS "Using Emscripten port of ZLIB")
 else()
   find_package(ZLIB QUIET)
@@ -153,7 +154,8 @@ if(SPZ2GLB_BUILD_WASM)
     target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  # Emscripten ZLIB 配置（仅链接时需要）
+  # Emscripten ZLIB 配置（编译和链接都需要）
+  target_compile_options(spz2glb-wasm PRIVATE --use-port=zlib)
   target_link_options(spz2glb-wasm PRIVATE --use-port=zlib)
 
   # C++ 编译时优化（之前缺失的关键配置）
@@ -228,6 +230,9 @@ if(SPZ2GLB_BUILD_WASM)
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz_verify-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
+
+  # Emscripten ZLIB 配置（编译和链接都需要）
+  target_compile_options(spz_verify-wasm PRIVATE --use-port=zlib)
 
   # C++ 编译优化
   target_compile_options(spz_verify-wasm PRIVATE
