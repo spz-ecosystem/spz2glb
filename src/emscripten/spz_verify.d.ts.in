@@ -1,0 +1,21 @@
+export interface SpzVerifyModule {
+  layer1ValidateGlbStructure(glbData: Uint8Array): ValidationResult;
+  layer2ValidateLossless(spzData: Uint8Array, glbData: Uint8Array): ValidationResult;
+  layer3ValidateDecoding(spzData: Uint8Array, glbData: Uint8Array): ValidationResult;
+  validateAll(spzData: Uint8Array, glbData: Uint8Array): AllLayersResult;
+}
+
+export interface ValidationResult {
+  passed: boolean;
+  layer: 1 | 2 | 3;
+  message?: string;
+  details?: Record<string, any>;
+}
+
+export interface AllLayersResult {
+  overall: boolean;
+  layers: ValidationResult[];
+  totalTime: number;
+}
+
+export default function createSpzVerifyModule(): Promise<SpzVerifyModule>;

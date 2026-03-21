@@ -153,23 +153,59 @@ if(SPZ2GLB_BUILD_WASM)
     target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  # Emscripten ZLIB 配置
-  # 需要同时使用 compile 和 link 选项
-  target_compile_options(spz2glb-wasm PRIVATE --use-port=zlib)
+  # Emscripten ZLIB 配置（仅链接时需要）
   target_link_options(spz2glb-wasm PRIVATE --use-port=zlib)
 
-  # WASM 链接选项
+  # C++ 编译时优化（之前缺失的关键配置）
+  target_compile_options(spz2glb-wasm PRIVATE
+    "-O3"
+    "-flto"
+    "-fno-exceptions"
+    "-fno-rtti"
+  )
+
+  # WASM 链接优化配置
   target_link_options(spz2glb-wasm PRIVATE
-    "-O3"                              # 优化级别
-    "--use-port=zlib"                  # 使用完整的 Emscripten zlib 端口（处理编译和链接）
-    "--bind"                           # Emscripten bindings
-    "-sMODULARIZE=1"                   # 模块化输出
-    "-sEXPORT_NAME=createSpz2GlbModule" # 导出函数名
-    "-sALLOW_MEMORY_GROWTH=1"          # 允许内存增长
-    "-sENVIRONMENT=web"                # Web 环境
-    "-sEXPORT_ES6=1"                   # ES6 模块
-    "-sSINGLE_FILE=1"                  # 单文件输出（JS+WASM）
-    "-sEXPORTED_RUNTIME_METHODS=[\"ccall\",\"cwrap\"]" # 导出运行时方法
+    # 优化级别
+    "-O3"
+    "-flto"
+
+    # Embind
+    "--bind"
+
+    # 模块化
+    "-sMODULARIZE=1"
+    "-sEXPORT_NAME=createSpz2GlbModule"
+
+    # 内存配置（关键：大文件处理）
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sINITIAL_MEMORY=33554432"     # 32MB 初始
+    "-sMAXIMUM_MEMORY=1073741824"   # 1GB 最大
+    "-sSTACK_SIZE=10485760"         # 10MB 栈
+
+    # Web 环境
+    "-sENVIRONMENT=web"
+    "-sEXPORT_ES6=1"
+
+    # 文件系统（不需要，禁用以减小体积）
+    "-sFILESYSTEM=0"
+
+    # 生产环境优化
+    "-sASSERTIONS=0"
+    "-sNO_EXIT_RUNTIME=1"
+    "-sNO_DYNAMIC_EXECUTION=1"
+    "-sERROR_ON_UNDEFINED_SYMBOLS=1"
+    "-sWARN_ON_UNDEFINED_SYMBOLS=1"
+
+    # 性能优化
+    "-sWASM_BIGINT=1"
+    "-sDISABLE_EXCEPTION_CATCHING=1"
+    "-sDISALLOW_EXCEPTION_THROWING=1"
+    "-sMALLOC=emmalloc"
+    "-sOPTIMIZE=3"
+
+    # 文件拆分（减小 30% 体积）
+    "-sSINGLE_FILE=0"
   )
 
   # 输出配置
@@ -177,6 +213,82 @@ if(SPZ2GLB_BUILD_WASM)
     OUTPUT_NAME "spz2glb"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
   )
+
+  # ============================================================
+  # spz_verify WASM 构建
+  # ============================================================
+
+  add_executable(spz_verify-wasm
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+  )
+
+  target_link_libraries(spz_verify-wasm PRIVATE fastgltf)
+
+  # KHR Gaussian Splatting 支持
+  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+    target_compile_definitions(spz_verify-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+  endif()
+
+  # C++ 编译优化
+  target_compile_options(spz_verify-wasm PRIVATE
+    "-O3"
+    "-flto"
+    "-fno-exceptions"
+    "-fno-rtti"
+  )
+
+  # 完整链接优化
+  target_link_options(spz_verify-wasm PRIVATE
+    "-O3"
+    "-flto"
+    "-sUSE_ZLIB=1"
+    "--use-port=zlib"
+    "--bind"
+    "-sMODULARIZE=1"
+    "-sEXPORT_NAME=createSpzVerifyModule"
+    "-sALLOW_MEMORY_GROWTH=1"
+    "-sINITIAL_MEMORY=33554432"
+    "-sMAXIMUM_MEMORY=1073741824"
+    "-sSTACK_SIZE=10485760"
+    "-sENVIRONMENT=web"
+    "-sEXPORT_ES6=1"
+    "-sFILESYSTEM=0"
+    "-sASSERTIONS=0"
+    "-sNO_EXIT_RUNTIME=1"
+    "-sNO_DYNAMIC_EXECUTION=1"
+    "-sERROR_ON_UNDEFINED_SYMBOLS=1"
+    "-sWARN_ON_UNDEFINED_SYMBOLS=1"
+    "-sWASM_BIGINT=1"
+    "-sDISABLE_EXCEPTION_CATCHING=1"
+    "-sDISALLOW_EXCEPTION_THROWING=1"
+    "-sMALLOC=emmalloc"
+    "-sOPTIMIZE=3"
+    "-sSINGLE_FILE=0"
+  )
+
+  set_target_properties(spz_verify-wasm PROPERTIES
+    OUTPUT_NAME "spz_verify"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
+  )
+
+  message(STATUS "Added spz_verify-wasm configured")
+
+  # ============================================================
+  # 生成 TypeScript 声明文件
+  # ============================================================
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/emscripten/spz2glb.d.ts.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dist/spz2glb.d.ts"
+    COPYONLY
+  )
+
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/emscripten/spz_verify.d.ts.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dist/spz_verify.d.ts"
+    COPYONLY
+  )
+
+  message(STATUS "TypeScript definitions generated")
 
   message(STATUS "WASM output directory: ${CMAKE_CURRENT_SOURCE_DIR}/dist")
 endif()

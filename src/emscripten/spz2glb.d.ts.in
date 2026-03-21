@@ -1,0 +1,7 @@
+export interface Spz2GlbModule {
+  convertSpzToGlb(spzData: Uint8Array): Uint8Array | null;
+  getMemoryUsage(): { current: number; peak: number; max: number };
+  getVersion(): string;
+}
+
+export default function createSpz2GlbModule(): Promise<Spz2GlbModule>;
