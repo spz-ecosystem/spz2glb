@@ -162,7 +162,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: wasm-modules
-          path: tools/spz_to_glb/dist/
+          path: dist/
 
   release:
     needs: [build, wasm-build]
