@@ -151,7 +151,12 @@ jobs:
       - name: List WASM output files
         run: |
           pwd
-          ls -la tools/spz_to_glb/dist/ 2>/dev/null || ls -la tools/spz_to_glb/
+          echo "=== tools/spz_to_glb/ ==="
+          ls -la tools/spz_to_glb/ 2>/dev/null || echo "tools/spz_to_glb/ not found"
+          echo "=== find for *.wasm ==="
+          find . -name "*.wasm" 2>/dev/null | head -20
+          echo "=== find for spz2glb* ==="
+          find . -name "spz2glb*" 2>/dev/null | head -20
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v5
