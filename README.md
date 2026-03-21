@@ -278,6 +278,91 @@ chmod +x verify.sh
 verify.bat model.spz
 ```
 
+## WebAssembly Build
+
+### Build WASM Version
+
+```bash
+# Install Emscripten
+git clone https://github.com/emscripten-core/emsdk.git
+cd emsdk
+./emsdk install latest
+./emsdk activate latest
+source ./emsdk_env.sh
+
+# Build WASM modules
+cd tools/spz_to_glb
+emcmake cmake -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
+emmake cmake --build build_wasm --config Release --target spz2glb-wasm
+emmake cmake --build build_wasm --config Release --target spz_verify-wasm
+
+# Output in build_wasm/dist/
+# - spz2glb.js, spz2glb.wasm, spz2glb.data
+# - spz_verify.js, spz_verify.wasm, spz_verify.data
+```
+
+### Web Usage
+
+**Important**: For the WASM version, you must download **all** files:
+- `spz2glb.js`
+- `spz2glb.wasm`
+- `spz2glb.data`
+
+Place them in the same directory and load via HTTP server.
+
+### JavaScript API
+
+```javascript
+// Load the module
+const Module = await createSpz2GlbModule();
+
+// Convert SPZ to GLB
+const spzBuffer = new Uint8Array([...]);  // Your SPZ file data
+const glbBuffer = Module.convertSpzToGlb(spzBuffer);
+
+if (glbBuffer) {
+    // Success: glbBuffer is Uint8Array
+    console.log('Conversion successful!');
+} else {
+    // Failed
+    console.error('Conversion failed');
+}
+
+// Get memory statistics (optional)
+const stats = Module.getMemoryStats();
+console.log(`Peak memory: ${stats.peak_usage / 1024 / 1024} MB`);
+```
+
+### spz_verify JavaScript API
+
+```javascript
+const verifyModule = await createSpzVerifyModule();
+
+// Layer 1: GLB structure validation
+const layer1Result = verifyModule.layer1ValidateGlbStructure(glbBuffer);
+
+// Layer 2: Binary lossless verification
+const layer2Result = verifyModule.layer2ValidateLossless(spzBuffer, glbBuffer);
+
+// Layer 3: Decoding consistency
+const layer3Result = verifyModule.layer3ValidateDecoding(spzBuffer, glbBuffer);
+```
+
+### WASM Memory Configuration
+
+| Setting | Value | Description |
+|---------|-------|-------------|
+| INITIAL_MEMORY | 64MB | Initial heap size |
+| MAXIMUM_MEMORY | 1GB | Maximum heap size |
+
+### Performance Optimizations
+
+The WASM build includes:
+- **-O3 -flto**: Link-time optimization
+- **-fno-exceptions**: No exception overhead
+- **Memory pool**: Bump allocator for fast allocation
+- **Hot object pool**: Fixed-size object reuse
+
 ## Dependencies
 
 - CMake 3.15+
