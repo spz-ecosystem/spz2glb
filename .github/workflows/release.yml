@@ -125,16 +125,8 @@ jobs:
         with:
           version: latest
 
-      - name: Debug paths
-        run: |
-          pwd
-          ls -la
-          find . -name "spz_to_glb" -type d
-
       - name: Configure WASM build
         run: |
-          pwd
-          ls -la tools/spz_to_glb/ 2>/dev/null || ls -la
           cd tools/spz_to_glb
           emcmake cmake -S ../../ -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
 
@@ -147,16 +139,6 @@ jobs:
         run: |
           cd tools/spz_to_glb
           emmake cmake --build build_wasm --config Release --target spz_verify-wasm
-
-      - name: List WASM output files
-        run: |
-          pwd
-          echo "=== tools/spz_to_glb/ ==="
-          ls -la tools/spz_to_glb/ 2>/dev/null || echo "tools/spz_to_glb/ not found"
-          echo "=== find for *.wasm ==="
-          find . -name "*.wasm" 2>/dev/null | head -20
-          echo "=== find for spz2glb* ==="
-          find . -name "spz2glb*" 2>/dev/null | head -20
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v5
