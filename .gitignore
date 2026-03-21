@@ -19,6 +19,9 @@ test_output/
 .DS_Store
 Thumbs.db
 
+# Worktrees
+.worktrees/
+
 # Executables
 spz2glb
 spz2glb.exe
