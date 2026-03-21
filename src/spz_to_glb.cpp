@@ -56,6 +56,7 @@ struct SpzResult {
         return {true, "", std::move(data)};
     }
     static SpzResult error(SpzErrorCode code, const std::string& msg) {
+        (void)code;
         return {false, msg, {}};
     }
 };
@@ -444,24 +445,17 @@ bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_
  * const glbData = Module.convertSpzToGlb(spzData);
  */
 emscripten::val convertSpzToGlb(const emscripten::val& spzBuffer) {
-    try {
-        // 1. JavaScript Uint8Array 转 C++ vector
-        std::vector<uint8_t> spzData = spz2glb::vectorFromJsArray(spzBuffer);
+    // 1. JavaScript Uint8Array 转 C++ vector
+    std::vector<uint8_t> spzData = spz2glb::vectorFromJsArray(spzBuffer);
 
-        // 2. 调用核心转换函数
-        std::vector<uint8_t> glbData;
-        if (!convertSpzToGlbCore(spzData, glbData)) {
-            return emscripten::val::null();
-        }
-
-        // 3. C++ vector 转 JavaScript Uint8Array
-        return spz2glb::jsUint8ArrayFromVector(glbData);
-
-    } catch (const std::exception& e) {
-        emscripten::val console = emscripten::val::global("console");
-        console.call<void>("error", std::string("SPZ2GLB Error: ") + e.what());
+    // 2. 调用核心转换函数
+    std::vector<uint8_t> glbData;
+    if (!convertSpzToGlbCore(spzData, glbData)) {
         return emscripten::val::null();
     }
+
+    // 3. C++ vector 转 JavaScript Uint8Array
+    return spz2glb::jsUint8ArrayFromVector(glbData);
 }
 
 EMSCRIPTEN_BINDINGS(spz2glb_module) {
