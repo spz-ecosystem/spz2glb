@@ -140,26 +140,21 @@ jobs:
           cd tools/spz_to_glb
           emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
-      - name: Copy WASM output
+      - name: List WASM output files
         run: |
-          cp tools/spz_to_glb/dist/* . 2>/dev/null || true
-          ls -la
-
-      - name: List output files
-        run: |
-          ls -la
+          ls -la tools/spz_to_glb/dist/
 
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v5
         with:
           name: wasm-modules
           path: |
-            spz2glb.js
-            spz2glb.wasm
-            spz2glb.data
-            spz_verify.js
-            spz_verify.wasm
-            spz_verify.data
+            tools/spz_to_glb/dist/spz2glb.js
+            tools/spz_to_glb/dist/spz2glb.wasm
+            tools/spz_to_glb/dist/spz2glb.data
+            tools/spz_to_glb/dist/spz_verify.js
+            tools/spz_to_glb/dist/spz_verify.wasm
+            tools/spz_to_glb/dist/spz_verify.data
 
   release:
     needs: [build, wasm-build]
