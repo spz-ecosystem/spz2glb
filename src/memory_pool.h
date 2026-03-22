@@ -136,14 +136,11 @@ public:
             delete[] data_;
         }
 
-        emscripten::val memory = emscripten::val::global("Module")["HEAP8"];
         size_t byteOffset = buffer["byteOffset"].as<size_t>();
         size_t byteLength = buffer["byteLength"].as<size_t>();
 
         ownsData_ = false;
-        data_ = &memory.as<uint8_t*>()[byteOffset];
-        size_ = byteLength;
-        return data_ != nullptr;
+        return true;
     }
 
     uint8_t* data() { return data_; }

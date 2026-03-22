@@ -447,24 +447,16 @@ bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_
  * const glbData = Module.convertSpzToGlb(spzData);
  */
 emscripten::val convertSpzToGlb(const emscripten::val& spzBuffer) {
-    // 步骤 1: 零拷贝获取 JS Buffer 指针
-    // 直接从 WASM HEAP 获取视图，避免 vectorFromJsArray 的逐字节复制
-    emscripten::val heapView = emscripten::val::global("Module")["HEAP8"];
-    size_t byteOffset = spzBuffer["byteOffset"].as<size_t>();
-    size_t byteLength = spzBuffer["byteLength"].as<size_t>();
+    // JavaScript Uint8Array 转 C++ vector（Embind 标准做法）
+    std::vector<uint8_t> spzData = spz2glb::vectorFromJsArray(spzBuffer);
 
-    // 步骤 2: 使用 HEAP 指针创建 vector（仍然是拷贝，但比逐字节复制快）
-    // 真正的零拷贝需要重构 decompressSpzData 等函数
-    uint8_t* heapBase = heapView.as<uint8_t*>();
-    std::vector<uint8_t> spzData(heapBase + byteOffset, heapBase + byteOffset + byteLength);
-
-    // 步骤 3: 调用核心转换函数
+    // 调用核心转换函数
     std::vector<uint8_t> glbData;
     if (!convertSpzToGlbCore(spzData, glbData)) {
         return emscripten::val::null();
     }
 
-    // 步骤 4: 返回结果（不可避免的拷贝，因为 JS 需要自己的内存）
+    // 返回 JavaScript Uint8Array
     return spz2glb::jsUint8ArrayFromVector(glbData);
 }
 
