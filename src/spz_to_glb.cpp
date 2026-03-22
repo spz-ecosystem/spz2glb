@@ -284,45 +284,39 @@ SpzResult decompressSpzData(std::vector<uint8_t> compressedData) {
  * - 渲染器需要 SPZ 解码器
  */
 fastgltf::Asset createGltfAsset(std::vector<uint8_t> spzData, const SpzHeader& header) {
-    (void)header; // 头部信息预留未来使用（如验证点数等）
-    
+    (void)header;
+
     fastgltf::Asset asset;
 
-    // 注册使用的扩展（必须声明才能使用）
     asset.extensionsUsed.emplace_back("KHR_gaussian_splatting");
     asset.extensionsUsed.emplace_back("KHR_gaussian_splatting_compression_spz_2");
-
-    // 必需的扩展（没有这些扩展无法正确渲染）
     asset.extensionsRequired.emplace_back("KHR_gaussian_splatting");
     asset.extensionsRequired.emplace_back("KHR_gaussian_splatting_compression_spz_2");
 
-    // glTF 资产元信息
     asset.assetInfo.emplace();
-    asset.assetInfo->gltfVersion = "2.0";           // glTF 2.0 规范
-    asset.assetInfo->copyright = "";                // 版权信息（空）
-    asset.assetInfo->generator = "spz_to_glb_fastgltf";  // 生成器名称
+    asset.assetInfo->gltfVersion = "2.0";
+    asset.assetInfo->copyright = "";
+    asset.assetInfo->generator = "spz_to_glb_fastgltf";
 
-    // 获取 SPZ 数据大小
     size_t spzSize = spzData.size();
 
-    // 创建 glTF Buffer（存储 SPZ 压缩数据）
-    // 使用 ByteView 避免拷贝：直接引用原始数据
+    // 创建 Buffer（存储 SPZ 压缩数据）
+    // 注意：需要将 uint8_t 转换为 std::byte（这是 unavoidable 的）
     fastgltf::Buffer buffer;
-    fastgltf::sources::ByteView byteView;
-    byteView.bytes = fastgltf::span<const std::byte>(
-        reinterpret_cast<const std::byte*>(spzData.data()),
-        spzSize
-    );
-    byteView.mimeType = fastgltf::MimeType::None;
-    buffer.data = std::move(byteView);
+    fastgltf::sources::Array arrayData;
+    arrayData.bytes.reserve(spzSize);
+    for (size_t i = 0; i < spzSize; i++) {
+        arrayData.bytes.push_back(static_cast<std::byte>(spzData[i]));
+    }
+    arrayData.mimeType = fastgltf::MimeType::None;
+    buffer.data = std::move(arrayData);
     buffer.byteLength = spzSize;
     asset.buffers.emplace_back(std::move(buffer));
 
-    // 创建 BufferView（指向整个 Buffer）
     fastgltf::BufferView spzBufferView;
-    spzBufferView.bufferIndex = 0;         // 引用第 0 个 Buffer
-    spzBufferView.byteOffset = 0;          // 从开头开始
-    spzBufferView.byteLength = spzSize;    // 长度为整个 SPZ 数据
+    spzBufferView.bufferIndex = 0;
+    spzBufferView.byteOffset = 0;
+    spzBufferView.byteLength = spzSize;
     asset.bufferViews.emplace_back(std::move(spzBufferView));
 
     // 创建 Primitive（使用 SPZ 压缩扩展）
