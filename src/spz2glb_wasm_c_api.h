@@ -20,9 +20,15 @@
 #include <stdint.h>
 
 // Ensure struct has known size
+#if defined(__cplusplus)
+static_assert(sizeof(uint32_t) == 4, "uint32_t must be 4 bytes");
+static_assert(sizeof(uint64_t) == 8, "uint64_t must be 8 bytes");
+static_assert(sizeof(size_t) >= 4, "size_t must be at least 32 bits");
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 _Static_assert(sizeof(uint32_t) == 4, "uint32_t must be 4 bytes");
 _Static_assert(sizeof(uint64_t) == 8, "uint64_t must be 8 bytes");
 _Static_assert(sizeof(size_t) >= 4, "size_t must be at least 32 bits");
+#endif
 
 #ifdef __cplusplus
 extern "C" {

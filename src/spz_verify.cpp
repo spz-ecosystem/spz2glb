@@ -691,7 +691,8 @@ uint8_t* computeMd5HashWasm(const uint8_t* data, size_t len, uint8_t* outHash) {
 
     Md5Hash hash;
     hash.update(data, len);
-    std::memcpy(outHash, hash.finalizeBytes(), 16);
+    std::string result = hash.finalize();
+    std::memcpy(outHash, result.data(), 16);
     return outHash;
 }
 
