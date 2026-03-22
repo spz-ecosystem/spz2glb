@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPZ → GLB 在线转换器</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #8b5cf6;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --border-radius: 16px;
+            --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            background: var(--bg-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 560px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 48px 40px;
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo {
+            width: 72px;
+            height: 72px;
+            background: var(--bg-gradient);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+        }
+
+        .logo svg {
+            width: 40px;
+            height: 40px;
+            fill: white;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 32px;
+        }
+
+        .feature {
+            text-align: center;
+            padding: 16px 8px;
+            background: #f8f9ff;
+            border-radius: 12px;
+        }
+
+        .feature-icon {
+            font-size: 1.5rem;
+            margin-bottom: 6px;
+        }
+
+        .feature-text {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .drop-zone {
+            border: 2px dashed #e5e7eb;
+            border-radius: var(--border-radius);
+            padding: 48px 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fafafa;
+            margin-bottom: 20px;
+        }
+
+        .drop-zone:hover {
+            border-color: var(--primary);
+            background: #f0f1ff;
+        }
+
+        .drop-zone.dragover {
+            border-color: var(--primary);
+            background: #eef0ff;
+            transform: scale(1.02);
+        }
+
+        .drop-zone.has-file {
+            border-color: var(--success);
+            background: #ecfdf5;
+        }
+
+        .drop-zone-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+
+        .drop-zone-text {
+            font-size: 1rem;
+            color: var(--text-primary);
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .drop-zone-hint {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            display: none;
+            background: #ecfdf5;
+            border: 1px solid var(--success);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-info.show {
+            display: flex;
+        }
+
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--success);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .file-icon svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        .file-details {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-size {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-top: 2px;
+        }
+
+        .file-remove {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .file-remove:hover {
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .file-remove svg {
+            width: 16px;
+            height: 16px;
+            fill: var(--error);
+        }
+
+        .convert-btn {
+            width: 100%;
+            padding: 16px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            background: var(--bg-gradient);
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .convert-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .convert-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .convert-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .status {
+            display: none;
+            margin-top: 20px;
+            padding: 16px 20px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.loading {
+            background: #eff6ff;
+            border: 1px solid #3b82f6;
+            color: #1d4ed8;
+        }
+
+        .status.success {
+            background: #ecfdf5;
+            border: 1px solid var(--success);
+            color: #059669;
+        }
+
+        .status.error {
+            background: #fef2f2;
+            border: 1px solid var(--error);
+            color: #dc2626;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(59, 130, 246, 0.2);
+            border-radius: 50%;
+            border-top-color: #3b82f6;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        .footer a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .privacy-note {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 12px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+        }
+
+        .privacy-note svg {
+            width: 14px;
+            height: 14px;
+            fill: var(--success);
+        }
+
+        @media (max-width: 480px) {
+            .card {
+                padding: 32px 24px;
+            }
+
+            .features {
+                gap: 8px;
+            }
+
+            .feature {
+                padding: 12px 4px;
+            }
+
+            .feature-text {
+                font-size: 0.7rem;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <div class="logo">
+                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7 17h2v-7H7v7zm8 0h2v-7h-2v7z"/>
+                    </svg>
+                </div>
+                <h1>SPZ → GLB</h1>
+                <p class="subtitle">浏览器端无损转换，无需上传服务器</p>
+            </div>
+
+            <div class="features">
+                <div class="feature">
+                    <div class="feature-icon">🔒</div>
+                    <div class="feature-text">无损压缩封装</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🌐</div>
+                    <div class="feature-text">纯浏览器运行</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">⚡</div>
+                    <div class="feature-text">即时转换下载</div>
+                </div>
+            </div>
+
+            <div id="drop-zone" class="drop-zone">
+                <div class="drop-zone-icon">📦</div>
+                <div class="drop-zone-text">拖拽 SPZ 文件到此处</div>
+                <div class="drop-zone-hint">或点击选择文件</div>
+                <input type="file" id="file-input" accept=".spz">
+            </div>
+
+            <div id="file-info" class="file-info">
+                <div class="file-icon">
+                    <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </div>
+                <div class="file-details">
+                    <div id="file-name" class="file-name"></div>
+                    <div id="file-size" class="file-size"></div>
+                </div>
+                <button id="file-remove" class="file-remove">
+                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+
+            <button id="convert-btn" class="convert-btn" disabled>
+                <svg viewBox="0 0 24 24"><path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"/></svg>
+                <span id="btn-text">选择文件开始转换</span>
+            </button>
+
+            <div id="status" class="status"></div>
+
+            <div class="footer">
+                <a href="https://github.com/spz-ecosystem/spz2glb" target="_blank">spz2glb</a> | SPZ_2 无损封装格式
+                <div class="privacy-note">
+                    <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+                    所有转换在本地完成，数据不会上传
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        let spzData = null;
+        let fileNameValue = '';
+        let Module = null;
+
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const fileInfo = document.getElementById('file-info');
+        const fileNameEl = document.getElementById('file-name');
+        const fileSizeEl = document.getElementById('file-size');
+        const fileRemove = document.getElementById('file-remove');
+        const convertBtn = document.getElementById('convert-btn');
+        const btnText = document.getElementById('btn-text');
+        const status = document.getElementById('status');
+
+        function showStatus(message, type) {
+            status.innerHTML = message;
+            status.className = 'status show ' + type;
+        }
+
+        function hideStatus() {
+            status.className = 'status';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        function resetFile() {
+            spzData = null;
+            fileNameValue = '';
+            fileInput.value = '';
+            fileInfo.classList.remove('show');
+            dropZone.classList.remove('has-file');
+            convertBtn.disabled = true;
+            btnText.textContent = '选择文件开始转换';
+            hideStatus();
+        }
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        fileRemove.addEventListener('click', (e) => {
+            e.stopPropagation();
+            resetFile();
+        });
+
+        function handleFile(file) {
+            hideStatus();
+
+            if (!file.name.toLowerCase().endsWith('.spz')) {
+                showStatus('请选择 .spz 文件', 'error');
+                return;
+            }
+
+            fileNameValue = file.name;
+            fileNameEl.textContent = file.name;
+            fileSizeEl.textContent = formatFileSize(file.size);
+            fileInfo.classList.add('show');
+            dropZone.classList.add('has-file');
+            convertBtn.disabled = false;
+            btnText.textContent = '转换 ' + file.name;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                spzData = new Uint8Array(e.target.result);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        convertBtn.addEventListener('click', async () => {
+            if (!spzData) return;
+
+            if (!Module) {
+                showStatus('<span class="loading-spinner"></span>WASM 模块加载中...', 'loading');
+                return;
+            }
+
+            convertBtn.disabled = true;
+            btnText.textContent = '转换中...';
+            showStatus('<span class="loading-spinner"></span>正在转换，请稍候...', 'loading');
+
+            try {
+                const glbData = Module.convertSpzToGlb(spzData);
+
+                if (!glbData) {
+                    throw new Error('转换失败');
+                }
+
+                const blob = new Blob([glbData], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileNameValue.replace(/\.spz$/i, '.glb');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showStatus('✅ 转换成功！GLB 大小: ' + formatFileSize(glbData.length), 'success');
+
+            } catch (err) {
+                showStatus('❌ 错误: ' + err.message, 'error');
+            } finally {
+                convertBtn.disabled = false;
+                btnText.textContent = '转换 ' + fileNameValue;
+            }
+        });
+
+        async function init() {
+            showStatus('<span class="loading-spinner"></span>正在加载 WASM 模块...', 'loading');
+
+            try {
+                const wasmUrl = './spz2glb.js';
+                const module = await import(wasmUrl);
+                Module = await module.default();
+                hideStatus();
+            } catch (err) {
+                showStatus('❌ WASM 模块加载失败<br><small>请确保在支持 WebAssembly 的浏览器中打开</small>', 'error');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
