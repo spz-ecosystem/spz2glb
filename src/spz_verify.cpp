@@ -697,22 +697,25 @@ bool validateGlbHeader(emscripten::val buffer) {
     return magic == 0x46546C67 && version == 2;
 }
 
-bool computeMd5Hash(emscripten::val data, std::string& outHash) {
-    void* mem = g_md5Pool.alloc();
-    if (!mem) return false;
-
+std::string computeMd5Hash(emscripten::val data) {
     size_t len = data["length"].as<size_t>();
+
+    void* mem = g_md5Pool.alloc();
     std::vector<uint8_t> buffer(len);
-    for (size_t i = 0; i < len; i++) {
-        buffer[i] = data[i].as<unsigned char>();
+
+    if (mem) {
+        for (size_t i = 0; i < len; i++) {
+            buffer[i] = data[i].as<unsigned char>();
+        }
+        Md5Hash* hash = new (mem) Md5Hash();
+        hash->update(buffer.data(), len);
+        std::string result = hash->finalize();
+        hash->~Md5Hash();
+        g_md5Pool.dealloc(mem);
+        return result;
     }
 
-    Md5Hash* hash = new (mem) Md5Hash();
-    hash->update(buffer.data(), len);
-    outHash = hash->finalize();
-    hash->~Md5Hash();
-    g_md5Pool.dealloc(mem);
-    return true;
+    return Md5Hash::hash(buffer.data(), len);
 }
 
 }
