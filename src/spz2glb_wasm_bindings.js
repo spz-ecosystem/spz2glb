@@ -2,10 +2,12 @@
  * High-Performance WebAssembly bindings for spz2glb
  *
  * Uses WebAssembly.instantiate directly instead of Embind
- * for zero-copy JS <-> WASM memory access
+ * for direct JS <-> WASM memory access
  *
  * Usage:
- *   const { instance } = await WebAssembly.instantiate(wasmBuffer);
+ *   const response = await fetch('spz2glb.wasm');
+ *   const buffer = await response.arrayBuffer();
+ *   const { instance } = await WebAssembly.instantiate(buffer);
  *   const spz2glb = createSpz2GlbBindings(instance);
  *   const glbBuffer = spz2glb.convert(spzBuffer);
  */
@@ -24,16 +26,27 @@ function createSpz2GlbBindings(wasmInstance) {
     function convert(spzBuffer) {
         const [inputPtr, inputSize] = writeBuffer(spzBuffer);
 
-        let outSizePtr = 0;
+        const outSizePtr = exports.spz2glb_alloc(8);
         const resultPtr = exports.spz2glb_convert(inputPtr, inputSize, outSizePtr);
 
         freeBuffer(inputPtr);
 
-        if (!resultPtr || !outSizePtr) {
+        if (!resultPtr) {
+            freeBuffer(outSizePtr);
             return null;
         }
 
-        const result = readBuffer(resultPtr, outSizePtr);
+        const heapU32 = new Uint32Array(memory.buffer);
+        const outSize = heapU32[outSizePtr / 4];
+
+        freeBuffer(outSizePtr);
+
+        if (!outSize) {
+            exports.spz2glb_free(resultPtr);
+            return null;
+        }
+
+        const result = readBuffer(resultPtr, outSize);
         exports.spz2glb_free(resultPtr);
 
         return result;
@@ -60,36 +73,55 @@ function createSpz2GlbBindings(wasmInstance) {
         }
     }
 
-    function getMemoryStats() {
-        const statsPtr = exports.spz2glb_get_memory_stats();
-        const stats = new DataView(memory.buffer, statsPtr, 32);
-        return {
-            peak_usage: stats.getUint32(0, true),
-            current_usage: stats.getUint32(8, true),
-            total_allocations: stats.getUint32(16, true),
-            total_frees: stats.getUint32(24, true)
-        };
+    function getVersion() {
+        const versionPtr = exports.spz2glb_alloc(12);
+        exports.spz2glb_get_version(versionPtr, versionPtr + 4, versionPtr + 8);
+
+        const heapU32 = new Uint32Array(memory.buffer);
+        const major = heapU32[versionPtr / 4];
+        const minor = heapU32[versionPtr / 4 + 1];
+        const patch = heapU32[versionPtr / 4 + 2];
+
+        freeBuffer(versionPtr);
+        return `${major}.${minor}.${patch}`;
     }
 
-    function getVersion() {
-        const major = { value: 0 };
-        const minor = { value: 0 };
-        const patch = { value: 0 };
-        exports.spz2glb_get_version(major, minor, patch);
-        return `${major.value}.${minor.value}.${patch.value}`;
+    function getMemoryStats() {
+        const statsPtr = exports.spz2glb_alloc(40);
+        exports.spz2glb_get_memory_stats(statsPtr);
+
+        const heapU32 = new Uint32Array(memory.buffer);
+        const stats = {
+            peak_usage: Number(heapU32[statsPtr / 4]) + (Number(heapU32[statsPtr / 4 + 1]) << 32),
+            current_usage: Number(heapU32[statsPtr / 4 + 2]) + (Number(heapU32[statsPtr / 4 + 3]) << 32),
+            total_allocations: heapU32[statsPtr / 4 + 4],
+            total_frees: heapU32[statsPtr / 4 + 5],
+            failed_allocations: heapU32[statsPtr / 4 + 6]
+        };
+
+        freeBuffer(statsPtr);
+        return stats;
+    }
+
+    function resetMemoryStats() {
+        exports.spz2glb_reset_memory_stats();
     }
 
     return {
         validateHeader,
         convert,
-        getMemoryStats,
         getVersion,
+        getMemoryStats,
+        resetMemoryStats,
         exports
     };
 }
 
 async function loadSpz2GlbWasm(wasmUrl) {
     const response = await fetch(wasmUrl);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch WASM: ${response.status}`);
+    }
     const buffer = await response.arrayBuffer();
     const { instance } = await WebAssembly.instantiate(buffer, {
         env: {
