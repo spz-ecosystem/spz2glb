@@ -152,14 +152,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
 
     steps:
-      - name: Checkout gh-pages
-        uses: actions/checkout@v5
-        with:
-          ref: gh-pages
-          fetch-depth: 0
-
-      - name: Download HTML files from source
+      - name: Download HTML files
         run: |
+          mkdir -p docs/examples
           curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/index.html -o index.html
           curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/verify.html -o verify.html
           curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/spz2glb_bindings.js -o spz2glb_bindings.js
@@ -178,21 +173,16 @@ jobs:
           cp tools/spz_to_glb/dist/spz2glb.wasm .
           cp tools/spz_to_glb/dist/spz_verify.js .
           cp tools/spz_to_glb/dist/spz_verify.wasm .
-          cp src/docs/examples/index.html .
-          cp src/docs/examples/verify.html .
-          cp src/docs/examples/spz2glb_bindings.js .
           ls -la
 
-      - name: Configure git
-        run: |
-          git config user.name "GitHub Action"
-          git config user.email "action@github.com"
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
 
-      - name: Commit and push
-        run: |
-          git add -A
-          git diff --staged --quiet || git commit -m "Update WASM modules and examples"
-          git push origin gh-pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   release:
     needs: [build, wasm-build]
