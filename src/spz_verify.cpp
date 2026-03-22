@@ -668,3 +668,59 @@ std::string Md5Hash::hash(const uint8_t* data, size_t len) {
     h.update(data, len);
     return h.finalize();
 }
+
+#ifdef __EMSCRIPTEN__
+
+#include "memory_pool.h"
+#include <emscripten/bind.h>
+
+namespace {
+
+static spz2glb::BumpAllocator g_workAllocator(16 * 1024 * 1024);
+static spz2glb::HotObjectPool<1024, 64> g_jsonPool;
+static spz2glb::HotObjectPool<sizeof(Md5Hash), 32> g_md5Pool;
+
+struct VerifyResult {
+    bool passed;
+    std::string message;
+};
+
+bool validateGlbHeader(const uint8_t* data, size_t size) {
+    if (size < 12) return false;
+    uint32_t magic = *reinterpret_cast<const uint32_t*>(data);
+    uint32_t version = *reinterpret_cast<const uint32_t*>(data + 4);
+    return magic == 0x46546C67 && version == 2;
+}
+
+bool computeMd5Hash(const uint8_t* data, size_t len, std::string& outHash) {
+    void* mem = g_md5Pool.alloc();
+    if (!mem) return false;
+
+    Md5Hash* hash = new (mem) Md5Hash();
+    hash->update(data, len);
+    outHash = hash->finalize();
+    hash->~Md5Hash();
+    g_md5Pool.dealloc(mem);
+    return true;
+}
+
+}
+
+spz2glb::MemoryStats getVerifyMemoryStats() {
+    return {
+        0,
+        g_workAllocator.used(),
+        0,
+        g_jsonPool.available(),
+        g_workAllocator.used(),
+        g_workAllocator.remaining()
+    };
+}
+
+EMSCRIPTEN_BINDINGS(spz_verify_module) {
+    emscripten::function("validateGlbHeader", &validateGlbHeader);
+    emscripten::function("computeMd5Hash", &computeMd5Hash);
+    emscripten::function("getMemoryStats", &getVerifyMemoryStats);
+}
+
+#endif
