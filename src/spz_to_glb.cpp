@@ -301,15 +301,15 @@ fastgltf::Asset createGltfAsset(std::vector<uint8_t> spzData, const SpzHeader& h
     size_t spzSize = spzData.size();
 
     // 创建 Buffer（存储 SPZ 压缩数据）
-    // 注意：需要将 uint8_t 转换为 std::byte（这是 unavoidable 的）
+    // 使用 Vector 而不是 Array，因为 Vector 有 std::vector<std::byte>
     fastgltf::Buffer buffer;
-    fastgltf::sources::Array arrayData;
-    arrayData.bytes.reserve(spzSize);
+    fastgltf::sources::Vector vectorData;
+    vectorData.bytes.reserve(spzSize);
     for (size_t i = 0; i < spzSize; i++) {
-        arrayData.bytes.push_back(static_cast<std::byte>(spzData[i]));
+        vectorData.bytes.push_back(static_cast<std::byte>(spzData[i]));
     }
-    arrayData.mimeType = fastgltf::MimeType::None;
-    buffer.data = std::move(arrayData);
+    vectorData.mimeType = fastgltf::MimeType::None;
+    buffer.data = std::move(vectorData);
     buffer.byteLength = spzSize;
     asset.buffers.emplace_back(std::move(buffer));
 
