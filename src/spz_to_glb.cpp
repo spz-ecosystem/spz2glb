@@ -205,7 +205,7 @@ SpzResult loadSpzFile(const std::string& spzPath) {
  * 4. 循环解压直到 Z_STREAM_END
  * 5. 调整最终大小并返回
  */
-SpzResult decompressSpzData(const std::vector<uint8_t>& compressedData) {
+SpzResult decompressSpzData(std::vector<uint8_t> compressedData) {
     // 检查 gzip 魔数：前两个字节必须是 0x1f 0x8b
     if (compressedData.size() < 2 || compressedData[0] != 0x1f || compressedData[1] != 0x8b) {
         // 不是 gzip 压缩，直接返回原始数据
@@ -283,7 +283,7 @@ SpzResult decompressSpzData(const std::vector<uint8_t>& compressedData) {
  * - 没有 attributes（数据在压缩流中）
  * - 渲染器需要 SPZ 解码器
  */
-fastgltf::Asset createGltfAsset(const std::vector<uint8_t>& spzData, const SpzHeader& header) {
+fastgltf::Asset createGltfAsset(std::vector<uint8_t> spzData, const SpzHeader& header) {
     (void)header; // 头部信息预留未来使用（如验证点数等）
     
     fastgltf::Asset asset;
@@ -388,14 +388,14 @@ fastgltf::Asset createGltfAsset(const std::vector<uint8_t>& spzData, const SpzHe
  * 3. 创建 glTF 资产
  * 4. 导出 GLB
  */
-bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_t>& glbData) {
-    // 步骤 1: 解压副本用于解析头部
-    auto decompressResult = decompressSpzData(spzData);
+bool convertSpzToGlbCore(std::vector<uint8_t> spzData, std::vector<uint8_t>& glbData) {
+    // 步骤 1: 解压（移动语义，避免拷贝）
+    auto decompressResult = decompressSpzData(std::move(spzData));
     if (!decompressResult.success) {
         std::cerr << "[ERROR] " << decompressResult.errorMessage << std::endl;
         return false;
     }
-    auto& decompressedData = decompressResult.data;
+    std::vector<uint8_t> decompressedData = std::move(decompressResult.data);
 
     // 步骤 2: 解析 SPZ 头部
     SpzHeader header;
@@ -412,7 +412,7 @@ bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_
 
     // 步骤 4: 创建 glTF 资产
     std::cout << "[INFO] Creating glTF Asset with KHR extensions" << std::endl;
-    auto asset = createGltfAsset(spzData, header);
+    auto asset = createGltfAsset(std::move(decompressedData), header);
 
     // 步骤 5: 导出 GLB
     std::cout << "[INFO] Exporting GLB..." << std::endl;
@@ -424,8 +424,8 @@ bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_
         return false;
     }
 
-    // 步骤 6: 获取 GLB 数据
-    const auto& output = result.get().output;
+    // 步骤 6: 获取 GLB 数据（移动语义，避免拷贝）
+    std::vector<std::byte> output = std::move(result.get().output);
     glbData.resize(output.size());
     std::memcpy(glbData.data(), output.data(), output.size());
 
