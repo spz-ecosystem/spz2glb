@@ -383,15 +383,15 @@ fastgltf::Asset createGltfAsset(std::vector<uint8_t> spzData, const SpzHeader& h
  * 4. 导出 GLB
  */
 bool convertSpzToGlbCore(std::vector<uint8_t> spzData, std::vector<uint8_t>& glbData) {
-    // 步骤 1: 解压（移动语义，避免拷贝）
-    auto decompressResult = decompressSpzData(std::move(spzData));
+    // 步骤 1: 解压（传引用，因为后面还需要 spzData）
+    auto decompressResult = decompressSpzData(spzData);  // 不 move，保留 spzData
     if (!decompressResult.success) {
         std::cerr << "[ERROR] " << decompressResult.errorMessage << std::endl;
         return false;
     }
     std::vector<uint8_t> decompressedData = std::move(decompressResult.data);
 
-    // 步骤 2: 解析 SPZ 头部
+    // 步骤 2: 解析 SPZ 头部（使用解压后数据）
     SpzHeader header;
     if (!parseSpzHeader(decompressedData, header)) {
         std::cerr << "[ERROR] Failed to parse SPZ header" << std::endl;
@@ -403,9 +403,9 @@ bool convertSpzToGlbCore(std::vector<uint8_t> spzData, std::vector<uint8_t>& glb
     std::cout << "[INFO] Num points: " << header.numPoints << std::endl;
     std::cout << "[INFO] SH degree: " << (int)header.shDegree << std::endl;
 
-    // 步骤 4: 创建 glTF 资产
+    // 步骤 4: 创建 glTF 资产（存储原始压缩数据）
     std::cout << "[INFO] Creating glTF Asset with KHR extensions" << std::endl;
-    auto asset = createGltfAsset(std::move(decompressedData), header);
+    auto asset = createGltfAsset(spzData, header);
 
     // 步骤 5: 导出 GLB
     std::cout << "[INFO] Exporting GLB..." << std::endl;
