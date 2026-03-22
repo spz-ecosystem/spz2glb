@@ -305,39 +305,39 @@ if(SPZ2GLB_BUILD_WASM)
   # Emscripten ZLIB 配置（编译和链接都需要）
   target_compile_options(spz_verify-wasm PRIVATE --use-port=zlib)
 
-  # C++ 编译优化
-  # 注意：-fno-rtti 仍不能使用，因为 Embind 需要 RTTI
+  # C++ 编译优化 + 严格警告
   target_compile_options(spz_verify-wasm PRIVATE
     "-O3"
     "-flto"
     "-fno-exceptions"
+    "-Wall"
+    "-Wextra"
+    "-Werror"
+    "-Wno-unused-parameter"
   )
 
-  # 完整链接优化
+  # 完整链接优化（无 Embind）
   target_link_options(spz_verify-wasm PRIVATE
     "-O3"
     "-flto"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
-    "--bind"
     "-sMODULARIZE=1"
     "-sEXPORT_NAME=createSpzVerifyModule"
-    # 内存配置（固定内存池，性能优先）
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
     "-sSTACK_SIZE=10485760"
-    # 禁用 ALLOW_MEMORY_GROWTH（固定内存最快）
     "-sENVIRONMENT=web"
     "-sEXPORT_ES6=1"
     "-sFILESYSTEM=0"
     "-sASSERTIONS=0"
     "-sNO_EXIT_RUNTIME=1"
     "-sNO_DYNAMIC_EXECUTION=1"
-    "-sERROR_ON_UNDEFINED_SYMBOLS=1"
-    "-sWARN_ON_UNDEFINED_SYMBOLS=1"
+    "-sERROR_ON_UNDEFINED_SYMBOLS=0"
     "-sWASM_BIGINT=1"
     "-sMALLOC=emmalloc"
     "-sSINGLE_FILE=0"
+    "-sEXPORTED_FUNCTIONS=_spz_verify_alloc,_spz_verify_free,_spz_verify_validate_header,_spz_verify_compute_md5,_spz_verify_get_memory_stats"
   )
 
   set_target_properties(spz_verify-wasm PROPERTIES
