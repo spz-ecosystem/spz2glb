@@ -177,9 +177,9 @@ jobs:
           cp tools/spz_to_glb/dist/spz2glb.wasm .
           cp tools/spz_to_glb/dist/spz_verify.js .
           cp tools/spz_to_glb/dist/spz_verify.wasm .
-          cp src/tools/spz_to_glb/docs/examples/index.html .
-          cp src/tools/spz_to_glb/docs/examples/verify.html .
-          cp src/tools/spz_to_glb/docs/examples/spz2glb_bindings.js .
+          cp src/docs/examples/index.html .
+          cp src/docs/examples/verify.html .
+          cp src/docs/examples/spz2glb_bindings.js .
           ls -la
 
       - name: Configure git
