@@ -208,8 +208,8 @@ SpzResult loadSpzFile(const std::string& spzPath) {
 SpzResult decompressSpzData(std::vector<uint8_t> compressedData) {
     // 检查 gzip 魔数：前两个字节必须是 0x1f 0x8b
     if (compressedData.size() < 2 || compressedData[0] != 0x1f || compressedData[1] != 0x8b) {
-        // 不是 gzip 压缩，直接返回原始数据
-        return SpzResult::ok(const_cast<std::vector<uint8_t>&>(compressedData));
+        // 不是 gzip 压缩，直接返回原始数据（使用移动语义）
+        return SpzResult::ok(std::move(compressedData));
     }
 
     // 预分配解压缓冲区（假设压缩率约 10 倍）
