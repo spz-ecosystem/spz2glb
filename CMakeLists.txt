@@ -230,11 +230,20 @@ if(SPZ2GLB_BUILD_WASM)
   # Emscripten ZLIB
   target_compile_options(spz2glb-wasm-standalone PRIVATE --use-port=zlib)
 
-  # C++ 编译优化
+  # C++ 编译优化 + 严格警告
   target_compile_options(spz2glb-wasm-standalone PRIVATE
     "-O3"
     "-flto"
     "-fno-exceptions"
+    "-Wall"
+    "-Wextra"
+    "-Wpedantic"
+    "-Werror"
+    "-Wno-unused-parameter"
+    "-Wno-old-style-cast"
+    "-Wshadow"
+    "-Wconversion"
+    "-Wsign-conversion"
   )
 
   # 完整链接优化（无 Embind）
