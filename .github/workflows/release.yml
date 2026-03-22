@@ -170,6 +170,9 @@ jobs:
           cp tools/spz_to_glb/dist/spz2glb.wasm . 2>/dev/null || true
           cp tools/spz_to_glb/dist/spz_verify.js . 2>/dev/null || true
           cp tools/spz_to_glb/dist/spz_verify.wasm . 2>/dev/null || true
+          cp tools/spz_to_glb/docs/examples/index.html . 2>/dev/null || true
+          cp tools/spz_to_glb/docs/examples/verify.html . 2>/dev/null || true
+          cp tools/spz_to_glb/docs/examples/spz2glb_bindings.js . 2>/dev/null || true
 
       - name: Configure git
         run: |

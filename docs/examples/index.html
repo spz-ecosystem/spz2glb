@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPZ → GLB 在线转换器</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --border-radius: 16px;
+            --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            background: var(--bg-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container { width: 100%; max-width: 560px; }
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 48px 40px;
+        }
+        .header { text-align: center; margin-bottom: 40px; }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+        .header p { color: var(--text-secondary); font-size: 16px; }
+        .nav {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 32px;
+            justify-content: center;
+        }
+        .nav a {
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .nav a.convert { background: var(--primary); color: white; }
+        .nav a.verify { background: #e5e7eb; color: var(--text-secondary); }
+        .drop-zone {
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .drop-zone:hover { border-color: var(--primary); background: rgba(99, 102, 241, 0.05); }
+        .drop-zone input { display: none; }
+        .drop-icon { font-size: 48px; margin-bottom: 16px; }
+        .drop-text { font-size: 16px; color: var(--text-primary); margin-bottom: 4px; }
+        .drop-hint { font-size: 13px; color: var(--text-secondary); }
+        .file-info {
+            margin-top: 16px;
+            padding: 12px;
+            background: #f3f4f6;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+        .status {
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 14px;
+            margin-top: 16px;
+            display: none;
+        }
+        .status.loading { background: #fef3c7; color: var(--warning); }
+        .status.success { background: #d1fae5; color: var(--success); }
+        .status.error { background: #fee2e2; color: var(--error); }
+        button {
+            width: 100%;
+            padding: 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 20px;
+        }
+        button:hover:not(:disabled) { background: var(--primary-dark); }
+        button:disabled { background: #d1d5db; cursor: not-allowed; }
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid currentColor;
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .stat {
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .stat-value { font-size: 16px; font-weight: 600; color: var(--primary); }
+        .stat-label { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <h1>🌀 SPZ → GLB</h1>
+                <p>高性能 WebAssembly 在线转换</p>
+            </div>
+
+            <div class="nav">
+                <a href="./index.html" class="convert">SPZ → GLB 转换</a>
+                <a href="./verify.html" class="verify">三层验证</a>
+            </div>
+
+            <div class="drop-zone" id="dropZone">
+                <input type="file" id="fileInput" accept=".spz">
+                <div class="drop-icon">📁</div>
+                <div class="drop-text">点击或拖拽上传 SPZ 文件</div>
+                <div class="drop-hint">支持 .spz 格式</div>
+            </div>
+
+            <div class="file-info" id="fileInfo"></div>
+
+            <div class="status" id="statusBox"></div>
+
+            <div class="stats" id="statsBox" style="display:none;">
+                <div class="stat">
+                    <div class="stat-value" id="statTime">-</div>
+                    <div class="stat-label">耗时 (ms)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statInput">-</div>
+                    <div class="stat-label">输入大小</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statOutput">-</div>
+                    <div class="stat-label">输出大小</div>
+                </div>
+            </div>
+
+            <button id="convertBtn" disabled>选择文件后点击转换</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { loadSpz2Glb } from './spz2glb_bindings.js';
+
+        let spz2glb = null;
+        let selectedFile = null;
+        let outputBuffer = null;
+
+        function showStatus(msg, type) {
+            const el = document.getElementById('statusBox');
+            el.style.display = 'block';
+            el.className = 'status ' + type;
+            el.innerHTML = msg;
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+        }
+
+        async function init() {
+            showStatus('<span class="loading-spinner"></span>正在加载 WASM 模块...', 'loading');
+            try {
+                spz2glb = await loadSpz2Glb('./spz2glb.wasm');
+                showStatus('✅ WASM 模块加载成功！版本: ' + spz2glb.getVersion(), 'success');
+                setTimeout(() => document.getElementById('statusBox').style.display = 'none', 2000);
+            } catch (err) {
+                showStatus('❌ WASM 加载失败: ' + err.message, 'error');
+            }
+        }
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; });
+        dropZone.addEventListener('dragleave', () => dropZone.style.borderColor = '#d1d5db'; });
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#d1d5db';
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.spz')) handleFile(file);
+        });
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            if (file) handleFile(file);
+        });
+
+        function handleFile(file) {
+            selectedFile = file;
+            fileInfo.style.display = 'block';
+            fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})`;
+            document.getElementById('convertBtn').disabled = false;
+            document.getElementById('convertBtn').textContent = '转换 ' + file.name;
+        }
+
+        document.getElementById('convertBtn').addEventListener('click', async () => {
+            if (!selectedFile || !spz2glb) return;
+
+            const btn = document.getElementById('convertBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading-spinner"></span>转换中...';
+            document.getElementById('statsBox').style.display = 'none';
+
+            const startTime = performance.now();
+            showStatus('<span class="loading-spinner"></span>正在转换...', 'loading');
+
+            try {
+                const spzData = new Uint8Array(await selectedFile.arrayBuffer());
+
+                if (!spz2glb.validateHeader(spzData)) {
+                    throw new Error('无效的 SPZ 文件');
+                }
+
+                const glbData = spz2glb.convert(spzData);
+                if (!glbData) throw new Error('转换失败');
+
+                const endTime = performance.now();
+                outputBuffer = glbData;
+
+                document.getElementById('statTime').textContent = (endTime - startTime).toFixed(0);
+                document.getElementById('statInput').textContent = formatSize(spzData.length);
+                document.getElementById('statOutput').textContent = formatSize(glbData.length);
+                document.getElementById('statsBox').style.display = 'grid';
+
+                const blob = new Blob([glbData], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = selectedFile.name.replace(/\.spz$/i, '.glb');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showStatus('✅ 转换成功！', 'success');
+
+            } catch (err) {
+                showStatus('❌ 错误: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '转换 ' + selectedFile.name;
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
