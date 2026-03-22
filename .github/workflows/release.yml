@@ -162,15 +162,14 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: wasm-modules
-          path: dist/
+          path: tools/spz_to_glb/dist/
 
-      - name: Copy examples
+      - name: Copy WASM modules to root
         run: |
-          cp -r docs/examples/* .
-          cp dist/spz2glb.js . 2>/dev/null || true
-          cp dist/spz2glb.wasm . 2>/dev/null || true
-          cp dist/spz_verify.js . 2>/dev/null || true
-          cp dist/spz_verify.wasm . 2>/dev/null || true
+          cp tools/spz_to_glb/dist/spz2glb.js . 2>/dev/null || true
+          cp tools/spz_to_glb/dist/spz2glb.wasm . 2>/dev/null || true
+          cp tools/spz_to_glb/dist/spz_verify.js . 2>/dev/null || true
+          cp tools/spz_to_glb/dist/spz_verify.wasm . 2>/dev/null || true
 
       - name: Configure git
         run: |
