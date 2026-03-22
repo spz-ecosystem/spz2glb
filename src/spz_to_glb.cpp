@@ -402,7 +402,6 @@ bool convertSpzToGlbCore(std::vector<uint8_t> spzData, std::vector<uint8_t>& glb
     std::cout << "[INFO] SPZ version: " << (int)header.version << std::endl;
     std::cout << "[INFO] Num points: " << header.numPoints << std::endl;
     std::cout << "[INFO] SH degree: " << (int)header.shDegree << std::endl;
-    std::cout << "[INFO] SPZ size (raw compressed): " << (spzData.size() / 1024 / 1024) << " MB" << std::endl;
 
     // 步骤 4: 创建 glTF 资产
     std::cout << "[INFO] Creating glTF Asset with KHR extensions" << std::endl;
