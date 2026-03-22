@@ -158,11 +158,12 @@ jobs:
           ref: gh-pages
           fetch-depth: 0
 
-      - name: Checkout source (for HTML files)
-        uses: actions/checkout@v5
-        with:
-          ref: wasm-optimization
-          path: src
+      - name: Download HTML files from source
+        run: |
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/index.html -o index.html
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/verify.html -o verify.html
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/spz2glb_bindings.js -o spz2glb_bindings.js
+          ls -la
 
       - name: Download WASM artifacts
         uses: actions/download-artifact@v5
