@@ -152,11 +152,17 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
 
     steps:
-      - name: Checkout
+      - name: Checkout gh-pages
         uses: actions/checkout@v5
         with:
           ref: gh-pages
           fetch-depth: 0
+
+      - name: Checkout source (for HTML files)
+        uses: actions/checkout@v5
+        with:
+          ref: wasm-optimization
+          path: src
 
       - name: Download WASM artifacts
         uses: actions/download-artifact@v5
@@ -166,13 +172,15 @@ jobs:
 
       - name: Copy WASM modules to root
         run: |
-          cp tools/spz_to_glb/dist/spz2glb.js . 2>/dev/null || true
-          cp tools/spz_to_glb/dist/spz2glb.wasm . 2>/dev/null || true
-          cp tools/spz_to_glb/dist/spz_verify.js . 2>/dev/null || true
-          cp tools/spz_to_glb/dist/spz_verify.wasm . 2>/dev/null || true
-          cp tools/spz_to_glb/docs/examples/index.html . 2>/dev/null || true
-          cp tools/spz_to_glb/docs/examples/verify.html . 2>/dev/null || true
-          cp tools/spz_to_glb/docs/examples/spz2glb_bindings.js . 2>/dev/null || true
+          set -e
+          cp tools/spz_to_glb/dist/spz2glb.js .
+          cp tools/spz_to_glb/dist/spz2glb.wasm .
+          cp tools/spz_to_glb/dist/spz_verify.js .
+          cp tools/spz_to_glb/dist/spz_verify.wasm .
+          cp src/tools/spz_to_glb/docs/examples/index.html .
+          cp src/tools/spz_to_glb/docs/examples/verify.html .
+          cp src/tools/spz_to_glb/docs/examples/spz2glb_bindings.js .
+          ls -la
 
       - name: Configure git
         run: |
