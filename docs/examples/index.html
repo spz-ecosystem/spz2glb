@@ -217,7 +217,7 @@
 
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; });
-        dropZone.addEventListener('dragleave', () => dropZone.style.borderColor = '#d1d5db'; });
+        dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#d1d5db'; });
         dropZone.addEventListener('drop', e => {
             e.preventDefault();
             dropZone.style.borderColor = '#d1d5db';
