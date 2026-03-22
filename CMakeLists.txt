@@ -180,11 +180,11 @@ if(SPZ2GLB_BUILD_WASM)
     "-sMODULARIZE=1"
     "-sEXPORT_NAME=createSpz2GlbModule"
 
-    # 内存配置（关键：大文件处理）
-    "-sALLOW_MEMORY_GROWTH=1"
-    "-sINITIAL_MEMORY=33554432"     # 32MB 初始
+    # 内存配置（固定内存池，性能优先）
+    "-sINITIAL_MEMORY=67108864"     # 64MB 初始
     "-sMAXIMUM_MEMORY=1073741824"   # 1GB 最大
     "-sSTACK_SIZE=10485760"         # 10MB 栈
+    # 禁用 ALLOW_MEMORY_GROWTH（固定内存最快）
 
     # Web 环境
     "-sENVIRONMENT=web"
@@ -249,10 +249,11 @@ if(SPZ2GLB_BUILD_WASM)
     "--bind"
     "-sMODULARIZE=1"
     "-sEXPORT_NAME=createSpzVerifyModule"
-    "-sALLOW_MEMORY_GROWTH=1"
-    "-sINITIAL_MEMORY=33554432"
+    # 内存配置（固定内存池，性能优先）
+    "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
     "-sSTACK_SIZE=10485760"
+    # 禁用 ALLOW_MEMORY_GROWTH（固定内存最快）
     "-sENVIRONMENT=web"
     "-sEXPORT_ES6=1"
     "-sFILESYSTEM=0"

@@ -29,6 +29,8 @@
 #include <optional>
 #include <zlib.h>
 
+#include "memory_pool.h"
+
 #include <fastgltf/core.hpp>
 #include <fastgltf/types.hpp>
 
@@ -460,6 +462,7 @@ emscripten::val convertSpzToGlb(const emscripten::val& spzBuffer) {
 
 EMSCRIPTEN_BINDINGS(spz2glb_module) {
     emscripten::function("convertSpzToGlb", &convertSpzToGlb);
+    emscripten::function("getMemoryStats", &spz2glb::getMemoryStats);
 }
 
 #else  // __EMSCRIPTEN__
