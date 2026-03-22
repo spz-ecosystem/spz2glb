@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPZ2GLB Demo - High Performance WebAssembly</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #00d9ff;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .panel {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        h2 {
+            margin-bottom: 15px;
+            color: #00d9ff;
+            font-size: 1.2rem;
+        }
+
+        .drop-zone {
+            border: 2px dashed #00d9ff;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            background: rgba(0, 217, 255, 0.1);
+            border-color: #00ff88;
+        }
+
+        .drop-zone input {
+            display: none;
+        }
+
+        .file-info {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            margin-top: 15px;
+            background: linear-gradient(135deg, #00d9ff, #00a8cc);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.02);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+        }
+
+        .success {
+            color: #00ff88;
+        }
+
+        .error {
+            color: #ff4757;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .stat {
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00d9ff;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #888;
+        }
+
+        #log {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 3px solid rgba(0,217,255,0.3);
+            border-top-color: #00d9ff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>🌀 SPZ2GLB Demo - High Performance WASM</h1>
+
+    <div class="container">
+        <div class="panel">
+            <h2>Convert SPZ → GLB</h2>
+
+            <div class="drop-zone" id="spzDropZone">
+                <p>📁 Drop SPZ file here or click to select</p>
+                <input type="file" id="spzFileInput" accept=".spz">
+                <div class="file-info" id="spzFileInfo" style="display:none;"></div>
+            </div>
+
+            <button id="convertBtn" disabled>Convert to GLB</button>
+
+            <div class="loading" id="convertLoading">
+                <div class="spinner"></div>
+                <p style="margin-top:10px;">Converting...</p>
+            </div>
+
+            <div class="result" id="convertResult" style="display:none;"></div>
+
+            <div class="stats" id="convertStats" style="display:none;">
+                <div class="stat">
+                    <div class="stat-value" id="statTime">-</div>
+                    <div class="stat-label">Time (ms)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statSize">-</div>
+                    <div class="stat-label">Output Size</div>
+                </div>
+            </div>
+
+            <button id="downloadBtn" style="display:none; background: linear-gradient(135deg, #00ff88, #00cc6a);">
+                Download GLB
+            </button>
+        </div>
+
+        <div class="panel">
+            <h2>Memory Stats</h2>
+            <div id="memoryStats" class="result">
+                <div class="log-entry">Peak: <span id="memPeak">-</span></div>
+                <div class="log-entry">Current: <span id="memCurrent">-</span></div>
+                <div class="log-entry">Allocations: <span id="memAlloc">-</span></div>
+                <div class="log-entry">Frees: <span id="memFrees">-</span></div>
+                <div class="log-entry">Failed: <span id="memFailed">-</span></div>
+            </div>
+
+            <h2 style="margin-top:20px;">Activity Log</h2>
+            <div id="log" class="result"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { loadSpz2Glb } from './spz2glb_bindings.js';
+
+        let spz2glb = null;
+        let selectedFile = null;
+        let outputBuffer = null;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            if (type === 'success') entry.style.color = '#00ff88';
+            if (type === 'error') entry.style.color = '#ff4757';
+            logDiv.insertBefore(entry, logDiv.firstChild);
+        }
+
+        function updateMemoryStats() {
+            if (!spz2glb) return;
+            const stats = spz2glb.getMemoryStats();
+            document.getElementById('memPeak').textContent = formatBytes(stats.peak_usage_bytes);
+            document.getElementById('memCurrent').textContent = formatBytes(stats.current_usage_bytes);
+            document.getElementById('memAlloc').textContent = stats.total_allocations;
+            document.getElementById('memFrees').textContent = stats.total_frees;
+            document.getElementById('memFailed').textContent = stats.failed_allocations;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+        }
+
+        async function init() {
+            log('Loading WASM module...');
+            try {
+                spz2glb = await loadSpz2Glb('./spz2glb.wasm');
+                log(`WASM loaded! Version: ${spz2glb.getVersion()}`, 'success');
+                updateMemoryStats();
+            } catch (e) {
+                log('Failed to load WASM: ' + e.message, 'error');
+            }
+        }
+
+        // File drop handling
+        const dropZone = document.getElementById('spzDropZone');
+        const fileInput = document.getElementById('spzFileInput');
+        const fileInfo = document.getElementById('spzFileInfo');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFileSelect(file);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleFileSelect(file);
+        });
+
+        function handleFileSelect(file) {
+            if (!file.name.endsWith('.spz')) {
+                log('Please select a .spz file', 'error');
+                return;
+            }
+            selectedFile = file;
+            fileInfo.style.display = 'block';
+            fileInfo.innerHTML = `<strong>${file.name}</strong><br>${formatBytes(file.size)}`;
+            document.getElementById('convertBtn').disabled = false;
+            log(`Selected: ${file.name} (${formatBytes(file.size)})`);
+        }
+
+        // Convert button
+        document.getElementById('convertBtn').addEventListener('click', async () => {
+            if (!selectedFile || !spz2glb) return;
+
+            const btn = document.getElementById('convertBtn');
+            const loading = document.getElementById('convertLoading');
+            const result = document.getElementById('convertResult');
+            const stats = document.getElementById('convertStats');
+            const downloadBtn = document.getElementById('downloadBtn');
+
+            btn.style.display = 'none';
+            loading.style.display = 'block';
+            result.style.display = 'none';
+            stats.style.display = 'none';
+            downloadBtn.style.display = 'none';
+
+            const startTime = performance.now();
+            log('Starting conversion...');
+
+            try {
+                const spzData = new Uint8Array(await selectedFile.arrayBuffer());
+                log(`Read ${formatBytes(spzData.length)} from file`);
+
+                // Check header
+                const valid = spz2glb.validateHeader(spzData);
+                log(`Header valid: ${valid}`);
+                if (!valid) {
+                    throw new Error('Invalid SPZ file');
+                }
+
+                // Convert
+                const glbData = spz2glb.convert(spzData);
+                if (!glbData) {
+                    throw new Error('Conversion failed');
+                }
+
+                outputBuffer = glbData;
+                const endTime = performance.now();
+
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                result.className = 'result success';
+                result.textContent = `Conversion successful!`;
+
+                document.getElementById('statTime').textContent = (endTime - startTime).toFixed(2);
+                document.getElementById('statSize').textContent = formatBytes(glbData.length);
+                stats.style.display = 'grid';
+
+                downloadBtn.style.display = 'block';
+                downloadBtn.style.marginTop = '10px';
+
+                log(`Converted in ${(endTime - startTime).toFixed(2)}ms`, 'success');
+                updateMemoryStats();
+            } catch (e) {
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                result.className = 'result error';
+                result.textContent = 'Error: ' + e.message;
+                log('Conversion failed: ' + e.message, 'error');
+            }
+
+            btn.style.display = 'block';
+        });
+
+        // Download button
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            if (!outputBuffer) return;
+            const blob = new Blob([outputBuffer], { type: 'model/gltf-binary' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = selectedFile.name.replace('.spz', '.glb');
+            a.click();
+            URL.revokeObjectURL(url);
+            log('Downloaded GLB file');
+        });
+
+        init();
+    </script>
+</body>
+</html>
