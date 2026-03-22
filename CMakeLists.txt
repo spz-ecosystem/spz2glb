@@ -215,6 +215,70 @@ if(SPZ2GLB_BUILD_WASM)
   )
 
   # ============================================================
+  # spz2glb-wasm-standalone: 高性能版本（无 Embind）
+  # ============================================================
+  add_executable(spz2glb-wasm-standalone
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz2glb_wasm_c_api.cpp
+  )
+
+  target_link_libraries(spz2glb-wasm-standalone PRIVATE fastgltf)
+
+  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+    target_compile_definitions(spz2glb-wasm-standalone PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+  endif()
+
+  # Emscripten ZLIB
+  target_compile_options(spz2glb-wasm-standalone PRIVATE --use-port=zlib)
+
+  # C++ 编译优化
+  target_compile_options(spz2glb-wasm-standalone PRIVATE
+    "-O3"
+    "-flto"
+    "-fno-exceptions"
+  )
+
+  # 完整链接优化（无 Embind）
+  target_link_options(spz2glb-wasm-standalone PRIVATE
+    "-O3"
+    "-flto"
+    "-sUSE_ZLIB=1"
+    "--use-port=zlib"
+
+    # 内存配置
+    "-sINITIAL_MEMORY=67108864"
+    "-sMAXIMUM_MEMORY=1073741824"
+    "-sSTACK_SIZE=10485760"
+
+    # Web 环境
+    "-sENVIRONMENT=web"
+    "-sEXPORT_ES6=1"
+
+    # 文件系统
+    "-sFILESYSTEM=0"
+
+    # 生产优化
+    "-sASSERTIONS=0"
+    "-sNO_EXIT_RUNTIME=1"
+    "-sNO_DYNAMIC_EXECUTION=1"
+    "-sERROR_ON_UNDEFINED_SYMBOLS=0"
+    "-sWASM_BIGINT=1"
+    "-sMALLOC=emmalloc"
+
+    # 单独文件
+    "-sSINGLE_FILE=0"
+
+    # C API 导出
+    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats"
+  )
+
+  set_target_properties(spz2glb-wasm-standalone PROPERTIES
+    OUTPUT_NAME "spz2glb-standalone"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
+  )
+
+  message(STATUS "Added spz2glb-wasm-standalone (high-performance, no Embind)")
+
+  # ============================================================
   # spz_verify WASM 构建
   # ============================================================
 
