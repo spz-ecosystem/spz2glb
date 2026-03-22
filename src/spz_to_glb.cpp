@@ -305,18 +305,16 @@ fastgltf::Asset createGltfAsset(const std::vector<uint8_t>& spzData, const SpzHe
     // 获取 SPZ 数据大小
     size_t spzSize = spzData.size();
 
-    // 类型转换：uint8_t -> std::byte（fastgltf 要求）
-    std::vector<std::byte> byteData;
-    byteData.reserve(spzSize);
-    for (const auto& b : spzData) {
-        byteData.push_back(static_cast<std::byte>(b));
-    }
-
     // 创建 glTF Buffer（存储 SPZ 压缩数据）
+    // 使用 ByteView 避免拷贝：直接引用原始数据
     fastgltf::Buffer buffer;
-    buffer.data.emplace<fastgltf::sources::Vector>();  // 使用 Vector 作为数据源
-    std::get<fastgltf::sources::Vector>(buffer.data).bytes = std::move(byteData);
-    buffer.byteLength = spzSize;  // Buffer 大小等于 SPZ 数据大小
+    buffer.data.emplace<fastgltf::sources::ByteView>();
+    auto& byteView = std::get<fastgltf::sources::ByteView>(buffer.data);
+    byteView.bytes = fastgltf::span<const std::byte>(
+        reinterpret_cast<const std::byte*>(spzData.data()),
+        spzSize
+    );
+    buffer.byteLength = spzSize;
     asset.buffers.emplace_back(std::move(buffer));
 
     // 创建 BufferView（指向整个 Buffer）
