@@ -31,6 +31,8 @@ private:
 public:
     BumpAllocator() : pool_(nullptr), current_(nullptr), end_(nullptr), peak_usage_(0), allocations_(0) {}
 
+    BumpAllocator(size_t size) : pool_(new char[size]), current_(pool_), end_(pool_ + size), peak_usage_(0), allocations_(0) {}
+
     bool init(size_t size) {
         pool_ = new char[size];
         if (!pool_) return false;
@@ -113,41 +115,6 @@ public:
 
     uint32_t allocations() const { return allocations_; }
 };
-
-#ifdef __EMSCRIPTEN__
-
-class ZeroCopyBuffer {
-private:
-    uint8_t* data_;
-    size_t size_;
-    bool ownsData_;
-
-public:
-    ZeroCopyBuffer() : data_(nullptr), size_(0), ownsData_(false) {}
-
-    ~ZeroCopyBuffer() {
-        if (ownsData_ && data_) {
-            delete[] data_;
-        }
-    }
-
-    bool createFromJsBuffer(emscripten::val buffer) {
-        if (ownsData_ && data_) {
-            delete[] data_;
-        }
-
-        size_t byteOffset = buffer["byteOffset"].as<size_t>();
-        size_t byteLength = buffer["byteLength"].as<size_t>();
-
-        ownsData_ = false;
-        return true;
-    }
-
-    uint8_t* data() { return data_; }
-    size_t size() const { return size_; }
-};
-
-#endif
 
 inline MemoryStats getMemoryStats() {
     return {0, 0, 0, 0, 0, 0};

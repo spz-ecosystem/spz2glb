@@ -685,19 +685,30 @@ struct VerifyResult {
     std::string message;
 };
 
-bool validateGlbHeader(const uint8_t* data, size_t size) {
+bool validateGlbHeader(emscripten::val buffer) {
+    size_t size = buffer["length"].as<size_t>();
     if (size < 12) return false;
-    uint32_t magic = *reinterpret_cast<const uint32_t*>(data);
-    uint32_t version = *reinterpret_cast<const uint32_t*>(data + 4);
+
+    emscripten::val heap = emscripten::val::global("Module")["HEAPU8"];
+    size_t offset = buffer["byteOffset"].as<size_t>();
+
+    uint32_t magic = heap.call<uint32_t>("getUint32", offset);
+    uint32_t version = heap.call<uint32_t>("getUint32", offset + 4);
     return magic == 0x46546C67 && version == 2;
 }
 
-bool computeMd5Hash(const uint8_t* data, size_t len, std::string& outHash) {
+bool computeMd5Hash(emscripten::val data, std::string& outHash) {
     void* mem = g_md5Pool.alloc();
     if (!mem) return false;
 
+    size_t len = data["length"].as<size_t>();
+    std::vector<uint8_t> buffer(len);
+    for (size_t i = 0; i < len; i++) {
+        buffer[i] = data[i].as<unsigned char>();
+    }
+
     Md5Hash* hash = new (mem) Md5Hash();
-    hash->update(data, len);
+    hash->update(buffer.data(), len);
     outHash = hash->finalize();
     hash->~Md5Hash();
     g_md5Pool.dealloc(mem);
