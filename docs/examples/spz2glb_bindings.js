@@ -68,12 +68,26 @@ function createSpz2GlbBindings(instance) {
     return { validateHeader, convert, getVersion };
 }
 
-export async function loadSpz2Glb(wasmUrl) {
+export async function loadSpz2Glb(wasmUrl, options = {}) {
     const response = await fetch(wasmUrl);
     if (!response.ok) throw new Error(`Failed to fetch WASM: ${response.status}`);
     const buffer = await response.arrayBuffer();
+
+    let memory;
+    if (options.memory) {
+        memory = options.memory;
+    } else {
+        const initialPages = options.initialPages || 64;
+        const maximumPages = options.maximumPages || 1024;
+        memory = new WebAssembly.Memory({
+            initial: initialPages,
+            maximum: maximumPages
+        });
+    }
+
     const { instance } = await WebAssembly.instantiate(buffer, {
-        env: { memory: new WebAssembly.Memory({ initial: 64, maximum: 1024 }) }
+        env: { memory }
     });
+
     return createSpz2GlbBindings(instance);
 }

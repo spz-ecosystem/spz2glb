@@ -182,10 +182,12 @@
 
     <script type="module">
         import { loadSpz2Glb } from './spz2glb_bindings.js';
+        import SmartMemoryManager from './smart_memory.js';
 
         let spz2glb = null;
         let selectedFile = null;
         let outputBuffer = null;
+        let memManager = null;
 
         function showStatus(msg, type) {
             const el = document.getElementById('statusBox');
@@ -201,11 +203,21 @@
         }
 
         async function init() {
-            showStatus('<span class="loading-spinner"></span>正在加载 WASM 模块...', 'loading');
+            memManager = new SmartMemoryManager();
+            const info = memManager.getInfo();
+            
+            const deviceIcon = info.device.isMobile ? '📱' : '💻';
+            const tierLabel = { low: '低端', medium: '中端', high: '高端' }[info.device.tier];
+            
+            showStatus(`<span class="loading-spinner"></span>正在加载 WASM 模块...<br>
+                <small style="opacity:0.7">${deviceIcon} ${info.device.type} (${tierLabel}) | 
+                内存限制: ${info.memoryLimit}MB | 推荐: ≤${info.recommendedMaxFileSize}MB</small>`, 'loading');
+            
             try {
                 spz2glb = await loadSpz2Glb('./spz2glb.wasm');
-                showStatus('✅ WASM 模块加载成功！版本: ' + spz2glb.getVersion(), 'success');
-                setTimeout(() => document.getElementById('statusBox').style.display = 'none', 2000);
+                showStatus(`✅ WASM 模块加载成功！版本: ${spz2glb.getVersion()}<br>
+                    <small style="opacity:0.7">建议文件大小 ≤ ${info.recommendedMaxFileSize}MB</small>`, 'success');
+                setTimeout(() => document.getElementById('statusBox').style.display = 'none', 3000);
             } catch (err) {
                 showStatus('❌ WASM 加载失败: ' + err.message, 'error');
             }
@@ -230,11 +242,23 @@
         });
 
         function handleFile(file) {
+            const fileSizeMB = file.size / (1024 * 1024);
+            const recommendation = memManager.getRecommendation(fileSizeMB);
+            
             selectedFile = file;
             fileInfo.style.display = 'block';
-            fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})`;
-            document.getElementById('convertBtn').disabled = false;
-            document.getElementById('convertBtn').textContent = '转换 ' + file.name;
+            
+            if (recommendation.canHandle) {
+                fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})`;
+                document.getElementById('convertBtn').disabled = false;
+                document.getElementById('convertBtn').textContent = '转换 ' + file.name;
+            } else {
+                fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})<br>
+                    <span style="color:var(--warning)">⚠️ ${recommendation.message}</span><br>
+                    <small style="opacity:0.7">命令行: ${recommendation.cliCommand}</small>`;
+                document.getElementById('convertBtn').disabled = false;
+                document.getElementById('convertBtn').textContent = '仍要转换 (可能失败)';
+            }
         }
 
         document.getElementById('convertBtn').addEventListener('click', async () => {
