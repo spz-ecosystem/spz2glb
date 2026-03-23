@@ -129,17 +129,14 @@ jobs:
 
       - name: Configure WASM build
         run: |
-          cd tools/spz_to_glb
-          emcmake cmake -S ../../ -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
+          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
 
       - name: Build spz2glb WASM
         run: |
-          cd tools/spz_to_glb
           emmake cmake --build build_wasm --config Release --target spz2glb-wasm
 
       - name: Build spz_verify WASM
         run: |
-          cd tools/spz_to_glb
           emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
       - name: Upload WASM artifacts
@@ -161,9 +158,7 @@ jobs:
         run: |
           mkdir -p docs/examples
           curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/index.html -o index.html
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/verify.html -o verify.html
           curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/spz2glb_bindings.js -o spz2glb_bindings.js
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/smart_memory.js -o smart_memory.js
           ls -la
 
       - name: Download WASM artifacts
