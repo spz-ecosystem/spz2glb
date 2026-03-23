@@ -180,8 +180,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-sMODULARIZE=1"
     "-sEXPORT_NAME=createSpz2GlbModule"
 
-    # 内存配置（允许动态增长）
-    "-sINITIAL_MEMORY=134217728"     # 128MB 初始
+    # 内存配置（允许动态增长， "-sINITIAL_MEMORY=16777216"     # 16MB 初始 (1 页 = 64KB)
     "-sMAXIMUM_MEMORY=2147483648"    # 2GB 最大
     "-sSTACK_SIZE=16777216"          # 16MB 栈
     "-sALLOW_MEMORY_GROWTH=1"        # 启用内存增长
