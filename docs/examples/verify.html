@@ -201,12 +201,9 @@
         </div>
     </div>
 
-    <script type="module">
-        import SmartMemoryManager from './smart_memory.js';
-
+    <script>
         let spzFile = null;
         let glbFile = null;
-        let memManager = null;
 
         function showStatus(msg, type) {
             const el = document.getElementById('statusBox');
@@ -474,7 +471,6 @@
             }
         });
 
-        memManager = new SmartMemoryManager();
     </script>
 </body>
 </html>

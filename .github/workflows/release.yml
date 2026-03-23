@@ -146,7 +146,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: wasm-modules
-          path: dist/
+          path: tools/spz_to_glb/dist/
 
   deploy-pages:
     needs: [wasm-build]
@@ -160,10 +160,10 @@ jobs:
       - name: Download HTML files
         run: |
           mkdir -p docs/examples
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/index.html -o index.html
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/verify.html -o verify.html
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/spz2glb_bindings.js -o spz2glb_bindings.js
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/smart_memory.js -o smart_memory.js
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/index.html -o index.html
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/verify.html -o verify.html
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/spz2glb_bindings.js -o spz2glb_bindings.js
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/smart_memory.js -o smart_memory.js
           ls -la
 
       - name: Download WASM artifacts
