@@ -214,10 +214,8 @@
                 内存限制: ${info.memoryLimit}MB | 推荐: ≤${info.recommendedMaxFileSize}MB</small>`, 'loading');
             
             try {
-                const wasmConfig = memManager.getWasmMemoryConfig();
-                spz2glb = await loadSpz2Glb('./spz2glb.wasm', {
-                    memory: wasmConfig.memory
-                });
+                const memConfig = memManager.getWasmMemoryConfig();
+                spz2glb = await loadSpz2Glb('./spz2glb.wasm', { memory: memConfig.memory });
                 showStatus(`✅ WASM 模块加载成功！版本: ${spz2glb.getVersion()}<br>
                     <small style="opacity:0.7">建议文件大小 ≤ ${info.recommendedMaxFileSize}MB</small>`, 'success');
                 setTimeout(() => document.getElementById('statusBox').style.display = 'none', 3000);

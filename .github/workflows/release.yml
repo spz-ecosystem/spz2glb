@@ -163,6 +163,7 @@ jobs:
           curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/index.html -o index.html
           curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/verify.html -o verify.html
           curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/spz2glb_bindings.js -o spz2glb_bindings.js
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/smart_memory.js -o smart_memory.js
           ls -la
 
       - name: Download WASM artifacts
