@@ -12,17 +12,19 @@ async function initModule(wasmUrl, memoryOptions = {}) {
 
     // Create memory with smart configuration
     const memory = new WebAssembly.Memory({
-        initial: memoryOptions.initialPages || 64,  // 64 * 64KB = 4MB
-        maximum: memoryOptions.maximumPages || 1024, // 1024 * 64KB = 64MB
+        initial: memoryOptions.initialPages || 1024,  // 1024 * 64KB = 64MB
+        maximum: memoryOptions.maximumPages || 16384, // 16384 * 64KB = 1GB
     });
 
-    // Load the Emscripten-generated JS glue code
-    const response = await fetch(wasmUrl.replace('.wasm', '.js'));
-    const jsCode = await response.text();
+    // Dynamically import the Emscripten-generated JS glue code as a module
+    // This ensures import.meta is available in the correct context
+    const jsUrl = wasmUrl.replace('.wasm', '.js');
 
-    // Create a module that uses our memory
-    const moduleFactory = new Function('return ' + jsCode)();
-    spz2glbModule = await moduleFactory({
+    // Create a module script that imports the Emscripten glue
+    const module = await import(jsUrl);
+
+    // Initialize with our memory configuration
+    spz2glbModule = await module.default({
         wasmMemory: memory,
         locateFile: (path) => {
             if (path.endsWith('.wasm')) return wasmUrl;
