@@ -21,9 +21,9 @@ static bool g_initialized = false;
 // Debug: track active allocations
 #if SPZ2GLB_DEBUG_ALLOC
 #include <stdio.h>
-#define DEBUG_LOG(fmt, ...) fprintf(stderr, "[spz2glb] " fmt "\n", ##__VA_ARGS__)
+#define DEBUG_LOG(...) fprintf(stderr, "[spz2glb] " __VA_ARGS__ "\n")
 #else
-#define DEBUG_LOG(fmt, ...) ((void)0)
+#define DEBUG_LOG(...) ((void)0)
 #endif
 
 // Initialization flag

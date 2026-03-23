@@ -53,7 +53,7 @@ public:
         }
         void* ptr = current_;
         current_ += size;
-        size_t used = current_ - pool_;
+        size_t used = static_cast<size_t>(current_ - pool_);
         if (used > peak_usage_) {
             peak_usage_ = used;
         }
@@ -65,9 +65,9 @@ public:
         current_ = pool_;
     }
 
-    size_t used() const { return current_ - pool_; }
+    size_t used() const { return static_cast<size_t>(current_ - pool_); }
     size_t peak_usage() const { return peak_usage_; }
-    size_t remaining() const { return end_ - current_; }
+    size_t remaining() const { return static_cast<size_t>(end_ - current_); }
     size_t allocations() const { return allocations_; }
 };
 
