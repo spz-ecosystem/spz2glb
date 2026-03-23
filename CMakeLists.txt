@@ -178,7 +178,8 @@ if(SPZ2GLB_BUILD_WASM)
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
 
-    # 内存配置
+    # 内存配置 - 支持外部导入内存（智能内存管理）
+    "-sIMPORTED_MEMORY=1"
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
     "-sSTACK_SIZE=10485760"
@@ -249,6 +250,8 @@ if(SPZ2GLB_BUILD_WASM)
     "--use-port=zlib"
     "-sMODULARIZE=1"
     "-sEXPORT_NAME=createSpzVerifyModule"
+    # 内存配置 - 支持外部导入内存（智能内存管理）
+    "-sIMPORTED_MEMORY=1"
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
     "-sSTACK_SIZE=10485760"

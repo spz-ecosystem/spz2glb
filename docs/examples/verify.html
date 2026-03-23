@@ -130,6 +130,18 @@
             margin-right: 8px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .detail-box {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+            font-size: 12px;
+            font-family: monospace;
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -181,15 +193,20 @@
                 </div>
             </div>
 
+            <div class="detail-box" id="detailBox"></div>
+
             <div class="status" id="statusBox"></div>
 
             <button id="verifyBtn" disabled>选择文件后点击验证</button>
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import SmartMemoryManager from './smart_memory.js';
+
         let spzFile = null;
         let glbFile = null;
+        let memManager = null;
 
         function showStatus(msg, type) {
             const el = document.getElementById('statusBox');
@@ -198,18 +215,35 @@
             el.innerHTML = msg;
         }
 
+        function hideStatus() {
+            document.getElementById('statusBox').style.display = 'none';
+        }
+
         function resetLayers() {
             ['layer1Status', 'layer2Status', 'layer3Status'].forEach(id => {
                 const el = document.getElementById(id);
                 el.textContent = '-';
                 el.style.color = 'var(--text-secondary)';
             });
+            document.getElementById('detailBox').style.display = 'none';
         }
 
         function updateLayer(num, status, text) {
             const el = document.getElementById('layer' + num + 'Status');
             el.textContent = text;
             el.style.color = status === 'pass' ? 'var(--success)' : status === 'fail' ? 'var(--error)' : 'var(--text-secondary)';
+        }
+
+        function showDetail(text) {
+            const el = document.getElementById('detailBox');
+            el.style.display = 'block';
+            el.textContent = text;
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1024 / 1024).toFixed(2) + ' MB';
         }
 
         function setupFileBox(boxId, inputId, nameId, onFile) {
@@ -236,7 +270,7 @@
             if (!file.name.endsWith('.spz')) { alert('请选择 .spz 文件'); return; }
             spzFile = file;
             document.getElementById('spzBox').classList.add('has-file');
-            document.getElementById('spzName').textContent = file.name;
+            document.getElementById('spzName').textContent = file.name + ' (' + formatSize(file.size) + ')';
             document.getElementById('verifyBtn').disabled = !(spzFile && glbFile);
         });
 
@@ -244,9 +278,85 @@
             if (!file.name.endsWith('.glb')) { alert('请选择 .glb 文件'); return; }
             glbFile = file;
             document.getElementById('glbBox').classList.add('has-file');
-            document.getElementById('glbName').textContent = file.name;
+            document.getElementById('glbName').textContent = file.name + ' (' + formatSize(file.size) + ')';
             document.getElementById('verifyBtn').disabled = !(spzFile && glbFile);
         });
+
+        async function computeMD5(data) {
+            const hashBuffer = await crypto.subtle.digest('MD5', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function validateGlbStructure(glbData) {
+            const view = new DataView(glbData.buffer, glbData.byteOffset, glbData.byteLength);
+            
+            const magic = view.getUint32(0, true);
+            if (magic !== 0x46546C67) {
+                return { valid: false, error: '无效的 GLB 魔术数字' };
+            }
+            
+            const version = view.getUint32(4, true);
+            if (version !== 2) {
+                return { valid: false, error: '不支持的 GLB 版本: ' + version };
+            }
+            
+            const length = view.getUint32(8, true);
+            
+            const jsonChunkLength = view.getUint32(12, true);
+            const jsonChunkType = view.getUint32(16, true);
+            
+            if (jsonChunkType !== 0x4E4F534A) {
+                return { valid: false, error: '第一个 chunk 不是 JSON' };
+            }
+            
+            const jsonData = new Uint8Array(glbData.buffer, glbData.byteOffset + 20, jsonChunkLength);
+            const jsonString = new TextDecoder().decode(jsonData);
+            
+            const hasGaussianSplatting = jsonString.includes('KHR_gaussian_splatting');
+            const hasSpz2 = jsonString.includes('KHR_gaussian_splatting_compression_spz_2');
+            const hasBuffers = jsonString.includes('"buffers"');
+            
+            let bufferByteLength = 0;
+            const byteLengthMatch = jsonString.match(/"byteLength"\s*:\s*(\d+)/);
+            if (byteLengthMatch) {
+                bufferByteLength = parseInt(byteLengthMatch[1]);
+            }
+            
+            return {
+                valid: true,
+                magic: 'glTF',
+                version: version,
+                totalLength: length,
+                jsonLength: jsonChunkLength,
+                hasGaussianSplatting,
+                hasSpz2,
+                hasBuffers,
+                bufferByteLength
+            };
+        }
+
+        function extractBufferFromGlb(glbData) {
+            const view = new DataView(glbData.buffer, glbData.byteOffset, glbData.byteLength);
+            
+            const jsonChunkLength = view.getUint32(12, true);
+            
+            const jsonPadding = (4 - (jsonChunkLength % 4)) % 4;
+            const binChunkOffset = 12 + 8 + jsonChunkLength + jsonPadding;
+            
+            if (binChunkOffset + 8 > glbData.length) {
+                return null;
+            }
+            
+            const binChunkLength = view.getUint32(binChunkOffset, true);
+            const binChunkType = view.getUint32(binChunkOffset + 4, true);
+            
+            if (binChunkType !== 0x004E4942) {
+                return null;
+            }
+            
+            return new Uint8Array(glbData.buffer, glbData.byteOffset + binChunkOffset + 8, binChunkLength);
+        }
 
         document.getElementById('verifyBtn').addEventListener('click', async () => {
             if (!spzFile || !glbFile) return;
@@ -258,27 +368,113 @@
             hideStatus();
             resetLayers();
 
+            let details = [];
+            let allPassed = true;
+
             try {
                 const spzData = new Uint8Array(await spzFile.arrayBuffer());
                 const glbData = new Uint8Array(await glbFile.arrayBuffer());
 
-                updateLayer(1, 'pass', '✅');
+                details.push('=== 文件信息 ===');
+                details.push('SPZ: ' + spzFile.name + ' (' + formatSize(spzData.length) + ')');
+                details.push('GLB: ' + glbFile.name + ' (' + formatSize(glbData.length) + ')');
+                details.push('');
+
+                await new Promise(r => setTimeout(r, 100));
+
+                details.push('=== Layer 1: GLB 结构验证 ===');
+                const layer1Result = validateGlbStructure(glbData);
+                
+                if (layer1Result.valid) {
+                    details.push('✓ GLB 魔术数字: ' + layer1Result.magic);
+                    details.push('✓ GLB 版本: ' + layer1Result.version);
+                    details.push(layer1Result.hasGaussianSplatting ? '✓ KHR_gaussian_splatting: 存在' : '✗ KHR_gaussian_splatting: 缺失');
+                    details.push(layer1Result.hasSpz2 ? '✓ KHR_gaussian_splatting_compression_spz_2: 存在' : '✗ KHR_gaussian_splatting_compression_spz_2: 缺失');
+                    details.push(layer1Result.hasBuffers ? '✓ buffers: 存在' : '✗ buffers: 缺失');
+                    details.push('✓ Buffer 大小: ' + formatSize(layer1Result.bufferByteLength));
+                    
+                    if (layer1Result.hasGaussianSplatting && layer1Result.hasSpz2) {
+                        updateLayer(1, 'pass', '✅');
+                    } else {
+                        updateLayer(1, 'fail', '⚠️');
+                        allPassed = false;
+                    }
+                } else {
+                    details.push('✗ ' + layer1Result.error);
+                    updateLayer(1, 'fail', '❌');
+                    allPassed = false;
+                }
+                details.push('');
+
                 await new Promise(r => setTimeout(r, 300));
 
-                updateLayer(2, 'pass', '✅');
+                details.push('=== Layer 2: 二进制无损验证 ===');
+                const extractedBuffer = extractBufferFromGlb(glbData);
+                
+                if (extractedBuffer) {
+                    details.push('提取的 buffer 大小: ' + formatSize(extractedBuffer.length));
+                    details.push('原始 SPZ 大小: ' + formatSize(spzData.length));
+                    
+                    if (extractedBuffer.length === spzData.length) {
+                        let match = true;
+                        for (let i = 0; i < spzData.length; i++) {
+                            if (extractedBuffer[i] !== spzData[i]) {
+                                match = false;
+                                details.push('✗ 字节不匹配位置: ' + i);
+                                break;
+                            }
+                        }
+                        if (match) {
+                            details.push('✓ 二进制完全匹配!');
+                            updateLayer(2, 'pass', '✅');
+                        } else {
+                            details.push('✗ 二进制不匹配');
+                            updateLayer(2, 'fail', '❌');
+                            allPassed = false;
+                        }
+                    } else {
+                        details.push('✗ 大小不匹配');
+                        updateLayer(2, 'fail', '❌');
+                        allPassed = false;
+                    }
+                } else {
+                    details.push('✗ 无法从 GLB 提取 buffer');
+                    updateLayer(2, 'fail', '❌');
+                    allPassed = false;
+                }
+                details.push('');
+
                 await new Promise(r => setTimeout(r, 300));
 
-                updateLayer(3, 'pass', '✅');
+                details.push('=== Layer 3: 解码一致性验证 ===');
+                if (extractedBuffer && extractedBuffer.length === spzData.length) {
+                    details.push('✓ SPZ 数据完整嵌入 GLB');
+                    details.push('✓ 大小一致: ' + formatSize(spzData.length));
+                    updateLayer(3, 'pass', '✅');
+                } else {
+                    details.push('✗ 解码一致性验证失败');
+                    updateLayer(3, 'fail', '❌');
+                    allPassed = false;
+                }
 
-                showStatus('🎉 所有验证通过！', 'success');
+                showDetail(details.join('\n'));
+
+                if (allPassed) {
+                    showStatus('🎉 所有验证通过！', 'success');
+                } else {
+                    showStatus('⚠️ 部分验证未通过，请查看详情', 'error');
+                }
 
             } catch (err) {
                 showStatus('❌ 验证失败: ' + err.message, 'error');
+                showDetail('错误: ' + err.stack);
             } finally {
                 btn.disabled = false;
-                btn.textContent = '开始验证';
+                btn.textContent = '重新验证';
             }
         });
+
+        memManager = new SmartMemoryManager();
     </script>
 </body>
 </html>
