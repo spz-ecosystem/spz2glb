@@ -1,11 +1,10 @@
 /**
  * High-Performance WebAssembly bindings for spz2glb
- * Uses WebAssembly.instantiate directly instead of Embind
+ * Uses WebAssembly.instantiate directly with external memory
  */
 
-function createSpz2GlbBindings(instance) {
+function createSpz2GlbBindings(instance, memory) {
     const exports = instance.exports;
-    const memory = exports.memory;
 
     function validateHeader(buffer) {
         const [ptr, size] = writeBuffer(buffer);
@@ -73,21 +72,17 @@ export async function loadSpz2Glb(wasmUrl, options = {}) {
     if (!response.ok) throw new Error(`Failed to fetch WASM: ${response.status}`);
     const buffer = await response.arrayBuffer();
 
-    let memory;
-    if (options.memory) {
-        memory = options.memory;
-    } else {
-        const initialPages = options.initialPages || 1024;  // 1024 * 64KB = 64MB
-        const maximumPages = options.maximumPages || 16384; // 16384 * 64KB = 1GB
-        memory = new WebAssembly.Memory({
-            initial: initialPages,
-            maximum: maximumPages
-        });
-    }
+    // 创建内存（使用传入的配置或默认值）
+    const initialPages = options.initialPages || options.memory?.initial || 1024;  // 64MB
+    const maximumPages = options.maximumPages || options.memory?.maximum || 16384; // 1GB
+    const memory = new WebAssembly.Memory({
+        initial: initialPages,
+        maximum: maximumPages
+    });
 
     const { instance } = await WebAssembly.instantiate(buffer, {
         env: { memory }
     });
 
-    return createSpz2GlbBindings(instance);
+    return createSpz2GlbBindings(instance, memory);
 }

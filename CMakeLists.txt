@@ -185,9 +185,9 @@ if(SPZ2GLB_BUILD_WASM)
     "-sMAXIMUM_MEMORY=1073741824"
     "-sSTACK_SIZE=10485760"
 
-    # Web 环境 - 纯 WASM，不需要 JS 胶水代码
+    # Web 环境 - 纯 WASM，支持外部内存导入
     "-sENVIRONMENT=web"
-    "-sEXPORT_ES6=0"
+    "-sEXPORT_ES6=1"
 
     # 文件系统
     "-sFILESYSTEM=0"
