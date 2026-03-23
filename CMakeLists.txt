@@ -141,97 +141,24 @@ if(SPZ2GLB_BUILD_WASM)
   # 创建输出目录
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
 
-  # WASM 可执行文件
+  # ============================================================
+  # spz2glb-wasm: 高性能版本（纯 C API，无 Embind）
+  # ============================================================
   add_executable(spz2glb-wasm
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz2glb_wasm_c_api.cpp
   )
 
-  # 链接 fastgltf
   target_link_libraries(spz2glb-wasm PRIVATE fastgltf)
 
-  # 启用 KHR Gaussian Splatting 扩展
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  # Emscripten ZLIB 配置（编译和链接都需要）
-  target_compile_options(spz2glb-wasm PRIVATE --use-port=zlib)
-  target_link_options(spz2glb-wasm PRIVATE --use-port=zlib)
-
-  # C++ 编译时优化
-  # 注意：-fno-rtti 仍不能使用，因为 Embind 需要 RTTI
-  # 但 -fno-exceptions 可以使用了，因为代码已移除 throw
-  target_compile_options(spz2glb-wasm PRIVATE
-    "-O3"
-    "-flto"
-    "-fno-exceptions"
-  )
-
-  # WASM 链接优化配置
-  target_link_options(spz2glb-wasm PRIVATE
-    # 优化级别
-    "-O3"
-    "-flto"
-
-    # Embind
-    "--bind"
-
-    # 模块化
-    "-sMODULARIZE=1"
-    "-sEXPORT_NAME=createSpz2GlbModule"
-
-    # 内存配置（允许动态增长）
-    "-sINITIAL_MEMORY=67108864"      # 64MB 初始
-    "-sMAXIMUM_MEMORY=2147483648"    # 2GB 最大
-    "-sSTACK_SIZE=16777216"          # 16MB 栈
-    "-sALLOW_MEMORY_GROWTH=1"        # 启用内存增长
-
-    # Web 环境
-    "-sENVIRONMENT=web"
-    "-sEXPORT_ES6=1"
-
-    # 文件系统（不需要，禁用以减小体积）
-    "-sFILESYSTEM=0"
-
-    # 生产环境优化
-    "-sASSERTIONS=0"
-    "-sNO_EXIT_RUNTIME=1"
-    "-sNO_DYNAMIC_EXECUTION=1"
-    "-sERROR_ON_UNDEFINED_SYMBOLS=1"
-    "-sWARN_ON_UNDEFINED_SYMBOLS=1"
-
-    # 性能优化
-    "-sWASM_BIGINT=1"
-    "-sMALLOC=emmalloc"
-
-    # 文件拆分（减小 30% 体积）
-    "-sSINGLE_FILE=0"
-  )
-
-  # 输出配置
-  set_target_properties(spz2glb-wasm PROPERTIES
-    OUTPUT_NAME "spz2glb"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
-  )
-
-  # ============================================================
-  # spz2glb-wasm-standalone: 高性能版本（无 Embind）
-  # ============================================================
-  add_executable(spz2glb-wasm-standalone
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz2glb_wasm_c_api.cpp
-  )
-
-  target_link_libraries(spz2glb-wasm-standalone PRIVATE fastgltf)
-
-  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(spz2glb-wasm-standalone PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-  endif()
-
   # Emscripten ZLIB
-  target_compile_options(spz2glb-wasm-standalone PRIVATE --use-port=zlib)
+  target_compile_options(spz2glb-wasm PRIVATE --use-port=zlib)
 
   # C++ 编译优化 + 严格警告
-  target_compile_options(spz2glb-wasm-standalone PRIVATE
+  target_compile_options(spz2glb-wasm PRIVATE
     "-O3"
     "-flto"
     "-fno-exceptions"
@@ -247,7 +174,7 @@ if(SPZ2GLB_BUILD_WASM)
   )
 
   # 完整链接优化（无 Embind）
-  target_link_options(spz2glb-wasm-standalone PRIVATE
+  target_link_options(spz2glb-wasm PRIVATE
     "-O3"
     "-flto"
     "-sUSE_ZLIB=1"
@@ -280,12 +207,12 @@ if(SPZ2GLB_BUILD_WASM)
     "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats"
   )
 
-  set_target_properties(spz2glb-wasm-standalone PROPERTIES
-    OUTPUT_NAME "spz2glb-standalone"
+  set_target_properties(spz2glb-wasm PROPERTIES
+    OUTPUT_NAME "spz2glb"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
   )
 
-  message(STATUS "Added spz2glb-wasm-standalone (high-performance, no Embind)")
+  message(STATUS "Added spz2glb-wasm (high-performance, pure C API)")
 
   # ============================================================
   # spz_verify WASM 构建
