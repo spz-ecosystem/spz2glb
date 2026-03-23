@@ -175,8 +175,7 @@ jobs:
       - name: Copy WASM modules to root
         run: |
           set -e
-          cp tools/spz_to_glb/dist/spz2glb.js .
-          cp tools/spz_to_glb/dist/spz2glb.wasm .
+          cp tools/spz_to_glb/dist/spz2glb-standalone.wasm ./spz2glb.wasm
           cp tools/spz_to_glb/dist/spz_verify.js .
           cp tools/spz_to_glb/dist/spz_verify.wasm .
           ls -la
