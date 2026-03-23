@@ -151,10 +151,7 @@ jobs:
   deploy-pages:
     needs: [wasm-build]
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Download HTML files
