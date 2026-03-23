@@ -159,6 +159,7 @@ jobs:
           mkdir -p docs/examples
           curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/index.html -o index.html
           curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/spz2glb_bindings.js -o spz2glb_bindings.js
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/smart_memory.js -o smart_memory.js
           ls -la
 
       - name: Download WASM artifacts
