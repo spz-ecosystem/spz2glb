@@ -179,13 +179,12 @@ if(SPZ2GLB_BUILD_WASM)
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
 
-    # 内存配置 - 支持外部导入内存（智能内存管理）
-    "-sIMPORTED_MEMORY=1"
+    # 内存配置 - WASM 自己创建内存（避免 LTO 导入名压缩问题）
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
     "-sSTACK_SIZE=10485760"
 
-    # Web 环境 - 纯 WASM，支持外部内存导入
+    # Web 环境 - 纯 WASM
     "-sENVIRONMENT=web"
     "-sEXPORT_ES6=1"
 
