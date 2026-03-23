@@ -168,7 +168,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-Werror"
     "-Wno-unused-parameter"
     "-Wno-old-style-cast"
-    "-Wshadow"
+    "-Wno-sign-conversion"
   )
 
   # 完整链接优化（无 Embind）
