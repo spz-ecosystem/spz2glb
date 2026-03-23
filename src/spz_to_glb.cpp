@@ -173,7 +173,7 @@ SpzResult loadSpzFile(const std::string& spzPath) {
     rawBuffer.resize(static_cast<size_t>(size));
 
     // 一次性读取整个文件到缓冲区
-    if (!file.read(reinterpret_cast<char*>(rawBuffer.data()), size)) {
+    if (!file.read(reinterpret_cast<char*>(rawBuffer.data()), static_cast<std::streamsize>(size))) {
         return SpzResult::error(SpzErrorCode::FailedToReadSpzFile,
             "Failed to read SPZ file");
     }

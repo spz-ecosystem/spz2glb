@@ -23,7 +23,7 @@ static bool g_initialized = false;
 #include <stdio.h>
 #define DEBUG_LOG(...) fprintf(stderr, "[spz2glb] " __VA_ARGS__ "\n")
 #else
-#define DEBUG_LOG(...) ((void)0)
+#define DEBUG_LOG(...) do { } while(0)
 #endif
 
 // Initialization flag
