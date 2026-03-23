@@ -146,7 +146,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: wasm-modules
-          path: tools/spz_to_glb/dist/
+          path: dist/
 
   deploy-pages:
     needs: [wasm-build]
@@ -170,14 +170,14 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: wasm-modules
-          path: tools/spz_to_glb/dist/
+          path: dist/
 
       - name: Copy WASM modules to root
         run: |
           set -e
-          cp tools/spz_to_glb/dist/spz2glb.wasm .
-          cp tools/spz_to_glb/dist/spz_verify.js .
-          cp tools/spz_to_glb/dist/spz_verify.wasm .
+          cp dist/spz2glb.wasm .
+          cp dist/spz_verify.js .
+          cp dist/spz_verify.wasm .
           ls -la
 
       - name: Upload to GitHub Pages
