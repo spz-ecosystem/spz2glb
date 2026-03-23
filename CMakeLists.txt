@@ -75,6 +75,7 @@ endif()
 if(NOT SPZ2GLB_BUILD_WASM)
 add_executable(spz2glb 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
 )
 
 target_compile_options(spz2glb PRIVATE

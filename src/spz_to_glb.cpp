@@ -459,18 +459,47 @@ EMSCRIPTEN_BINDINGS(spz2glb_module) {
 
 #else  // __EMSCRIPTEN__
 
+#include "spz_verifier.h"
+
+void printUsage(const char* progName) {
+    std::cout << "SPZ to GLB Converter\n";
+    std::cout << "Usage: " << progName << " <input.spz> <output.glb> [options]\n\n";
+    std::cout << "Options:\n";
+    std::cout << "  --verify    Run three-layer verification after conversion\n";
+    std::cout << "  --help      Show this help message\n";
+}
+
 int main(int argc, char** argv) {
-    // 参数检查：需要输入文件和输出文件两个参数
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <input.spz> <output.glb>" << std::endl;
+    bool doVerify = false;
+    std::string inputPath;
+    std::string outputPath;
+    
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "--verify") {
+            doVerify = true;
+        } else if (arg == "--help" || arg == "-h") {
+            printUsage(argv[0]);
+            return 0;
+        } else if (arg[0] != '-') {
+            if (inputPath.empty()) {
+                inputPath = arg;
+            } else if (outputPath.empty()) {
+                outputPath = arg;
+            }
+        } else {
+            std::cerr << "[ERROR] Unknown option: " << arg << std::endl;
+            printUsage(argv[0]);
+            return 1;
+        }
+    }
+    
+    if (inputPath.empty() || outputPath.empty()) {
+        std::cerr << "[ERROR] Missing input or output file\n";
+        printUsage(argv[0]);
         return 1;
     }
 
-    // 获取命令行参数
-    std::string inputPath = argv[1];   // 输入 SPZ 文件路径
-    std::string outputPath = argv[2];  // 输出 GLB 文件路径
-
-    // 步骤 1: 加载 SPZ 文件
     std::cout << "[INFO] Loading SPZ: " << inputPath << std::endl;
     auto spzResult = loadSpzFile(inputPath);
     if (!spzResult.success) {
@@ -478,14 +507,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // 步骤 2: 调用核心转换函数
+    std::cout << "[INFO] Converting to GLB..." << std::endl;
     std::vector<uint8_t> glbData;
     if (!convertSpzToGlbCore(spzResult.data, glbData)) {
         std::cerr << "[ERROR] Conversion failed" << std::endl;
         return 1;
     }
 
-    // 步骤 3: 写入文件
     std::cout << "[INFO] Writing GLB: " << outputPath << std::endl;
     std::ofstream file(outputPath, std::ios::binary);
     if (!file) {
@@ -495,11 +523,37 @@ int main(int argc, char** argv) {
 
     file.write(reinterpret_cast<const char*>(glbData.data()), glbData.size());
 
-    // 步骤 4: 打印成功信息
     std::cout << "[SUCCESS] GLB exported: " << outputPath << std::endl;
-    std::cout << "[INFO] GLB size: " << (glbData.size() / 1024 / 1024) << " MB" << std::endl;
+    std::cout << "[INFO] GLB size: " << (glbData.size() / 1024.0 / 1024.0) << " MB" << std::endl;
 
-    return 0;  // 成功退出
+    if (doVerify) {
+        std::cout << "\n============================================================\n";
+        std::cout << "Running Three-Layer Verification...\n";
+        std::cout << "============================================================\n\n";
+        
+        spz::Verifier verifier;
+        auto result = verifier.verify(spzResult.data, glbData);
+        
+        std::cout << result.layer1_detail << "\n";
+        std::cout << result.layer2_detail << "\n";
+        std::cout << result.layer3_detail << "\n";
+        
+        std::cout << "============================================================\n";
+        std::cout << "Summary:\n";
+        std::cout << "  Layer 1 (GLB Structure): " << (result.layer1_passed ? "PASSED" : "FAILED") << "\n";
+        std::cout << "  Layer 2 (Binary Lossless): " << (result.layer2_passed ? "PASSED" : "FAILED") << "\n";
+        std::cout << "  Layer 3 (Decoding): " << (result.layer3_passed ? "PASSED" : "FAILED") << "\n";
+        std::cout << "============================================================\n";
+        
+        if (result.all_passed()) {
+            std::cout << "\n[SUCCESS] All verifications PASSED!\n";
+        } else {
+            std::cout << "\n[WARNING] Some verifications FAILED!\n";
+            return 2;
+        }
+    }
+
+    return 0;
 }
 
 #endif  // __EMSCRIPTEN__
