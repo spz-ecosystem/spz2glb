@@ -189,6 +189,10 @@ if(SPZ2GLB_BUILD_WASM)
     "-sENVIRONMENT=web"
     "-sEXPORT_ES6=1"
 
+    # 生成 JS 胶水代码（正确处理内存导入）
+    "-sMODULARIZE=1"
+    "-sEXPORT_NAME=createSpz2glbModule"
+
     # 文件系统
     "-sFILESYSTEM=0"
 

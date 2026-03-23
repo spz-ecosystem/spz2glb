@@ -46,22 +46,7 @@
             margin-bottom: 8px;
         }
         .header p { color: var(--text-secondary); font-size: 16px; }
-        .nav {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 32px;
-            justify-content: center;
-        }
-        .nav a {
-            padding: 10px 20px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 500;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-        .nav a.convert { background: var(--primary); color: white; }
-        .nav a.verify { background: #e5e7eb; color: var(--text-secondary); }
+
         .drop-zone {
             border: 2px dashed #d1d5db;
             border-radius: 12px;
@@ -143,11 +128,6 @@
             <div class="header">
                 <h1>🌀 SPZ → GLB</h1>
                 <p>高性能 WebAssembly 在线转换</p>
-            </div>
-
-            <div class="nav">
-                <a href="./index.html" class="convert">SPZ → GLB 转换</a>
-                <a href="./verify.html" class="verify">三层验证</a>
             </div>
 
             <div class="drop-zone" id="dropZone">
