@@ -9,15 +9,15 @@ function createSpz2GlbBindings(instance) {
 
     function validateHeader(buffer) {
         const [ptr, size] = writeBuffer(buffer);
-        const result = exports.spz2glb_validate_header(ptr, size);
+        const result = exports._spz2glb_validate_header(ptr, size);
         freeBuffer(ptr);
         return result;
     }
 
     function convert(spzBuffer) {
         const [inputPtr, inputSize] = writeBuffer(spzBuffer);
-        const outSizePtr = exports.spz2glb_alloc(8);
-        const resultPtr = exports.spz2glb_convert(inputPtr, inputSize, outSizePtr);
+        const outSizePtr = exports._spz2glb_alloc(8);
+        const resultPtr = exports._spz2glb_convert(inputPtr, inputSize, outSizePtr);
         freeBuffer(inputPtr);
 
         if (!resultPtr) {
@@ -30,18 +30,18 @@ function createSpz2GlbBindings(instance) {
         freeBuffer(outSizePtr);
 
         if (!outSize) {
-            exports.spz2glb_free(resultPtr);
+            exports._spz2glb_free(resultPtr);
             return null;
         }
 
         const result = readBuffer(resultPtr, outSize);
-        exports.spz2glb_free(resultPtr);
+        exports._spz2glb_free(resultPtr);
         return result;
     }
 
     function writeBuffer(jsBuffer) {
         const size = jsBuffer.byteLength;
-        const ptr = exports.spz2glb_alloc(size);
+        const ptr = exports._spz2glb_alloc(size);
         const heap = new Uint8Array(memory.buffer);
         heap.set(new Uint8Array(jsBuffer.buffer, jsBuffer.byteOffset, size), ptr);
         return [ptr, size];
@@ -53,12 +53,12 @@ function createSpz2GlbBindings(instance) {
     }
 
     function freeBuffer(ptr) {
-        if (ptr) exports.spz2glb_free(ptr);
+        if (ptr) exports._spz2glb_free(ptr);
     }
 
     function getVersion() {
-        const ptr = exports.spz2glb_alloc(12);
-        exports.spz2glb_get_version(ptr, ptr + 4, ptr + 8);
+        const ptr = exports._spz2glb_alloc(12);
+        exports._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
         const heapU32 = new Uint32Array(memory.buffer);
         const version = `${heapU32[ptr / 4]}.${heapU32[ptr / 4 + 1]}.${heapU32[ptr / 4 + 2]}`;
         freeBuffer(ptr);
