@@ -26,7 +26,10 @@
 #include <string>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <zlib.h>
+
+#include "memory_pool.h"
 
 #include <fastgltf/core.hpp>
 #include <fastgltf/types.hpp>
@@ -35,6 +38,30 @@
 #include <emscripten/bind.h>
 #include "emscripten_utils.h"
 #endif
+
+enum class SpzErrorCode {
+    Success = 0,
+    CannotOpenSpzFile = 1,
+    FailedToReadSpzFile = 2,
+    FailedToInitZlib = 3,
+    FailedToDecompress = 4,
+    ConversionFailed = 5,
+    CannotOpenOutputFile = 6
+};
+
+struct SpzResult {
+    bool success;
+    std::string errorMessage;
+    std::vector<uint8_t> data;
+
+    static SpzResult ok(std::vector<uint8_t> data) {
+        return {true, "", std::move(data)};
+    }
+    static SpzResult error(SpzErrorCode code, const std::string& msg) {
+        (void)code;
+        return {false, msg, {}};
+    }
+};
 
 /**
  * SPZ 文件格式头结构（16 字节）
@@ -128,11 +155,12 @@ int getAccessorCount(int shDegree) {
  * - GLB 存储压缩数据，加载时由 SPZ 解码器解压
  * - 符合 SPZ_2 规范的压缩流模式
  */
-std::vector<uint8_t> loadSpzFile(const std::string& spzPath) {
+SpzResult loadSpzFile(const std::string& spzPath) {
     // 以二进制模式打开文件，ios::ate 将读取位置定位到文件末尾
     std::ifstream file(spzPath, std::ios::binary | std::ios::ate);
     if (!file) {
-        throw std::runtime_error("Cannot open SPZ file: " + spzPath);
+        return SpzResult::error(SpzErrorCode::CannotOpenSpzFile,
+            "Cannot open SPZ file: " + spzPath);
     }
 
     // 获取文件大小（tellg 返回当前位置，即文件末尾）
@@ -145,14 +173,15 @@ std::vector<uint8_t> loadSpzFile(const std::string& spzPath) {
     rawBuffer.resize(static_cast<size_t>(size));
 
     // 一次性读取整个文件到缓冲区
-    if (!file.read(reinterpret_cast<char*>(rawBuffer.data()), size)) {
-        throw std::runtime_error("Failed to read SPZ file");
+    if (!file.read(reinterpret_cast<char*>(rawBuffer.data()), static_cast<std::streamsize>(size))) {
+        return SpzResult::error(SpzErrorCode::FailedToReadSpzFile,
+            "Failed to read SPZ file");
     }
 
     // 返回原始 SPZ 数据（保持 gzip 压缩状态）
     // 重要：不要解压！GLB 必须存储原始压缩数据
     // SPZ 解码器在加载时会自动解压
-    return rawBuffer;
+    return SpzResult::ok(std::move(rawBuffer));
 }
 
 /**
@@ -176,11 +205,11 @@ std::vector<uint8_t> loadSpzFile(const std::string& spzPath) {
  * 4. 循环解压直到 Z_STREAM_END
  * 5. 调整最终大小并返回
  */
-std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedData) {
+SpzResult decompressSpzData(std::vector<uint8_t> compressedData) {
     // 检查 gzip 魔数：前两个字节必须是 0x1f 0x8b
     if (compressedData.size() < 2 || compressedData[0] != 0x1f || compressedData[1] != 0x8b) {
-        // 不是 gzip 压缩，直接返回原始数据
-        return compressedData;
+        // 不是 gzip 压缩，直接返回原始数据（使用移动语义）
+        return SpzResult::ok(std::move(compressedData));
     }
 
     // 预分配解压缓冲区（假设压缩率约 10 倍）
@@ -196,7 +225,8 @@ std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedDat
 
     // 初始化解压：16 + MAX_WBITS 表示使用 gzip 格式（而不是 zlib）
     if (inflateInit2(&strm, 16 + MAX_WBITS) != Z_OK) {
-        throw std::runtime_error("Failed to initialize zlib decompression");
+        return SpzResult::error(SpzErrorCode::FailedToInitZlib,
+            "Failed to initialize zlib decompression");
     }
 
     // 循环解压直到完成
@@ -217,7 +247,8 @@ std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedDat
     // 检查解压结果：必须是 Z_STREAM_END
     if (ret != Z_STREAM_END) {
         inflateEnd(&strm);
-        throw std::runtime_error("Failed to decompress SPZ file");
+        return SpzResult::error(SpzErrorCode::FailedToDecompress,
+            "Failed to decompress SPZ file");
     }
 
     // 调整到实际解压的大小
@@ -225,7 +256,7 @@ std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedDat
     // 释放 zlib 资源
     inflateEnd(&strm);
 
-    return decompressed;
+    return SpzResult::ok(std::move(decompressed));
 }
 
 /**
@@ -252,47 +283,40 @@ std::vector<uint8_t> decompressSpzData(const std::vector<uint8_t>& compressedDat
  * - 没有 attributes（数据在压缩流中）
  * - 渲染器需要 SPZ 解码器
  */
-fastgltf::Asset createGltfAsset(const std::vector<uint8_t>& spzData, const SpzHeader& header) {
-    (void)header; // 头部信息预留未来使用（如验证点数等）
-    
+fastgltf::Asset createGltfAsset(std::vector<uint8_t> spzData, const SpzHeader& header) {
+    (void)header;
+
     fastgltf::Asset asset;
 
-    // 注册使用的扩展（必须声明才能使用）
     asset.extensionsUsed.emplace_back("KHR_gaussian_splatting");
     asset.extensionsUsed.emplace_back("KHR_gaussian_splatting_compression_spz_2");
-
-    // 必需的扩展（没有这些扩展无法正确渲染）
     asset.extensionsRequired.emplace_back("KHR_gaussian_splatting");
     asset.extensionsRequired.emplace_back("KHR_gaussian_splatting_compression_spz_2");
 
-    // glTF 资产元信息
     asset.assetInfo.emplace();
-    asset.assetInfo->gltfVersion = "2.0";           // glTF 2.0 规范
-    asset.assetInfo->copyright = "";                // 版权信息（空）
-    asset.assetInfo->generator = "spz_to_glb_fastgltf";  // 生成器名称
+    asset.assetInfo->gltfVersion = "2.0";
+    asset.assetInfo->copyright = "";
+    asset.assetInfo->generator = "spz_to_glb_fastgltf";
 
-    // 获取 SPZ 数据大小
     size_t spzSize = spzData.size();
 
-    // 类型转换：uint8_t -> std::byte（fastgltf 要求）
-    std::vector<std::byte> byteData;
-    byteData.reserve(spzSize);
-    for (const auto& b : spzData) {
-        byteData.push_back(static_cast<std::byte>(b));
-    }
-
-    // 创建 glTF Buffer（存储 SPZ 压缩数据）
+    // 创建 Buffer（存储 SPZ 压缩数据）
+    // 使用 Vector 而不是 Array，因为 Vector 有 std::vector<std::byte>
     fastgltf::Buffer buffer;
-    buffer.data.emplace<fastgltf::sources::Vector>();  // 使用 Vector 作为数据源
-    std::get<fastgltf::sources::Vector>(buffer.data).bytes = std::move(byteData);
-    buffer.byteLength = spzSize;  // Buffer 大小等于 SPZ 数据大小
+    fastgltf::sources::Vector vectorData;
+    vectorData.bytes.reserve(spzSize);
+    for (size_t i = 0; i < spzSize; i++) {
+        vectorData.bytes.push_back(static_cast<std::byte>(spzData[i]));
+    }
+    vectorData.mimeType = fastgltf::MimeType::None;
+    buffer.data = std::move(vectorData);
+    buffer.byteLength = spzSize;
     asset.buffers.emplace_back(std::move(buffer));
 
-    // 创建 BufferView（指向整个 Buffer）
     fastgltf::BufferView spzBufferView;
-    spzBufferView.bufferIndex = 0;         // 引用第 0 个 Buffer
-    spzBufferView.byteOffset = 0;          // 从开头开始
-    spzBufferView.byteLength = spzSize;    // 长度为整个 SPZ 数据
+    spzBufferView.bufferIndex = 0;
+    spzBufferView.byteOffset = 0;
+    spzBufferView.byteLength = spzSize;
     asset.bufferViews.emplace_back(std::move(spzBufferView));
 
     // 创建 Primitive（使用 SPZ 压缩扩展）
@@ -358,11 +382,16 @@ fastgltf::Asset createGltfAsset(const std::vector<uint8_t>& spzData, const SpzHe
  * 3. 创建 glTF 资产
  * 4. 导出 GLB
  */
-bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_t>& glbData) {
-    // 步骤 1: 解压副本用于解析头部
-    auto decompressedData = decompressSpzData(spzData);
+bool convertSpzToGlbCore(std::vector<uint8_t> spzData, std::vector<uint8_t>& glbData) {
+    // 步骤 1: 解压（传引用，因为后面还需要 spzData）
+    auto decompressResult = decompressSpzData(spzData);  // 不 move，保留 spzData
+    if (!decompressResult.success) {
+        std::cerr << "[ERROR] " << decompressResult.errorMessage << std::endl;
+        return false;
+    }
+    std::vector<uint8_t> decompressedData = std::move(decompressResult.data);
 
-    // 步骤 2: 解析 SPZ 头部
+    // 步骤 2: 解析 SPZ 头部（使用解压后数据）
     SpzHeader header;
     if (!parseSpzHeader(decompressedData, header)) {
         std::cerr << "[ERROR] Failed to parse SPZ header" << std::endl;
@@ -373,9 +402,8 @@ bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_
     std::cout << "[INFO] SPZ version: " << (int)header.version << std::endl;
     std::cout << "[INFO] Num points: " << header.numPoints << std::endl;
     std::cout << "[INFO] SH degree: " << (int)header.shDegree << std::endl;
-    std::cout << "[INFO] SPZ size (raw compressed): " << (spzData.size() / 1024 / 1024) << " MB" << std::endl;
 
-    // 步骤 4: 创建 glTF 资产
+    // 步骤 4: 创建 glTF 资产（存储原始压缩数据）
     std::cout << "[INFO] Creating glTF Asset with KHR extensions" << std::endl;
     auto asset = createGltfAsset(spzData, header);
 
@@ -389,8 +417,8 @@ bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_
         return false;
     }
 
-    // 步骤 6: 获取 GLB 数据
-    const auto& output = result.get().output;
+    // 步骤 6: 获取 GLB 数据（移动语义，避免拷贝）
+    std::vector<std::byte> output = std::move(result.get().output);
     glbData.resize(output.size());
     std::memcpy(glbData.data(), output.data(), output.size());
 
@@ -411,28 +439,22 @@ bool convertSpzToGlbCore(const std::vector<uint8_t>& spzData, std::vector<uint8_
  * const glbData = Module.convertSpzToGlb(spzData);
  */
 emscripten::val convertSpzToGlb(const emscripten::val& spzBuffer) {
-    try {
-        // 1. JavaScript Uint8Array 转 C++ vector
-        std::vector<uint8_t> spzData = spz2glb::vectorFromJsArray(spzBuffer);
+    // JavaScript Uint8Array 转 C++ vector（Embind 标准做法）
+    std::vector<uint8_t> spzData = spz2glb::vectorFromJsArray(spzBuffer);
 
-        // 2. 调用核心转换函数
-        std::vector<uint8_t> glbData;
-        if (!convertSpzToGlbCore(spzData, glbData)) {
-            return emscripten::val::null();
-        }
-
-        // 3. C++ vector 转 JavaScript Uint8Array
-        return spz2glb::jsUint8ArrayFromVector(glbData);
-
-    } catch (const std::exception& e) {
-        emscripten::val console = emscripten::val::global("console");
-        console.call<void>("error", std::string("SPZ2GLB Error: ") + e.what());
+    // 调用核心转换函数
+    std::vector<uint8_t> glbData;
+    if (!convertSpzToGlbCore(spzData, glbData)) {
         return emscripten::val::null();
     }
+
+    // 返回 JavaScript Uint8Array
+    return spz2glb::jsUint8ArrayFromVector(glbData);
 }
 
 EMSCRIPTEN_BINDINGS(spz2glb_module) {
     emscripten::function("convertSpzToGlb", &convertSpzToGlb);
+    emscripten::function("getMemoryStats", &spz2glb::getMemoryStats);
 }
 
 #else  // __EMSCRIPTEN__
@@ -448,37 +470,36 @@ int main(int argc, char** argv) {
     std::string inputPath = argv[1];   // 输入 SPZ 文件路径
     std::string outputPath = argv[2];  // 输出 GLB 文件路径
 
-    try {
-        // 步骤 1: 加载 SPZ 文件
-        std::cout << "[INFO] Loading SPZ: " << inputPath << std::endl;
-        auto spzData = loadSpzFile(inputPath);
-
-        // 步骤 2: 调用核心转换函数
-        std::vector<uint8_t> glbData;
-        if (!convertSpzToGlbCore(spzData, glbData)) {
-            throw std::runtime_error("Conversion failed");
-        }
-
-        // 步骤 3: 写入文件
-        std::cout << "[INFO] Writing GLB: " << outputPath << std::endl;
-        std::ofstream file(outputPath, std::ios::binary);
-        if (!file) {
-            throw std::runtime_error("Cannot open output file: " + outputPath);
-        }
-
-        file.write(reinterpret_cast<const char*>(glbData.data()), glbData.size());
-
-        // 步骤 4: 打印成功信息
-        std::cout << "[SUCCESS] GLB exported: " << outputPath << std::endl;
-        std::cout << "[INFO] GLB size: " << (glbData.size() / 1024 / 1024) << " MB" << std::endl;
-
-        return 0;  // 成功退出
-
-    } catch (const std::exception& e) {
-        // 异常处理：打印错误信息并返回错误码
-        std::cerr << "[ERROR] " << e.what() << std::endl;
+    // 步骤 1: 加载 SPZ 文件
+    std::cout << "[INFO] Loading SPZ: " << inputPath << std::endl;
+    auto spzResult = loadSpzFile(inputPath);
+    if (!spzResult.success) {
+        std::cerr << "[ERROR] " << spzResult.errorMessage << std::endl;
         return 1;
     }
+
+    // 步骤 2: 调用核心转换函数
+    std::vector<uint8_t> glbData;
+    if (!convertSpzToGlbCore(spzResult.data, glbData)) {
+        std::cerr << "[ERROR] Conversion failed" << std::endl;
+        return 1;
+    }
+
+    // 步骤 3: 写入文件
+    std::cout << "[INFO] Writing GLB: " << outputPath << std::endl;
+    std::ofstream file(outputPath, std::ios::binary);
+    if (!file) {
+        std::cerr << "[ERROR] Cannot open output file: " << outputPath << std::endl;
+        return 1;
+    }
+
+    file.write(reinterpret_cast<const char*>(glbData.data()), glbData.size());
+
+    // 步骤 4: 打印成功信息
+    std::cout << "[SUCCESS] GLB exported: " << outputPath << std::endl;
+    std::cout << "[INFO] GLB size: " << (glbData.size() / 1024 / 1024) << " MB" << std::endl;
+
+    return 0;  // 成功退出
 }
 
 #endif  // __EMSCRIPTEN__

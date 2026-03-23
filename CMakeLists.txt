@@ -42,7 +42,8 @@ endif()
 # ZLIB 配置（支持 Emscripten WASM）
 # ============================================================
 if(SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-  # Emscripten 使用端口版本的 ZLIB，无需 find_package
+  # Emscripten 使用端口版本的 ZLIB
+  # Emscripten 会自动配置 zlib 路径，但需要确保 include 目录正确
   message(STATUS "Using Emscripten port of ZLIB")
 else()
   find_package(ZLIB QUIET)
@@ -140,43 +141,153 @@ if(SPZ2GLB_BUILD_WASM)
   # 创建输出目录
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
 
-  # WASM 可执行文件
+  # ============================================================
+  # spz2glb-wasm: 高性能版本（纯 C API，无 Embind）
+  # ============================================================
   add_executable(spz2glb-wasm
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz2glb_wasm_c_api.cpp
   )
 
-  # 链接 fastgltf
   target_link_libraries(spz2glb-wasm PRIVATE fastgltf)
 
-  # 启用 KHR Gaussian Splatting 扩展
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  # Emscripten ZLIB 配置
-  # 需要同时使用 compile 和 link 选项
+  # Emscripten ZLIB
   target_compile_options(spz2glb-wasm PRIVATE --use-port=zlib)
-  target_link_options(spz2glb-wasm PRIVATE --use-port=zlib)
 
-  # WASM 链接选项
-  target_link_options(spz2glb-wasm PRIVATE
-    "-O3"                              # 优化级别
-    "--use-port=zlib"                  # 使用完整的 Emscripten zlib 端口（处理编译和链接）
-    "--bind"                           # Emscripten bindings
-    "-sMODULARIZE=1"                   # 模块化输出
-    "-sEXPORT_NAME=createSpz2GlbModule" # 导出函数名
-    "-sALLOW_MEMORY_GROWTH=1"          # 允许内存增长
-    "-sENVIRONMENT=web"                # Web 环境
-    "-sEXPORT_ES6=1"                   # ES6 模块
-    "-sSINGLE_FILE=1"                  # 单文件输出（JS+WASM）
-    "-sEXPORTED_RUNTIME_METHODS=[\"ccall\",\"cwrap\"]" # 导出运行时方法
+  # C++ 编译优化 + 严格警告
+  target_compile_options(spz2glb-wasm PRIVATE
+    "-O3"
+    "-flto"
+    "-fno-exceptions"
+    "-Wall"
+    "-Wextra"
+    "-Wpedantic"
+    "-Werror"
+    "-Wno-unused-parameter"
+    "-Wno-old-style-cast"
+    "-Wno-sign-conversion"
   )
 
-  # 输出配置
+  # 完整链接优化（无 Embind）
+  target_link_options(spz2glb-wasm PRIVATE
+    "-O3"
+    "-flto"
+    "-sUSE_ZLIB=1"
+    "--use-port=zlib"
+
+    # 内存配置
+    "-sINITIAL_MEMORY=67108864"
+    "-sMAXIMUM_MEMORY=1073741824"
+    "-sSTACK_SIZE=10485760"
+
+    # Web 环境
+    "-sENVIRONMENT=web"
+    "-sEXPORT_ES6=1"
+
+    # 文件系统
+    "-sFILESYSTEM=0"
+
+    # 生产优化
+    "-sASSERTIONS=0"
+    "-sNO_EXIT_RUNTIME=1"
+    "-sNO_DYNAMIC_EXECUTION=1"
+    "-sERROR_ON_UNDEFINED_SYMBOLS=0"
+    "-sWASM_BIGINT=1"
+    "-sMALLOC=emmalloc"
+
+    # 单独文件
+    "-sSINGLE_FILE=0"
+
+    # C API 导出
+    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats"
+  )
+
   set_target_properties(spz2glb-wasm PROPERTIES
     OUTPUT_NAME "spz2glb"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
   )
+
+  message(STATUS "Added spz2glb-wasm (high-performance, pure C API)")
+
+  # ============================================================
+  # spz_verify WASM 构建
+  # ============================================================
+
+  add_executable(spz_verify-wasm
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+  )
+
+  target_link_libraries(spz_verify-wasm PRIVATE fastgltf)
+
+  # KHR Gaussian Splatting 支持
+  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+    target_compile_definitions(spz_verify-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+  endif()
+
+  # Emscripten ZLIB 配置（编译和链接都需要）
+  target_compile_options(spz_verify-wasm PRIVATE --use-port=zlib)
+
+  # C++ 编译优化 + 严格警告
+  target_compile_options(spz_verify-wasm PRIVATE
+    "-O3"
+    "-flto"
+    "-fno-exceptions"
+    "-Wall"
+    "-Wextra"
+    "-Werror"
+    "-Wno-unused-parameter"
+  )
+
+  # 完整链接优化（无 Embind）
+  target_link_options(spz_verify-wasm PRIVATE
+    "-O3"
+    "-flto"
+    "-sUSE_ZLIB=1"
+    "--use-port=zlib"
+    "-sMODULARIZE=1"
+    "-sEXPORT_NAME=createSpzVerifyModule"
+    "-sINITIAL_MEMORY=67108864"
+    "-sMAXIMUM_MEMORY=1073741824"
+    "-sSTACK_SIZE=10485760"
+    "-sENVIRONMENT=web"
+    "-sEXPORT_ES6=1"
+    "-sFILESYSTEM=0"
+    "-sASSERTIONS=0"
+    "-sNO_EXIT_RUNTIME=1"
+    "-sNO_DYNAMIC_EXECUTION=1"
+    "-sERROR_ON_UNDEFINED_SYMBOLS=0"
+    "-sWASM_BIGINT=1"
+    "-sMALLOC=emmalloc"
+    "-sSINGLE_FILE=0"
+    "-sEXPORTED_FUNCTIONS=_spz_verify_alloc,_spz_verify_free,_spz_verify_validate_header,_spz_verify_compute_md5,_spz_verify_get_memory_stats"
+  )
+
+  set_target_properties(spz_verify-wasm PROPERTIES
+    OUTPUT_NAME "spz_verify"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
+  )
+
+  message(STATUS "Added spz_verify-wasm configured")
+
+  # ============================================================
+  # 生成 TypeScript 声明文件
+  # ============================================================
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/emscripten/spz2glb.d.ts.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dist/spz2glb.d.ts"
+    COPYONLY
+  )
+
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/emscripten/spz_verify.d.ts.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/dist/spz_verify.d.ts"
+    COPYONLY
+  )
+
+  message(STATUS "TypeScript definitions generated")
 
   message(STATUS "WASM output directory: ${CMAKE_CURRENT_SOURCE_DIR}/dist")
 endif()

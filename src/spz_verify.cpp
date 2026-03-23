@@ -668,3 +668,65 @@ std::string Md5Hash::hash(const uint8_t* data, size_t len) {
     h.update(data, len);
     return h.finalize();
 }
+
+#ifdef __EMSCRIPTEN__
+
+#include "memory_pool.h"
+#include "spz2glb_wasm_c_api.h"
+
+namespace {
+
+static spz2glb::BumpAllocator g_workAllocator(16 * 1024 * 1024);
+
+bool validateGlbHeaderWasm(const uint8_t* data, size_t size) {
+    if (data == nullptr || size < 12) return false;
+
+    uint32_t magic = *reinterpret_cast<const uint32_t*>(data);
+    uint32_t version = *reinterpret_cast<const uint32_t*>(data + 4);
+    return magic == 0x46546C67 && version == 2;
+}
+
+uint8_t* computeMd5HashWasm(const uint8_t* data, size_t len, uint8_t* outHash) {
+    if (data == nullptr || len == 0 || outHash == nullptr) return nullptr;
+
+    Md5Hash hash;
+    hash.update(data, len);
+    std::string result = hash.finalize();
+    std::memcpy(outHash, result.data(), 16);
+    return outHash;
+}
+
+}
+
+Spz2GlbMemoryStats getVerifyMemoryStats() {
+    Spz2GlbMemoryStats stats = {0, 0, 0, 0, 0};
+    stats.peak_usage_bytes = g_workAllocator.used();
+    stats.current_usage_bytes = g_workAllocator.used();
+    return stats;
+}
+
+extern "C" {
+
+uint8_t* spz_verify_alloc(size_t size) {
+    return spz2glb_alloc(size);
+}
+
+void spz_verify_free(uint8_t* ptr) {
+    spz2glb_free(ptr);
+}
+
+bool spz_verify_validate_header(const uint8_t* data, size_t size) {
+    return validateGlbHeaderWasm(data, size);
+}
+
+uint8_t* spz_verify_compute_md5(const uint8_t* data, size_t len, uint8_t* outHash) {
+    return computeMd5HashWasm(data, len, outHash);
+}
+
+Spz2GlbMemoryStats spz_verify_get_memory_stats(void) {
+    return getVerifyMemoryStats();
+}
+
+}
+
+#endif

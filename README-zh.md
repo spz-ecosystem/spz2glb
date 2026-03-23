@@ -278,6 +278,91 @@ chmod +x verify.sh
 verify.bat model.spz
 ```
 
+## WebAssembly 构建
+
+### 构建 WASM 版本
+
+```bash
+# 安装 Emscripten
+git clone https://github.com/emscripten-core/emsdk.git
+cd emsdk
+./emsdk install latest
+./emsdk activate latest
+source ./emsdk_env.sh
+
+# 构建 WASM 模块
+cd tools/spz_to_glb
+emcmake cmake -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
+emmake cmake --build build_wasm --config Release --target spz2glb-wasm
+emmake cmake --build build_wasm --config Release --target spz_verify-wasm
+
+# 输出在 build_wasm/dist/
+# - spz2glb.js, spz2glb.wasm, spz2glb.data
+# - spz_verify.js, spz_verify.wasm, spz_verify.data
+```
+
+### Web 使用
+
+**重要**：WASM 版本需要下载所有文件：
+- `spz2glb.js`
+- `spz2glb.wasm`
+- `spz2glb.data`
+
+将它们放在同一目录，通过 HTTP 服务器加载。
+
+### JavaScript API
+
+```javascript
+// 加载模块
+const Module = await createSpz2GlbModule();
+
+// 转换 SPZ 到 GLB
+const spzBuffer = new Uint8Array([...]);  // 你的 SPZ 文件数据
+const glbBuffer = Module.convertSpzToGlb(spzBuffer);
+
+if (glbBuffer) {
+    // 成功：glbBuffer 是 Uint8Array
+    console.log('转换成功！');
+} else {
+    // 失败
+    console.error('转换失败');
+}
+
+// 获取内存统计（可选）
+const stats = Module.getMemoryStats();
+console.log(`峰值内存: ${stats.peak_usage / 1024 / 1024} MB`);
+```
+
+### spz_verify JavaScript API
+
+```javascript
+const verifyModule = await createSpzVerifyModule();
+
+// 第 1 层：GLB 结构验证
+const layer1Result = verifyModule.layer1ValidateGlbStructure(glbBuffer);
+
+// 第 2 层：二进制无损验证
+const layer2Result = verifyModule.layer2ValidateLossless(spzBuffer, glbBuffer);
+
+// 第 3 层：解码一致性验证
+const layer3Result = verifyModule.layer3ValidateDecoding(spzBuffer, glbBuffer);
+```
+
+### WASM 内存配置
+
+| 设置 | 值 | 说明 |
+|------|-----|------|
+| INITIAL_MEMORY | 64MB | 初始堆大小 |
+| MAXIMUM_MEMORY | 1GB | 最大堆大小 |
+
+### 性能优化
+
+WASM 构建包含以下优化：
+- **-O3 -flto**：链接时优化
+- **-fno-exceptions**：无异常开销
+- **内存池**：bump allocator 快速分配
+- **热点对象池**：固定大小对象复用
+
 ## 依赖
 
 - CMake 3.15+

@@ -12,6 +12,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -130,26 +132,62 @@ jobs:
           cd tools/spz_to_glb
           emcmake cmake -S ../../ -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
 
-      - name: Build WASM
+      - name: Build spz2glb WASM
         run: |
           cd tools/spz_to_glb
           emmake cmake --build build_wasm --config Release --target spz2glb-wasm
 
-      - name: Copy WASM output
+      - name: Build spz_verify WASM
         run: |
-          cp dist/* .
+          cd tools/spz_to_glb
+          emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
-      - name: List output files
-        run: |
-          ls -la
-
-      - name: Upload WASM artifact
+      - name: Upload WASM artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: spz2glb-wasm
-          path: |
-            spz2glb.js
-            index.html
+          name: wasm-modules
+          path: dist/
+
+  deploy-pages:
+    needs: [wasm-build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Download HTML files
+        run: |
+          mkdir -p docs/examples
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/index.html -o index.html
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/verify.html -o verify.html
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/spz2glb_bindings.js -o spz2glb_bindings.js
+          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/wasm-optimization/docs/examples/smart_memory.js -o smart_memory.js
+          ls -la
+
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: wasm-modules
+          path: tools/spz_to_glb/dist/
+
+      - name: Copy WASM modules to root
+        run: |
+          set -e
+          cp tools/spz_to_glb/dist/spz2glb.wasm .
+          cp tools/spz_to_glb/dist/spz_verify.js .
+          cp tools/spz_to_glb/dist/spz_verify.wasm .
+          ls -la
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   release:
     needs: [build, wasm-build]
