@@ -1,149 +1,79 @@
-# Copyright (c) 2026 Pu Junhan
-# SPDX-License-Identifier: MIT
-# Project: SPZ-ecosystem
-# Repository: https://github.com/spz-ecosystem/spz2glb
-#
-cmake_minimum_required(VERSION 3.15)
-project(spz2glb VERSION 1.0.3 LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.16)
+project(spz2glb VERSION 1.0.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_BUILD_RPATH_USE_ORIGIN ON)
-set(CMAKE_INSTALL_RPATH $ORIGIN/../lib)
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
-
-# ============================================================
-# WASM 构建配置（复用 Niantic SPZ 官方配置）
-# ============================================================
-if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
-  set(SPZ2GLB_BUILD_WASM ON)
-  if(NOT DEFINED SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-    set(SPZ2GLB_USE_EMSCRIPTEN_ZLIB ON)
-  endif()
-  message(STATUS "Emscripten detected: WASM build enabled")
-endif()
-
+# 选项
 option(SPZ2GLB_BUILD_WASM "Build WASM version" OFF)
+option(SPZ2GLB_USE_EMSCRIPTEN_ZLIB "Use Emscripten ZLIB port" OFF)
+option(ENABLE_KHR_GAUSSIAN_SPLATTING "Enable KHR_gaussian_splatting support" ON)
 
-include(GNUInstallDirs)
-
-option(ENABLE_KHR_GAUSSIAN_SPLATTING "Enable KHR_gaussian_splatting extension" ON)
-
-if(MSVC)
-    add_compile_options(/W4 /permissive-)
-else()
-    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unknown-pragmas)
-endif()
+# 添加 fastgltf
+add_subdirectory(third_party/fastgltf)
 
 # ============================================================
-# ZLIB 配置（支持 Emscripten WASM）
+# spz_verify 构建（命令行验证工具）
 # ============================================================
-if(SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-  # Emscripten 使用端口版本的 ZLIB
-  # Emscripten 会自动配置 zlib 路径，但需要确保 include 目录正确
-  message(STATUS "Using Emscripten port of ZLIB")
-else()
-  find_package(ZLIB QUIET)
-  if(NOT ZLIB_FOUND)
-    message(FATAL_ERROR "ZLIB not found. Install zlib-dev or use Emscripten for WASM build.")
-  endif()
-endif()
-
-# 指向根目录的 third_party（fastgltf 源码）
-# CMAKE_SOURCE_DIR = 仓库根目录 (spz_ecosystem_simplified)
-set(FASTGLTF_DIR "${CMAKE_SOURCE_DIR}/third_party")
-
-if(NOT EXISTS "${FASTGLTF_DIR}/CMakeLists.txt")
-    message(FATAL_ERROR "fastgltf not found at: ${FASTGLTF_DIR}")
-endif()
-
-add_subdirectory(${FASTGLTF_DIR} fastgltf_build)
-
-set_target_properties(fastgltf PROPERTIES
-    COMPILE_WARNING_AS_ERROR OFF
-)
-
-if(MSVC)
-    target_compile_options(fastgltf PRIVATE /W0)
-else()
-    target_compile_options(fastgltf PRIVATE -w)
-endif()
-
-if(NOT SPZ2GLB_BUILD_WASM)
-add_executable(spz2glb 
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
-)
-
-target_compile_options(spz2glb PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/WX>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Werror>
-)
-
-target_link_libraries(spz2glb PRIVATE
-    fastgltf
-)
-
-if(NOT SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-  # 桌面版需要 ZLIB
-  target_link_libraries(spz2glb PRIVATE ZLIB::ZLIB)
-endif()
-
-if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-    target_compile_definitions(fastgltf PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-endif()
 
 add_executable(spz_verify
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
 )
 
+target_link_libraries(spz_verify PRIVATE fastgltf)
+
+if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+  target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+endif()
+
+# 严格警告
 target_compile_options(spz_verify PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/WX>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Werror>
+  "-Wall"
+  "-Wextra"
+  "-Wpedantic"
+  "-Werror"
+  "-Wno-unused-parameter"
 )
 
-if(NOT SPZ2GLB_USE_EMSCRIPTEN_ZLIB)
-  target_link_libraries(spz_verify PRIVATE ZLIB::ZLIB)
-endif()
-
-install(TARGETS spz2glb spz_verify
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+set_target_properties(spz_verify PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
 )
-endif()
-
-# 可选：启用测试
-option(BUILD_TESTS "Build tests" OFF)
-if(BUILD_TESTS)
-    message(STATUS "Building tests...")
-    add_subdirectory(tests)
-endif()
-
-message(STATUS "")
-message(STATUS "========================================")
-message(STATUS "spz2glb - SPZ to GLB Converter v${PROJECT_VERSION}")
-message(STATUS "========================================")
-message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
-message(STATUS "KHR Gaussian Splatting: ${ENABLE_KHR_GAUSSIAN_SPLATTING}")
-message(STATUS "Build tests: ${BUILD_TESTS}")
-message(STATUS "Build WASM: ${SPZ2GLB_BUILD_WASM}")
-message(STATUS "========================================")
 
 # ============================================================
-# WASM 版本配置（完全复用 Niantic SPZ 官方配置）
+# spz2glb 主程序构建
 # ============================================================
+
+add_executable(spz2glb
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
+)
+
+target_link_libraries(spz2glb PRIVATE fastgltf)
+
+if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+  target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+endif()
+
+# 严格警告
+target_compile_options(spz2glb PRIVATE
+  "-Wall"
+  "-Wextra"
+  "-Wpedantic"
+  "-Werror"
+  "-Wno-unused-parameter"
+)
+
+set_target_properties(spz2glb PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
+)
+
+# ============================================================
+# WASM 构建
+# ============================================================
+
 if(SPZ2GLB_BUILD_WASM)
-  message(STATUS "Configuring WASM build...")
+  message(STATUS "Building WASM version")
 
-  # 创建输出目录
-  file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
-
-  # ============================================================
-  # spz2glb-wasm: 高性能版本（纯 C API，无 Embind）
+  # spz2glb-wasm: 高性能版本（纯 C API，无 LTO 避免导入名压缩问题）
   # ============================================================
   add_executable(spz2glb-wasm
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz2glb_wasm_c_api.cpp
@@ -158,10 +88,9 @@ if(SPZ2GLB_BUILD_WASM)
   # Emscripten ZLIB
   target_compile_options(spz2glb-wasm PRIVATE --use-port=zlib)
 
-  # C++ 编译优化 + 严格警告
+  # C++ 编译优化（无 LTO 避免导入名压缩）
   target_compile_options(spz2glb-wasm PRIVATE
     "-O3"
-    "-flto"
     "-fno-exceptions"
     "-Wall"
     "-Wextra"
@@ -172,19 +101,19 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wno-sign-conversion"
   )
 
-  # 完整链接优化（无 Embind）
+  # 链接优化（无 LTO）
   target_link_options(spz2glb-wasm PRIVATE
     "-O3"
-    "-flto"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
 
-    # 内存配置 - WASM 自己创建内存（避免 LTO 导入名压缩问题）
+    # 内存配置 - 支持外部导入内存（智能内存管理）
+    "-sIMPORTED_MEMORY=1"
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
     "-sSTACK_SIZE=10485760"
 
-    # Web 环境 - 纯 WASM
+    # Web 环境
     "-sENVIRONMENT=web"
     "-sEXPORT_ES6=1"
 
@@ -211,7 +140,7 @@ if(SPZ2GLB_BUILD_WASM)
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
   )
 
-  message(STATUS "Added spz2glb-wasm (high-performance, pure C API)")
+  message(STATUS "Added spz2glb-wasm (high-performance, pure C API, no LTO)")
 
   # ============================================================
   # spz_verify WASM 构建
@@ -223,35 +152,28 @@ if(SPZ2GLB_BUILD_WASM)
 
   target_link_libraries(spz_verify-wasm PRIVATE fastgltf)
 
-  # KHR Gaussian Splatting 支持
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz_verify-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  # Emscripten ZLIB 配置（编译和链接都需要）
   target_compile_options(spz_verify-wasm PRIVATE --use-port=zlib)
 
-  # C++ 编译优化 + 严格警告
   target_compile_options(spz_verify-wasm PRIVATE
     "-O3"
-    "-flto"
     "-fno-exceptions"
     "-Wall"
     "-Wextra"
+    "-Wpedantic"
     "-Werror"
     "-Wno-unused-parameter"
+    "-Wno-old-style-cast"
+    "-Wno-sign-conversion"
   )
 
-  # 完整链接优化（无 Embind）
   target_link_options(spz_verify-wasm PRIVATE
     "-O3"
-    "-flto"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
-    "-sMODULARIZE=1"
-    "-sEXPORT_NAME=createSpzVerifyModule"
-    # 内存配置 - 支持外部导入内存（智能内存管理）
-    "-sIMPORTED_MEMORY=1"
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
     "-sSTACK_SIZE=10485760"
@@ -265,7 +187,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-sWASM_BIGINT=1"
     "-sMALLOC=emmalloc"
     "-sSINGLE_FILE=0"
-    "-sEXPORTED_FUNCTIONS=_spz_verify_alloc,_spz_verify_free,_spz_verify_validate_header,_spz_verify_compute_md5,_spz_verify_get_memory_stats"
+    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats"
   )
 
   set_target_properties(spz_verify-wasm PROPERTIES
@@ -273,24 +195,5 @@ if(SPZ2GLB_BUILD_WASM)
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
   )
 
-  message(STATUS "Added spz_verify-wasm configured")
-
-  # ============================================================
-  # 生成 TypeScript 声明文件
-  # ============================================================
-  configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/emscripten/spz2glb.d.ts.in"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dist/spz2glb.d.ts"
-    COPYONLY
-  )
-
-  configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/emscripten/spz_verify.d.ts.in"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dist/spz_verify.d.ts"
-    COPYONLY
-  )
-
-  message(STATUS "TypeScript definitions generated")
-
-  message(STATUS "WASM output directory: ${CMAKE_CURRENT_SOURCE_DIR}/dist")
+  message(STATUS "Added spz_verify-wasm")
 endif()
