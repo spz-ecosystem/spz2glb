@@ -9,11 +9,6 @@ option(SPZ2GLB_BUILD_WASM "Build WASM version" OFF)
 option(SPZ2GLB_USE_EMSCRIPTEN_ZLIB "Use Emscripten ZLIB port" OFF)
 option(ENABLE_KHR_GAUSSIAN_SPLATTING "Enable KHR_gaussian_splatting support" ON)
 
-# 查找 ZLIB (在非 WASM 构建时)
-if(NOT SPZ2GLB_BUILD_WASM)
-  find_package(ZLIB REQUIRED)
-endif()
-
 # 添加 fastgltf (文件直接在 third_party 目录下)
 add_subdirectory(third_party)
 
@@ -43,47 +38,56 @@ else()
 endif()
 
 # ============================================================
-# spz_verify 构建（命令行验证工具）
+# 原生构建 (非 WASM)
 # ============================================================
 
-add_executable(spz_verify
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
-)
+if(NOT SPZ2GLB_BUILD_WASM)
+  # 查找 ZLIB
+  find_package(ZLIB REQUIRED)
 
-target_link_libraries(spz_verify PRIVATE fastgltf)
+  # ============================================================
+  # spz_verify 构建（命令行验证工具）
+  # ============================================================
 
-if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-  target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+  add_executable(spz_verify
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+  )
+
+  target_link_libraries(spz_verify PRIVATE fastgltf)
+
+  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+    target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+  endif()
+
+  # 严格警告
+  target_compile_options(spz_verify PRIVATE ${STRICT_WARNINGS})
+
+  set_target_properties(spz_verify PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
+  )
+
+  # ============================================================
+  # spz2glb 主程序构建
+  # ============================================================
+
+  add_executable(spz2glb
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
+  )
+
+  target_link_libraries(spz2glb PRIVATE fastgltf ZLIB::ZLIB)
+
+  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+    target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+  endif()
+
+  # 严格警告
+  target_compile_options(spz2glb PRIVATE ${STRICT_WARNINGS})
+
+  set_target_properties(spz2glb PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
+  )
 endif()
-
-# 严格警告
-target_compile_options(spz_verify PRIVATE ${STRICT_WARNINGS})
-
-set_target_properties(spz_verify PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
-)
-
-# ============================================================
-# spz2glb 主程序构建
-# ============================================================
-
-add_executable(spz2glb
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
-)
-
-target_link_libraries(spz2glb PRIVATE fastgltf ZLIB::ZLIB)
-
-if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-  target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-endif()
-
-# 严格警告
-target_compile_options(spz2glb PRIVATE ${STRICT_WARNINGS})
-
-set_target_properties(spz2glb PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
-)
 
 # ============================================================
 # WASM 构建
