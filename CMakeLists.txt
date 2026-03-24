@@ -9,8 +9,8 @@ option(SPZ2GLB_BUILD_WASM "Build WASM version" OFF)
 option(SPZ2GLB_USE_EMSCRIPTEN_ZLIB "Use Emscripten ZLIB port" OFF)
 option(ENABLE_KHR_GAUSSIAN_SPLATTING "Enable KHR_gaussian_splatting support" ON)
 
-# 添加 fastgltf
-add_subdirectory(third_party/fastgltf)
+# 添加 fastgltf (文件直接在 third_party 目录下)
+add_subdirectory(third_party)
 
 # ============================================================
 # spz_verify 构建（命令行验证工具）
