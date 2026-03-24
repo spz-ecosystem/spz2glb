@@ -171,6 +171,7 @@ jobs:
       - name: Copy WASM modules to root
         run: |
           cp dist/spz2glb.wasm .
+          cp dist/spz2glb.js .
           ls -la
 
       - name: Upload to GitHub Pages
