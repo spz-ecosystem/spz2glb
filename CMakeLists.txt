@@ -125,14 +125,14 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wno-sign-conversion"
   )
 
-  # 链接优化（禁用导入名压缩）
+  # 链接优化（使用 JS 胶水代码）
   target_link_options(spz2glb-wasm PRIVATE
     "-O3"
     "-fno-lto"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
 
-    # 内存配置 - WASM 自管理内存
+    # 内存配置
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
     "-sALLOW_MEMORY_GROWTH=1"
@@ -140,24 +140,29 @@ if(SPZ2GLB_BUILD_WASM)
 
     # Web 环境
     "-sENVIRONMENT=web"
+    "-sEXPORT_ES6=1"
 
     # 文件系统
     "-sFILESYSTEM=0"
 
-    # 禁用所有导入名压缩
-    "--minify=0"
-    "-sLEGALIZE_JS_FFI=0"
-    "-sWASM_ASYNC_COMPILATION=0"
+    # 生成 JS 胶水代码
+    "-sMODULARIZE=1"
+    "-sEXPORT_NAME=createSpz2glbModule"
 
     # 生产优化
     "-sASSERTIONS=0"
+    "-sNO_EXIT_RUNTIME=1"
+    "-sNO_DYNAMIC_EXECUTION=1"
     "-sERROR_ON_UNDEFINED_SYMBOLS=0"
+    "-sWASM_BIGINT=1"
+    "-sMALLOC=emmalloc"
 
     # 单独文件
     "-sSINGLE_FILE=0"
 
-    # C API 导出
-    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats"
+    # C API 导出 + malloc/free
+    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats,_malloc,_free"
+    "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8"
   )
 
   set_target_properties(spz2glb-wasm PROPERTIES
