@@ -16,6 +16,28 @@ add_subdirectory(third_party)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
 
 # ============================================================
+# 根据编译器设置警告选项
+# ============================================================
+
+if(MSVC)
+  # MSVC 编译器选项
+  set(STRICT_WARNINGS
+    "/W4"
+    "/WX"
+    "/wd4100"  # 禁用未使用参数警告
+  )
+else()
+  # GCC/Clang 编译器选项
+  set(STRICT_WARNINGS
+    "-Wall"
+    "-Wextra"
+    "-Wpedantic"
+    "-Werror"
+    "-Wno-unused-parameter"
+  )
+endif()
+
+# ============================================================
 # spz_verify 构建（命令行验证工具）
 # ============================================================
 
@@ -30,13 +52,7 @@ if(ENABLE_KHR_GAUSSIAN_SPLATTING)
 endif()
 
 # 严格警告
-target_compile_options(spz_verify PRIVATE
-  "-Wall"
-  "-Wextra"
-  "-Wpedantic"
-  "-Werror"
-  "-Wno-unused-parameter"
-)
+target_compile_options(spz_verify PRIVATE ${STRICT_WARNINGS})
 
 set_target_properties(spz_verify PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
@@ -58,13 +74,7 @@ if(ENABLE_KHR_GAUSSIAN_SPLATTING)
 endif()
 
 # 严格警告
-target_compile_options(spz2glb PRIVATE
-  "-Wall"
-  "-Wextra"
-  "-Wpedantic"
-  "-Werror"
-  "-Wno-unused-parameter"
-)
+target_compile_options(spz2glb PRIVATE ${STRICT_WARNINGS})
 
 set_target_properties(spz2glb PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
@@ -134,8 +144,6 @@ if(SPZ2GLB_BUILD_WASM)
     "-sERROR_ON_UNDEFINED_SYMBOLS=0"
     "-sWASM_BIGINT=1"
     "-sMALLOC=emmalloc"
-    "-sMINIFY_HTML=0"
-    "-sMINIFY_JS=0"
 
     # 单独文件
     "-sSINGLE_FILE=0"
