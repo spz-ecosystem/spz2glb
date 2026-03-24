@@ -1,6 +1,6 @@
 /**
  * High-Performance WebAssembly bindings for spz2glb
- * Uses native WebAssembly.instantiate with WASM-managed memory
+ * Handles Emscripten compressed import names
  */
 
 function createSpz2GlbBindings(instance) {
@@ -81,29 +81,27 @@ export async function loadSpz2Glb(wasmUrl, options = {}) {
     if (!response.ok) throw new Error(`Failed to fetch WASM: ${response.status}`);
     const buffer = await response.arrayBuffer();
 
-    // Analyze imports first
-    const wasmModule = await WebAssembly.compile(buffer);
-    const imports = WebAssembly.Module.imports(wasmModule);
-    
-    console.log('WASM imports:', imports.length);
-    imports.forEach((imp, i) => {
-        console.log(`  Import ${i}: ${imp.module}.${imp.name} (${imp.kind})`);
-    });
+    // Build import object with compressed names
+    // Emscripten may compress "env" to "a", "memory" to "b", etc.
+    const importObject = {
+        env: {},
+        a: {}  // Handle compressed "env" -> "a"
+    };
 
-    // Build import object based on actual imports
-    const importObject = { env: {} };
-    imports.forEach(imp => {
-        if (imp.module === 'env') {
-            if (imp.name === 'memory') {
-                // WASM exports its own memory
-                console.log('  Note: WASM imports memory from env');
-            } else {
-                console.warn('  Warning: Unknown import:', imp.name);
-                importObject.env[imp.name] = () => {};
-            }
-        }
-    });
-
-    const { instance } = await WebAssembly.instantiate(buffer, importObject);
-    return createSpz2GlbBindings(instance);
+    try {
+        const { instance } = await WebAssembly.instantiate(buffer, importObject);
+        return createSpz2GlbBindings(instance);
+    } catch (err) {
+        console.error('WASM instantiation failed:', err);
+        
+        // If failed, try to analyze what imports are actually needed
+        const wasmModule = await WebAssembly.compile(buffer);
+        const imports = WebAssembly.Module.imports(wasmModule);
+        console.log('WASM imports:');
+        imports.forEach((imp, i) => {
+            console.log(`  ${i}: ${imp.module}.${imp.name} (${imp.kind})`);
+        });
+        
+        throw err;
+    }
 }
