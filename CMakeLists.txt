@@ -125,7 +125,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wno-sign-conversion"
   )
 
-  # 链接优化（高性能原生 WASM，无 JS 胶水代码）
+  # 链接优化（禁用导入名压缩）
   target_link_options(spz2glb-wasm PRIVATE
     "-O3"
     "-fno-lto"
@@ -144,14 +144,10 @@ if(SPZ2GLB_BUILD_WASM)
     # 文件系统
     "-sFILESYSTEM=0"
 
-    # 独立 WASM - 最小化外部依赖
-    "-sSTANDALONE_WASM=1"
-    "-sSUPPORT_ERRNO=0"
-    "-sSUPPORT_LONGJMP=0"
-    "-sWASM_BIGINT=0"
-
-    # 使用 dlmalloc 替代 emmalloc（减少内部导入）
-    "-sMALLOC=dlmalloc"
+    # 禁用所有导入名压缩
+    "--minify=0"
+    "-sLEGALIZE_JS_FFI=0"
+    "-sWASM_ASYNC_COMPILATION=0"
 
     # 生产优化
     "-sASSERTIONS=0"
