@@ -170,7 +170,6 @@ jobs:
 
       - name: Copy WASM modules to root
         run: |
-          set -e
           cp dist/spz2glb.wasm .
           ls -la
 
