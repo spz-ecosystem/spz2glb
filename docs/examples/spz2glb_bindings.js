@@ -1,6 +1,6 @@
 /**
  * High-Performance WebAssembly bindings for spz2glb
- * Uses WebAssembly.instantiate directly with external memory
+ * Uses WebAssembly.instantiate with external memory for smart memory management
  */
 
 function createSpz2GlbBindings(instance, memory) {
@@ -72,13 +72,20 @@ export async function loadSpz2Glb(wasmUrl, options = {}) {
     if (!response.ok) throw new Error(`Failed to fetch WASM: ${response.status}`);
     const buffer = await response.arrayBuffer();
 
-    // 创建内存（使用传入的配置或默认值）
-    const initialPages = options.initialPages || 1024;  // 1024 * 64KB = 64MB
-    const maximumPages = options.maximumPages || 16384; // 16384 * 64KB = 1GB
-    const memory = new WebAssembly.Memory({
-        initial: initialPages,
-        maximum: maximumPages
-    });
+    // 使用传入的 memory，或创建默认 memory
+    let memory;
+    if (options.memory) {
+        // 传入的是 WebAssembly.Memory 对象
+        memory = options.memory;
+    } else {
+        // 创建默认 memory
+        const initialPages = options.initialPages || 1024;  // 1024 * 64KB = 64MB
+        const maximumPages = options.maximumPages || 16384; // 16384 * 64KB = 1GB
+        memory = new WebAssembly.Memory({
+            initial: initialPages,
+            maximum: maximumPages
+        });
+    }
 
     const { instance } = await WebAssembly.instantiate(buffer, {
         env: { memory }
