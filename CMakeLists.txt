@@ -12,6 +12,9 @@ option(ENABLE_KHR_GAUSSIAN_SPLATTING "Enable KHR_gaussian_splatting support" ON)
 # 添加 fastgltf (文件直接在 third_party 目录下)
 add_subdirectory(third_party)
 
+# 添加 fastgltf include 路径
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
+
 # ============================================================
 # spz_verify 构建（命令行验证工具）
 # ============================================================
