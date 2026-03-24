@@ -154,6 +154,9 @@ if(SPZ2GLB_BUILD_WASM)
     "-sWASM_BIGINT=1"
     "-sMALLOC=emmalloc"
 
+    # 禁用导入名压缩（关键！）
+    "--minify=0"
+
     # 单独文件
     "-sSINGLE_FILE=0"
 
