@@ -51,7 +51,7 @@ add_executable(spz2glb
   ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
 )
 
-target_link_libraries(spz2glb PRIVATE fastgltf)
+target_link_libraries(spz2glb PRIVATE fastgltf z)
 
 if(ENABLE_KHR_GAUSSIAN_SPLATTING)
   target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
@@ -96,6 +96,7 @@ if(SPZ2GLB_BUILD_WASM)
   target_compile_options(spz2glb-wasm PRIVATE
     "-O3"
     "-fno-exceptions"
+    "-fno-lto"
     "-Wall"
     "-Wextra"
     "-Wpedantic"
@@ -105,9 +106,10 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wno-sign-conversion"
   )
 
-  # 链接优化（无 LTO）
+  # 链接优化（无 LTO，禁用导入名压缩）
   target_link_options(spz2glb-wasm PRIVATE
     "-O3"
+    "-fno-lto"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
 
@@ -115,6 +117,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-sIMPORTED_MEMORY=1"
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
+    "-sALLOW_MEMORY_GROWTH=1"
     "-sSTACK_SIZE=10485760"
 
     # Web 环境
@@ -124,13 +127,15 @@ if(SPZ2GLB_BUILD_WASM)
     # 文件系统
     "-sFILESYSTEM=0"
 
-    # 生产优化
+    # 生产优化（禁用导入名压缩）
     "-sASSERTIONS=0"
     "-sNO_EXIT_RUNTIME=1"
     "-sNO_DYNAMIC_EXECUTION=1"
     "-sERROR_ON_UNDEFINED_SYMBOLS=0"
     "-sWASM_BIGINT=1"
     "-sMALLOC=emmalloc"
+    "-sMINIFY_HTML=0"
+    "-sMINIFY_JS=0"
 
     # 单独文件
     "-sSINGLE_FILE=0"
