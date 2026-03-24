@@ -125,15 +125,14 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wno-sign-conversion"
   )
 
-  # 链接优化（无 LTO，纯 WASM，最小化导入）
+  # 链接优化（使用 JS 胶水代码正确处理导入）
   target_link_options(spz2glb-wasm PRIVATE
     "-O3"
     "-fno-lto"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
 
-    # 内存配置 - WASM 自管理内存，但允许增长
-    # 注意：不使用 -sIMPORTED_MEMORY=1，因为需要原生 WebAssembly.instantiate 兼容性
+    # 内存配置
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
     "-sALLOW_MEMORY_GROWTH=1"
@@ -141,28 +140,29 @@ if(SPZ2GLB_BUILD_WASM)
 
     # Web 环境
     "-sENVIRONMENT=web"
+    "-sEXPORT_ES6=1"
 
     # 文件系统
     "-sFILESYSTEM=0"
 
-    # 消除额外的 Emscripten 依赖
-    "-sSUPPORT_ERRNO=0"
-    "-sSUPPORT_LONGJMP=0"
-    "-sWASM_BIGINT=0"
-    "-sMALLOC=emmalloc"
+    # 生成 JS 胶水代码（正确处理 Emscripten 内部导入）
+    "-sMODULARIZE=1"
+    "-sEXPORT_NAME=createSpz2glbModule"
 
     # 生产优化
     "-sASSERTIONS=0"
+    "-sNO_EXIT_RUNTIME=1"
+    "-sNO_DYNAMIC_EXECUTION=1"
     "-sERROR_ON_UNDEFINED_SYMBOLS=0"
-
-    # 禁用导入名压缩
-    "--minify=0"
+    "-sWASM_BIGINT=1"
+    "-sMALLOC=emmalloc"
 
     # 单独文件
     "-sSINGLE_FILE=0"
 
-    # C API 导出（仅需要的函数）
-    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats"
+    # C API 导出 + malloc/free
+    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats,_malloc,_free"
+    "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8"
   )
 
   set_target_properties(spz2glb-wasm PROPERTIES
