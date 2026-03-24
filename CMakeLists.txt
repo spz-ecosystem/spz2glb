@@ -180,6 +180,7 @@ if(SPZ2GLB_BUILD_WASM)
     "--use-port=zlib"
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
+    "-sALLOW_MEMORY_GROWTH=1"
     "-sSTACK_SIZE=10485760"
     "-sENVIRONMENT=web"
     "-sEXPORT_ES6=1"
@@ -191,7 +192,6 @@ if(SPZ2GLB_BUILD_WASM)
     "-sWASM_BIGINT=1"
     "-sMALLOC=emmalloc"
     "-sSINGLE_FILE=0"
-    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats"
   )
 
   set_target_properties(spz_verify-wasm PROPERTIES
