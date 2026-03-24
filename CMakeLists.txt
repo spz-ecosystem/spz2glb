@@ -125,7 +125,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wno-sign-conversion"
   )
 
-  # 链接优化（使用 JS 胶水代码）
+  # 链接优化（使用 JS 胶水代码，禁用 embind）
   target_link_options(spz2glb-wasm PRIVATE
     "-O3"
     "-fno-lto"
@@ -148,6 +148,10 @@ if(SPZ2GLB_BUILD_WASM)
     # 生成 JS 胶水代码
     "-sMODULARIZE=1"
     "-sEXPORT_NAME=createSpz2glbModule"
+
+    # 禁用 embind（避免 _embind_register_function 错误）
+    "-sEMBIND_STD_STRING_IS_UTF8=0"
+    "-sDISABLE_EXCEPTION_CATCHING=1"
 
     # 生产优化
     "-sASSERTIONS=0"
