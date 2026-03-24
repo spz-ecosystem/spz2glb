@@ -48,6 +48,7 @@ set_target_properties(spz_verify PROPERTIES
 
 add_executable(spz2glb
   ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
 )
 
 target_link_libraries(spz2glb PRIVATE fastgltf)
