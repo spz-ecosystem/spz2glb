@@ -154,8 +154,7 @@ jobs:
 
                   const ptr = module._spz2glb_alloc(12);
                   module._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
-                  const heapU32 = new Uint32Array(module.HEAPU8.buffer);
-                  const version = `${heapU32[ptr / 4]}.${heapU32[ptr / 4 + 1]}.${heapU32[ptr / 4 + 2]}`;
+                  const version = `${module.getValue(ptr, 'i32')}.${module.getValue(ptr + 4, 'i32')}.${module.getValue(ptr + 8, 'i32')}`;
                   module._spz2glb_free(ptr);
 
                   window.__smokeResult = {
