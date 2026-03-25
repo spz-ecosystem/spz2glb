@@ -108,7 +108,7 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .stats {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
             gap: 12px;
             margin-top: 20px;
         }
@@ -154,6 +154,38 @@
                     <div class="stat-value" id="statOutput">-</div>
                     <div class="stat-label">输出大小</div>
                 </div>
+                <div class="stat">
+                    <div class="stat-value" id="statCurrent">-</div>
+                    <div class="stat-label">当前内存</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statPeak">-</div>
+                    <div class="stat-label">峰值内存</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statAllocs">-</div>
+                    <div class="stat-label">分配次数</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statFails">-</div>
+                    <div class="stat-label">失败次数</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statWorkUsed">-</div>
+                    <div class="stat-label">工作区占用</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statWorkCapacity">-</div>
+                    <div class="stat-label">工作区容量</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statWorkPeak">-</div>
+                    <div class="stat-label">工作区峰值</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="statHotAvailable">-</div>
+                    <div class="stat-label">热池剩余</div>
+                </div>
             </div>
 
             <button id="convertBtn" disabled>选择文件后点击转换</button>
@@ -167,6 +199,9 @@
         let spz2glb = null;
         let selectedFile = null;
         let memManager = null;
+        let isConverting = false;
+        const testConfig = readTestConfig();
+        window.__spz2glbTestState = testConfig.captureState ? createEmptyTestState() : null;
 
         function showStatus(msg, type) {
             const el = document.getElementById('statusBox');
@@ -183,6 +218,121 @@
 
         function formatRecommendation(recommendation) {
             return `推荐 ≤ ${recommendation.recommendedMaxSize}MB | 硬上限 ${recommendation.hardMaxSize}MB`;
+        }
+
+        function setStat(id, value) {
+            document.getElementById(id).textContent = value;
+        }
+
+        function readTestConfig() {
+            const params = new URLSearchParams(window.location.search);
+            const rawChunkSize = params.get('chunkSize');
+            if (rawChunkSize === null) {
+                return { chunkSize: null, captureState: false };
+            }
+
+            const chunkSize = Number.parseInt(rawChunkSize, 10);
+            if (!Number.isFinite(chunkSize) || chunkSize <= 0) {
+                throw new Error(`Invalid chunkSize query parameter: ${rawChunkSize}`);
+            }
+
+            return { chunkSize, captureState: true };
+        }
+
+        function createEmptyTestState(inputSize = 0) {
+            return {
+                inputSize,
+                outputSize: 0,
+                blobSize: 0,
+                chunkSize: testConfig.chunkSize,
+                chunkWrites: [],
+                operations: [],
+            };
+        }
+
+        function getTestState() {
+            return window.__spz2glbTestState;
+        }
+
+        function resetTestState(inputSize = 0) {
+            if (!testConfig.captureState) {
+                return;
+            }
+            window.__spz2glbTestState = createEmptyTestState(inputSize);
+        }
+
+        function updateTestState(patch) {
+            const state = getTestState();
+            if (!state) {
+                return;
+            }
+            Object.assign(state, patch);
+        }
+
+        function recordTestOperation(name, detail = {}) {
+            const state = getTestState();
+            if (!state) {
+                return;
+            }
+            state.operations.push({ name, ...detail });
+        }
+
+        function recordChunkWrite(chunk) {
+            const state = getTestState();
+            if (!state) {
+                return;
+            }
+            state.chunkWrites.push(chunk);
+        }
+
+        function getConvertFileOptions() {
+            if (testConfig.chunkSize == null) {
+                return undefined;
+            }
+            return {
+                chunkSize: testConfig.chunkSize,
+                onChunk: recordChunkWrite,
+            };
+        }
+
+        function setFileSelectionEnabled(enabled) {
+            fileInput.disabled = !enabled;
+            dropZone.style.pointerEvents = enabled ? 'auto' : 'none';
+            dropZone.style.opacity = enabled ? '1' : '0.7';
+        }
+
+        function downloadGlbResult(glbResult, fileName) {
+            const bytesView = glbResult.getBytesView();
+            recordTestOperation('output-view-read', { viewSize: bytesView.byteLength });
+
+            const blob = new Blob([bytesView], { type: 'application/octet-stream' });
+            updateTestState({ blobSize: blob.size });
+            recordTestOperation('output-blob-created', { blobSize: blob.size });
+
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName.replace(/\.spz$/i, '.glb');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            recordTestOperation('download-started', { downloadName: a.download });
+        }
+
+        function renderConversionStats(file, glbResult, elapsedMs, memoryStats) {
+            setStat('statTime', elapsedMs.toFixed(0));
+            setStat('statInput', formatSize(file.size));
+            setStat('statOutput', formatSize(glbResult.size));
+            setStat('statCurrent', formatSize(memoryStats.currentUsageBytes));
+            setStat('statPeak', formatSize(memoryStats.peakUsageBytes));
+            setStat('statAllocs', String(memoryStats.totalAllocations));
+            setStat('statFails', String(memoryStats.failedAllocations));
+            setStat('statWorkUsed', formatSize(memoryStats.workUsed));
+            setStat('statWorkCapacity', formatSize(memoryStats.workCapacity));
+            setStat('statWorkPeak', formatSize(memoryStats.workPeak));
+            setStat('statHotAvailable', String(memoryStats.hotAvailable));
+            document.getElementById('statsBox').style.display = 'grid';
         }
 
         async function validateSelectedFile(file) {
@@ -214,7 +364,7 @@
                 showStatus(`✅ WASM 模块加载成功！版本: ${spz2glb.getVersion()}<br>
                     <small style="opacity:0.7">建议文件大小 ≤ ${info.recommendedMaxFileSize}MB，硬上限 ${info.hardMaxFileSize}MB</small>`, 'success');
                 if (selectedFile) {
-                    handleFile(selectedFile);
+                    await handleFile(selectedFile);
                 }
                 setTimeout(() => document.getElementById('statusBox').style.display = 'none', 3000);
             } catch (err) {
@@ -227,16 +377,31 @@
         const fileInfo = document.getElementById('fileInfo');
         const convertBtn = document.getElementById('convertBtn');
 
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; });
+        dropZone.addEventListener('click', () => {
+            if (!isConverting) {
+                fileInput.click();
+            }
+        });
+        dropZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            if (!isConverting) {
+                dropZone.style.borderColor = 'var(--primary)';
+            }
+        });
         dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#d1d5db'; });
         dropZone.addEventListener('drop', e => {
             e.preventDefault();
             dropZone.style.borderColor = '#d1d5db';
+            if (isConverting) {
+                return;
+            }
             const file = e.dataTransfer.files[0];
             if (file && file.name.endsWith('.spz')) handleFile(file);
         });
         fileInput.addEventListener('change', () => {
+            if (isConverting) {
+                return;
+            }
             const file = fileInput.files[0];
             if (file) handleFile(file);
         });
@@ -281,15 +446,18 @@
         }
 
         convertBtn.addEventListener('click', async () => {
-            if (!selectedFile || !spz2glb) return;
+            if (!selectedFile || !spz2glb || isConverting) return;
 
-            const recommendation = memManager.getRecommendation(selectedFile.size / (1024 * 1024));
+            const file = selectedFile;
+            const convertOptions = getConvertFileOptions();
+            const chunkSize = convertOptions?.chunkSize ?? 1024 * 1024;
+            const recommendation = memManager.getRecommendation(file.size / (1024 * 1024));
             if (!recommendation.allowConversion) {
                 showStatus(`❌ ${recommendation.message}<br><small style="opacity:0.7">命令行: ${recommendation.cliCommand}</small>`, 'error');
                 return;
             }
 
-            const validation = await validateSelectedFile(selectedFile);
+            const validation = await validateSelectedFile(file);
             if (!validation.ok) {
                 showStatus(`❌ ${validation.message}`, 'error');
                 convertBtn.disabled = true;
@@ -297,41 +465,55 @@
                 return;
             }
 
+            isConverting = true;
+            setFileSelectionEnabled(false);
             convertBtn.disabled = true;
             convertBtn.innerHTML = '<span class="loading-spinner"></span>转换中...';
             document.getElementById('statsBox').style.display = 'none';
+            spz2glb.resetMemoryStats();
 
             const startTime = performance.now();
             showStatus('<span class="loading-spinner"></span>正在分块写入 WASM 并转换...', 'loading');
 
             let glbResult = null;
+            resetTestState(file.size);
+            recordTestOperation('conversion-start', { chunkSize, fileName: file.name });
             try {
-                glbResult = await spz2glb.convertFile(selectedFile);
+                glbResult = await spz2glb.convertFile(file, convertOptions);
                 if (!glbResult) throw new Error('转换失败');
 
-                const glbData = glbResult.bytes;
+                updateTestState({ outputSize: glbResult.size });
+                recordTestOperation('conversion-finished', { outputSize: glbResult.size });
+
                 const endTime = performance.now();
-                document.getElementById('statTime').textContent = (endTime - startTime).toFixed(0);
-                document.getElementById('statInput').textContent = formatSize(selectedFile.size);
-                document.getElementById('statOutput').textContent = formatSize(glbResult.size);
-                document.getElementById('statsBox').style.display = 'grid';
+                const memoryStats = spz2glb.getMemoryStats();
+                recordTestOperation('memory-stats-read', {
+                    currentUsageBytes: memoryStats.currentUsageBytes,
+                    peakUsageBytes: memoryStats.peakUsageBytes,
+                });
+                renderConversionStats(file, glbResult, endTime - startTime, memoryStats);
 
-                const blob = new Blob([glbData], { type: 'application/octet-stream' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = selectedFile.name.replace(/\.spz$/i, '.glb');
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
+                downloadGlbResult(glbResult, file.name);
                 showStatus('✅ 转换成功！', 'success');
             } catch (err) {
+                recordTestOperation('conversion-error', { message: err.message });
                 showStatus('❌ 错误: ' + err.message, 'error');
             } finally {
-                glbResult?.release();
-                handleFile(selectedFile);
+                if (glbResult) {
+                    glbResult.release();
+                    recordTestOperation('output-released');
+                    if (testConfig.captureState) {
+                        try {
+                            glbResult.getBytesView();
+                            recordTestOperation('post-release-view-read-unexpected');
+                        } catch (releaseError) {
+                            recordTestOperation('post-release-view-error', { message: releaseError.message });
+                        }
+                    }
+                }
+                isConverting = false;
+                setFileSelectionEnabled(true);
+                await handleFile(file);
             }
 
         });

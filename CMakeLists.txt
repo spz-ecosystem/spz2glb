@@ -171,7 +171,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-sSINGLE_FILE=0"
 
     # C API 导出 + malloc/free
-    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_reserve_input,_spz2glb_get_input_ptr,_spz2glb_convert_reserved_input,_spz2glb_release_output,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_validate_glb_header,_spz2glb_validate_spz_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats,_malloc,_free"
+    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_reserve_input,_spz2glb_get_input_ptr,_spz2glb_convert_reserved_input,_spz2glb_release_output,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_validate_glb_header,_spz2glb_validate_spz_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats,_spz2glb_sizeof_size_t,_spz2glb_sizeof_memory_stats,_malloc,_free"
     "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8"
   )
 

@@ -13,6 +13,8 @@ bool convertSpzToGlbCore(const uint8_t* spzData, size_t spzSize, std::vector<std
 
 namespace {
 
+constexpr size_t kExpectedHotPoolCapacity = 8;
+
 [[noreturn]] void failCheck(const char* expr, int line) {
     std::cerr << "CHECK failed at line " << line << ": " << expr << std::endl;
     std::exit(1);
@@ -21,6 +23,7 @@ namespace {
 #define CHECK(expr) do { if (!(expr)) failCheck(#expr, __LINE__); } while (0)
 
 std::vector<uint8_t> makeMinimalSpzPayload() {
+
     std::vector<uint8_t> payload(16, 0);
 
     const uint32_t magic = 0x5053474e;
@@ -90,14 +93,24 @@ int main() {
     CHECK(stats.total_allocations == 0);
     CHECK(stats.total_frees == 0);
     CHECK(stats.failed_allocations == 0);
+    CHECK(stats.hot_available == kExpectedHotPoolCapacity);
+    CHECK(stats.work_used == 0);
+    CHECK(stats.work_capacity == 0);
+    CHECK(stats.work_peak == 0);
+    CHECK(spz2glb_sizeof_size_t() == sizeof(size_t));
+    CHECK(spz2glb_sizeof_memory_stats() == sizeof(Spz2GlbMemoryStats));
 
     std::vector<uint8_t> spzData = makeMinimalSpzGzip();
+
     std::vector<uint8_t> rawSpzData = makeMinimalSpzPayload();
     std::vector<uint8_t> invalidSpzData = makeInvalidSpzPayload();
 
     CHECK(spz2glb_validate_spz_header(rawSpzData.data(), rawSpzData.size()));
     CHECK(spz2glb_validate_spz_header(spzData.data(), spzData.size()));
+    CHECK(!spz2glb_validate_spz_header(rawSpzData.data(), sizeof(uint32_t)));
+    CHECK(!spz2glb_validate_spz_header(spzData.data(), 2));
     CHECK(!spz2glb_validate_spz_header(invalidSpzData.data(), invalidSpzData.size()));
+
 
     std::vector<std::byte> coreOutput;
 
@@ -126,11 +139,20 @@ int main() {
     spz2glb_get_memory_stats(&stats);
     CHECK(stats.current_usage_bytes >= reserved + outSize);
     CHECK(stats.peak_usage_bytes >= stats.current_usage_bytes);
+    CHECK(stats.work_used == 0);
+    CHECK(stats.work_capacity == 0);
+    CHECK(stats.work_peak > 0);
+    CHECK(stats.hot_available + 1 == kExpectedHotPoolCapacity);
 
     spz2glb_reset_memory_stats();
     spz2glb_get_memory_stats(&stats);
     CHECK(stats.current_usage_bytes >= reserved + outSize);
     CHECK(stats.peak_usage_bytes >= stats.current_usage_bytes);
+    CHECK(stats.work_used == 0);
+    CHECK(stats.work_capacity == 0);
+    CHECK(stats.work_peak > 0);
+    CHECK(stats.hot_available + 1 == kExpectedHotPoolCapacity);
+
 
     spz2glb_release_output(output);
 
@@ -139,11 +161,31 @@ int main() {
 
     spz2glb_get_memory_stats(&stats);
     CHECK(stats.current_usage_bytes == 0);
+    CHECK(stats.work_used == 0);
+    CHECK(stats.work_capacity == 0);
+    CHECK(stats.work_peak > 0);
+    CHECK(stats.hot_available == kExpectedHotPoolCapacity);
+
+    spz2glb_release_output(output);
+    spz2glb_get_memory_stats(&stats);
+    CHECK(stats.current_usage_bytes == 0);
+    CHECK(stats.hot_available == kExpectedHotPoolCapacity);
 
     uint8_t* buffer = spz2glb_alloc(32);
     CHECK(buffer != nullptr);
     std::memset(buffer, 0xCD, 32);
+    spz2glb_get_memory_stats(&stats);
+    const size_t usageAfterAlloc = stats.current_usage_bytes;
+    CHECK(usageAfterAlloc > 0);
+
     spz2glb_release_output(buffer);
+    spz2glb_get_memory_stats(&stats);
+    CHECK(stats.current_usage_bytes == usageAfterAlloc);
+
+    spz2glb_free(buffer);
+    spz2glb_get_memory_stats(&stats);
+    CHECK(stats.current_usage_bytes == 0);
 
     return 0;
 }
+

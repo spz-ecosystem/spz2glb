@@ -34,6 +34,10 @@ typedef struct {
     size_t total_allocations;
     size_t total_frees;
     size_t failed_allocations;
+    size_t hot_available;
+    size_t work_used;
+    size_t work_capacity;
+    size_t work_peak;
 } Spz2GlbMemoryStats;
 
 uint8_t* spz2glb_alloc(size_t size);
@@ -51,6 +55,8 @@ bool spz2glb_validate_spz_header(const uint8_t* data, size_t size);
 void spz2glb_get_version(int* major, int* minor, int* patch);
 void spz2glb_get_memory_stats(Spz2GlbMemoryStats* stats);
 void spz2glb_reset_memory_stats(void);
+size_t spz2glb_sizeof_size_t(void);
+size_t spz2glb_sizeof_memory_stats(void);
 
 #ifdef __cplusplus
 }

@@ -81,6 +81,7 @@ struct SpzHeader {
 };
 
 constexpr uint32_t kSpzMagic = 0x5053474e;
+constexpr size_t kConversionWorkArenaBytes = 64 * 1024;
 
 fastgltf::span<const std::byte> asByteSpan(const uint8_t* data, size_t size) {
     return fastgltf::span<const std::byte>(reinterpret_cast<const std::byte*>(data), size);
@@ -102,36 +103,6 @@ bool parseSpzHeader(const uint8_t* data, size_t size, SpzHeader& header) {
     return true;
 }
 
-
-/**
- * 计算 glTF accessor 数量（基于球谐函数阶数）
- * 
- * @param shDegree 球谐函数阶数（0-3）
- * @return 需要的 accessor 总数
- * 
- * glTF 高斯泼溅需要以下属性：
- * - 基础属性（4 个）：POSITION, COLOR_0, SCALE, ROTATION
- * - 球谐系数（可选）：根据 SH 阶数增加
- *   - SH 阶数 1: +3 个系数
- *   - SH 阶数 2: +5 个系数
- *   - SH 阶数 3: +7 个系数
- * 
- * 注意：在压缩流模式（compression stream mode）下，
- * 这些 accessor 都不需要，因为数据存储在 SPZ 压缩流中
- */
-int getAccessorCount(int shDegree) {
-    // 基础属性：位置、颜色、缩放、旋转
-    int baseAccessors = 4; // POSITION, COLOR_0, SCALE, ROTATION
-    int shAccessors = 0;
-
-    // 根据 SH 阶数添加球谐系数
-    // 球谐函数用于编码光照方向信息，阶数越高，光照质量越好
-    if (shDegree >= 1) shAccessors += 3;  // 一阶 SH：3 个系数
-    if (shDegree >= 2) shAccessors += 5;  // 二阶 SH：5 个系数
-    if (shDegree >= 3) shAccessors += 7;  // 三阶 SH：7 个系数
-
-    return baseAccessors + shAccessors;
-}
 
 /**
  * 加载 SPZ 文件（二进制读取）
@@ -182,9 +153,20 @@ bool isGzipData(const uint8_t* data, size_t size) {
     return data != nullptr && size >= 2 && data[0] == 0x1f && data[1] == 0x8b;
 }
 
-bool peekSpzHeaderFromGzip(const uint8_t* compressedData, size_t compressedSize, SpzHeader& header) {
-    spz2glb::BumpAllocator arena(sizeof(SpzHeader));
-    auto* headerBytes = static_cast<uint8_t*>(arena.alloc(sizeof(SpzHeader), alignof(SpzHeader)));
+bool peekSpzHeaderFromGzip(const uint8_t* compressedData, size_t compressedSize, SpzHeader& header,
+        spz2glb::BumpAllocator* workArena = nullptr) {
+    spz2glb::BumpAllocator localArena;
+    if (workArena == nullptr) {
+        if (!localArena.init(sizeof(SpzHeader))) {
+            std::cerr << "[ERROR] Failed to initialize SPZ header work arena" << std::endl;
+            return false;
+        }
+        workArena = &localArena;
+    } else {
+        workArena->reset();
+    }
+
+    auto* headerBytes = static_cast<uint8_t*>(workArena->alloc(sizeof(SpzHeader), alignof(SpzHeader)));
     if (headerBytes == nullptr) {
         std::cerr << "[ERROR] Failed to allocate SPZ header scratch buffer" << std::endl;
         return false;
@@ -216,7 +198,8 @@ bool peekSpzHeaderFromGzip(const uint8_t* compressedData, size_t compressedSize,
     return parseSpzHeader(headerBytes, sizeof(SpzHeader), header);
 }
 
-bool peekSpzHeader(const uint8_t* data, size_t size, SpzHeader& header) {
+bool peekSpzHeader(const uint8_t* data, size_t size, SpzHeader& header,
+        spz2glb::BumpAllocator* workArena = nullptr) {
     if (data == nullptr || size == 0) {
         std::cerr << "[ERROR] SPZ input is empty" << std::endl;
         return false;
@@ -226,7 +209,7 @@ bool peekSpzHeader(const uint8_t* data, size_t size, SpzHeader& header) {
         return parseSpzHeader(data, size, header);
     }
 
-    return peekSpzHeaderFromGzip(data, size, header);
+    return peekSpzHeaderFromGzip(data, size, header, workArena);
 }
 
 
@@ -290,8 +273,14 @@ fastgltf::Asset createGltfAsset(fastgltf::span<const std::byte> spzData, const S
 
 
 bool convertSpzToGlbCore(const uint8_t* spzData, size_t spzSize, std::vector<std::byte>& glbData) {
+    spz2glb::BumpAllocator workArena;
+    if (!workArena.init(kConversionWorkArenaBytes)) {
+        std::cerr << "[ERROR] Failed to initialize conversion work arena" << std::endl;
+        return false;
+    }
+
     SpzHeader header;
-    if (!peekSpzHeader(spzData, spzSize, header)) {
+    if (!peekSpzHeader(spzData, spzSize, header, &workArena)) {
         std::cerr << "[ERROR] Failed to parse SPZ header" << std::endl;
         return false;
     }

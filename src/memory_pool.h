@@ -44,7 +44,7 @@ public:
     }
 
     void trackWorkReserve(size_t size) {
-        stats_.work_capacity += size;
+        stats_.work_capacity = size;
         trackExternalAlloc(size);
     }
 
@@ -73,7 +73,7 @@ public:
         stats_.total_allocations = 0;
         stats_.total_frees = 0;
         stats_.failed_allocations = 0;
-        stats_.work_peak = stats_.work_used;
+        stats_.work_peak = std::max(stats_.work_peak, stats_.work_used);
     }
 
     MemoryStats snapshot() const {
@@ -218,7 +218,6 @@ public:
 
     void* alloc() {
         if (freeList_ == nullptr) {
-            trackFailedAllocation();
             return nullptr;
         }
         auto* node = freeList_;

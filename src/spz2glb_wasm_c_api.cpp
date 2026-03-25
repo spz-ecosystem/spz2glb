@@ -9,23 +9,27 @@
 
 #include <cstdio>
 #include <cstring>
-#include <memory>
 #include <new>
 #include <vector>
 
 namespace {
 
 constexpr size_t kMaxAllocationBytes = 1024ULL * 1024ULL * 1024ULL;
+constexpr uint32_t kOwnedOutputPoolSize = 8;
 
 struct OwnedOutput {
     std::vector<std::byte> bytes;
     size_t tracked_bytes = 0;
+    bool from_hot_pool = false;
     OwnedOutput* next = nullptr;
 };
+
+using OwnedOutputPool = spz2glb::HotObjectPool<sizeof(OwnedOutput), kOwnedOutputPoolSize>;
 
 uint8_t* g_reserved_input = nullptr;
 size_t g_reserved_input_capacity = 0;
 OwnedOutput* g_owned_outputs = nullptr;
+OwnedOutputPool g_owned_output_pool;
 
 #if SPZ2GLB_DEBUG_ALLOC
 #define DEBUG_LOG(...) do { std::fprintf(stderr, "[spz2glb] " __VA_ARGS__); std::fprintf(stderr, "\n"); } while (0)
@@ -93,15 +97,44 @@ void clear_reserved_input() {
     }
 }
 
+OwnedOutput* create_owned_output() {
+    if (void* slot = g_owned_output_pool.alloc()) {
+        auto* owner = new (slot) OwnedOutput();
+        owner->from_hot_pool = true;
+        return owner;
+    }
+
+    auto* owner = new (std::nothrow) OwnedOutput();
+    if (owner == nullptr) {
+        spz2glb::trackFailedAllocation();
+        return nullptr;
+    }
+
+    return owner;
+}
+
+void destroy_owned_output(OwnedOutput* owner) {
+    if (owner == nullptr) {
+        return;
+    }
+
+    if (owner->from_hot_pool) {
+        owner->~OwnedOutput();
+        g_owned_output_pool.dealloc(owner);
+        return;
+    }
+
+    delete owner;
+}
+
 uint8_t* register_output(std::vector<std::byte>&& output, size_t* outSize) {
     if (outSize == nullptr || output.empty() || output.size() > kMaxAllocationBytes) {
         spz2glb::trackFailedAllocation();
         return nullptr;
     }
 
-    auto owner = std::unique_ptr<OwnedOutput>(new (std::nothrow) OwnedOutput());
-    if (!owner) {
-        spz2glb::trackFailedAllocation();
+    OwnedOutput* owner = create_owned_output();
+    if (owner == nullptr) {
         return nullptr;
     }
 
@@ -109,15 +142,19 @@ uint8_t* register_output(std::vector<std::byte>&& output, size_t* outSize) {
     auto* resultPtr = reinterpret_cast<uint8_t*>(owner->bytes.data());
     if (resultPtr == nullptr) {
         spz2glb::trackFailedAllocation();
+        destroy_owned_output(owner);
         return nullptr;
     }
 
     *outSize = owner->bytes.size();
-    owner->tracked_bytes = sizeof(OwnedOutput) + owner->bytes.capacity();
+    owner->tracked_bytes = owner->bytes.capacity();
+    if (!owner->from_hot_pool) {
+        owner->tracked_bytes += sizeof(OwnedOutput);
+    }
     track_alloc(owner->tracked_bytes);
 
     owner->next = g_owned_outputs;
-    g_owned_outputs = owner.release();
+    g_owned_outputs = owner;
     return resultPtr;
 }
 
@@ -128,7 +165,7 @@ bool release_owned_output(uint8_t* ptr) {
         if (reinterpret_cast<uint8_t*>(owner->bytes.data()) == ptr) {
             *current = owner->next;
             track_free(owner->tracked_bytes);
-            delete owner;
+            destroy_owned_output(owner);
             return true;
         }
         current = &owner->next;
@@ -201,9 +238,7 @@ int spz2glb_convert_reserved_input(size_t size, uint8_t** outPtr, size_t* outSiz
 }
 
 void spz2glb_release_output(uint8_t* ptr) {
-    if (!release_owned_output(ptr)) {
-        free_tracked(ptr);
-    }
+    release_owned_output(ptr);
 }
 
 uint8_t* spz2glb_convert(const uint8_t* spzData, size_t spzSize, size_t* outSize) {
@@ -255,9 +290,21 @@ void spz2glb_get_memory_stats(Spz2GlbMemoryStats* stats) {
     stats->total_allocations = coreStats.total_allocations;
     stats->total_frees = coreStats.total_frees;
     stats->failed_allocations = coreStats.failed_allocations;
+    stats->hot_available = coreStats.hot_available;
+    stats->work_used = coreStats.work_used;
+    stats->work_capacity = coreStats.work_capacity;
+    stats->work_peak = coreStats.work_peak;
 }
 
 void spz2glb_reset_memory_stats(void) {
     spz2glb::resetMemoryStats();
+}
+
+size_t spz2glb_sizeof_size_t(void) {
+    return sizeof(size_t);
+}
+
+size_t spz2glb_sizeof_memory_stats(void) {
+    return sizeof(Spz2GlbMemoryStats);
 }
 
