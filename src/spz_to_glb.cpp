@@ -307,6 +307,7 @@ bool convertSpzToGlbCore(const uint8_t* spzData, size_t spzSize, std::vector<std
 
 #ifdef __EMSCRIPTEN__
 
+#ifndef SPZ2GLB_DISABLE_EMBIND
 /**
  * WASM 导出函数：SPZ 转 GLB
  *
@@ -329,8 +330,6 @@ emscripten::val convertSpzToGlb(const emscripten::val& spzBuffer) {
     return spz2glb::jsUint8ArrayFromBytes(glbData);
 }
 
-
-#ifndef SPZ2GLB_DISABLE_EMBIND
 EMSCRIPTEN_BINDINGS(spz2glb_module) {
     emscripten::function("convertSpzToGlb", &convertSpzToGlb);
     emscripten::function("getMemoryStats", &spz2glb::getMemoryStats);
