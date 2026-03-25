@@ -125,74 +125,91 @@ jobs:
           echo "=== Memory Section ==="
           grep -A 5 "Memory" wasm_analysis.txt | head -10 || echo "No memory section found"
 
-      - name: Test WASM instantiation
+      - name: Test browser glue loading
         run: |
-          echo "=== Testing WASM Instantiation ==="
-          cat > test_wasm.js << 'EOF'
-          const fs = require('fs');
+          set -euo pipefail
+          echo "=== Testing browser glue loading ==="
+          test -f dist/spz2glb.js
+          test -f dist/spz2glb.wasm
 
-          async function testWasm() {
-              try {
-                  const wasmPath = process.env.WASM_FILE || './dist/spz2glb.wasm';
-                  const buffer = fs.readFileSync(wasmPath);
-                  console.log('✓ WASM file path:', wasmPath);
-                  console.log('✓ WASM file size:', buffer.length, 'bytes');
+          cat > smoke.html << 'EOF'
+          <!doctype html>
+          <html>
+            <body>
+              <script type="module">
+                import createSpz2glbModule from './dist/spz2glb.js';
 
-                  const wasmModule = await WebAssembly.compile(buffer);
-                  const imports = WebAssembly.Module.imports(wasmModule);
-                  console.log('✓ WASM imports:', imports.length);
-                  imports.forEach((imp, i) => {
-                      console.log(`  Import ${i}: ${imp.module}.${imp.name} (${imp.kind})`);
+                window.__smokeResult = { status: 'pending' };
+
+                try {
+                  const module = await createSpz2glbModule({
+                    locateFile(path) {
+                      return path.endsWith('.wasm') ? './dist/spz2glb.wasm' : path;
+                    },
+                    print() {},
+                    printErr(text) {
+                      console.error(text);
+                    },
                   });
 
-                  const importObject = { env: {} };
-                  imports.forEach(imp => {
-                      if (imp.module === 'env') {
-                          if (imp.name === 'memory') {
-                              console.log('  Note: WASM imports memory from env (but we will use exported memory)');
-                          } else if (imp.name === 'emscripten_notify_memory_growth') {
-                              importObject.env[imp.name] = (index) => {
-                                  console.log('[WASM] Memory growth notification, index:', index);
-                              };
-                          } else {
-                              console.warn('  Warning: Unknown import:', imp.name);
-                              importObject.env[imp.name] = () => {};
-                          }
-                      }
-                  });
+                  const ptr = module._spz2glb_alloc(12);
+                  module._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
+                  const heapU32 = new Uint32Array(module.HEAPU8.buffer);
+                  const version = `${heapU32[ptr / 4]}.${heapU32[ptr / 4 + 1]}.${heapU32[ptr / 4 + 2]}`;
+                  module._spz2glb_free(ptr);
 
-                  const { instance } = await WebAssembly.instantiate(buffer, importObject);
-                  console.log('✅ WASM instantiated successfully!');
-
-                  const exports = Object.keys(instance.exports);
-                  console.log('✓ Exports:', exports.join(', '));
-
-                  if (instance.exports.memory) {
-                      const mem = instance.exports.memory;
-                      console.log('✓ WASM-managed memory:', mem.buffer.byteLength, 'bytes initial');
-                  }
-
-                  if (instance.exports._spz2glb_get_version && instance.exports._spz2glb_alloc) {
-                      const ptr = instance.exports._spz2glb_alloc(12);
-                      instance.exports._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
-                      const heapU32 = new Uint32Array(instance.exports.memory.buffer);
-                      const version = `${heapU32[ptr/4]}.${heapU32[ptr/4+1]}.${heapU32[ptr/4+2]}`;
-                      console.log('✅ Version:', version);
-                      instance.exports._spz2glb_free(ptr);
-                  }
-
-                  return true;
-              } catch (err) {
-                  console.error('❌ WASM instantiation failed:', err.message);
-                  console.error(err.stack);
-                  return false;
-              }
-          }
-
-          testWasm().then(success => process.exit(success ? 0 : 1));
+                  window.__smokeResult = {
+                    status: 'ok',
+                    version,
+                    exports: Object.keys(module).filter((key) => key.startsWith('_')).slice(0, 10),
+                  };
+                } catch (error) {
+                  window.__smokeResult = {
+                    status: 'error',
+                    message: error?.message ?? String(error),
+                    stack: error?.stack ?? '',
+                  };
+                  console.error(error);
+                }
+              </script>
+            </body>
+          </html>
           EOF
 
-          node test_wasm.js
+          python3 -m http.server 8000 > browser_server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+
+          npx -y playwright@1.53.0 install --with-deps chromium
+          npx -y -p playwright@1.53.0 node << 'EOF' | tee browser_smoke.log
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage();
+            page.on('console', (msg) => console.log(`[browser:${msg.type()}] ${msg.text()}`));
+            page.on('pageerror', (err) => console.error('[pageerror]', err.stack || err.message));
+
+            await page.goto('http://127.0.0.1:8000/smoke.html', { waitUntil: 'load' });
+            await page.waitForFunction(
+              () => window.__smokeResult && window.__smokeResult.status !== 'pending',
+              null,
+              { timeout: 30000 }
+            );
+
+            const result = await page.evaluate(() => window.__smokeResult);
+            console.log(JSON.stringify(result));
+            await browser.close();
+
+            if (result.status !== 'ok') {
+              console.error(result.stack || result.message || 'browser glue smoke failed');
+              process.exit(1);
+            }
+          })().catch((error) => {
+            console.error(error.stack || error.message);
+            process.exit(1);
+          });
+          EOF
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5
@@ -202,6 +219,8 @@ jobs:
             cmake.log
             build.log
             wasm_analysis.txt
-            test_wasm.js
+            smoke.html
+            browser_server.log
+            browser_smoke.log
             dist/
             build_wasm/dist/
