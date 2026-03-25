@@ -51,10 +51,20 @@ jobs:
       - name: Locate WASM artifacts
         run: |
           echo "=== Locate WASM Artifacts ==="
-          WASM_FILE=$(find . -type f -name spz2glb.wasm | head -n 1)
+          echo "[debug] candidate wasm files:"
+          find . -type f -name '*.wasm' | sort || true
+
+          WASM_FILE=$(find . -type f -name '*.wasm' | grep -E 'spz2glb(-wasm)?\.wasm$|spz2glb\.wasm$' | head -n 1 || true)
           if [ -z "$WASM_FILE" ]; then
-            echo "❌ spz2glb.wasm not found"
-            find . -maxdepth 5 -type d -name dist -print
+            WASM_FILE=$(find . -type f -name '*spz2glb*.wasm' | head -n 1 || true)
+          fi
+
+          if [ -z "$WASM_FILE" ]; then
+            echo "❌ spz2glb wasm artifact not found"
+            echo "[debug] dist dirs:"
+            find . -type d -name dist -print || true
+            echo "[debug] build_wasm tree (depth 3):"
+            find build_wasm -maxdepth 3 -print || true
             exit 1
           fi
 
@@ -64,11 +74,16 @@ jobs:
 
           mkdir -p dist
           cp "$WASM_FILE" dist/spz2glb.wasm
-          for f in spz2glb.js spz2glb.data; do
-            if [ -f "$WASM_DIR/$f" ]; then
-              cp "$WASM_DIR/$f" "dist/$f"
-            fi
-          done
+
+          JS_CANDIDATE=$(find "$WASM_DIR" -maxdepth 1 -type f -name '*spz2glb*.js' | head -n 1 || true)
+          if [ -n "$JS_CANDIDATE" ]; then
+            cp "$JS_CANDIDATE" dist/spz2glb.js
+          fi
+
+          DATA_CANDIDATE=$(find "$WASM_DIR" -maxdepth 1 -type f -name '*spz2glb*.data' | head -n 1 || true)
+          if [ -n "$DATA_CANDIDATE" ]; then
+            cp "$DATA_CANDIDATE" dist/spz2glb.data
+          fi
 
           ls -la "$WASM_DIR"
           ls -la dist/
