@@ -7,9 +7,12 @@ on:
   push:
     branches:
       - main
+      - phase5-browser-lifecycle-20260325
     paths:
       - 'CMakeLists.txt'
       - 'src/**'
+      - 'docs/examples/**'
+      - 'tests/**'
       - '.github/workflows/test-wasm-build.yml'
 
 jobs:
