@@ -75,16 +75,30 @@ jobs:
           echo "WASM_DIR=$WASM_DIR" >> "$GITHUB_ENV"
 
           mkdir -p dist
-          cp "$WASM_FILE" dist/spz2glb.wasm
+
+          copy_if_needed() {
+            local src="$1"
+            local dst="$2"
+            local src_abs dst_abs
+            src_abs=$(readlink -f "$src")
+            dst_abs=$(readlink -f "$dst" 2>/dev/null || true)
+            if [ -n "$dst_abs" ] && [ "$src_abs" = "$dst_abs" ]; then
+              echo "[debug] skip copy (same file): $src -> $dst"
+              return 0
+            fi
+            cp "$src" "$dst"
+          }
+
+          copy_if_needed "$WASM_FILE" dist/spz2glb.wasm
 
           JS_CANDIDATE=$(find "$WASM_DIR" -maxdepth 1 -type f -name '*spz2glb*.js' | head -n 1 || true)
           if [ -n "$JS_CANDIDATE" ]; then
-            cp "$JS_CANDIDATE" dist/spz2glb.js
+            copy_if_needed "$JS_CANDIDATE" dist/spz2glb.js
           fi
 
           DATA_CANDIDATE=$(find "$WASM_DIR" -maxdepth 1 -type f -name '*spz2glb*.data' | head -n 1 || true)
           if [ -n "$DATA_CANDIDATE" ]; then
-            cp "$DATA_CANDIDATE" dist/spz2glb.data
+            copy_if_needed "$DATA_CANDIDATE" dist/spz2glb.data
           fi
 
           ls -la "$WASM_DIR"
