@@ -180,8 +180,9 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
 
-          npx -y playwright@1.53.0 install --with-deps chromium
-          npx -y -p playwright@1.53.0 node << 'EOF' | tee browser_smoke.log
+          npm install --no-save playwright@1.53.0
+          npx playwright install --with-deps chromium
+          node << 'EOF' | tee browser_smoke.log
           const { chromium } = require('playwright');
 
           (async () => {
