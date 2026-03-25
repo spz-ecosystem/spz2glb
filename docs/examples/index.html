@@ -185,6 +185,19 @@
             return `推荐 ≤ ${recommendation.recommendedMaxSize}MB | 硬上限 ${recommendation.hardMaxSize}MB`;
         }
 
+        async function validateSelectedFile(file) {
+            if (!spz2glb) {
+                return { ok: false, message: 'WASM 模块尚未加载完成' };
+            }
+
+            const headerBytes = new Uint8Array(await file.slice(0, 64 * 1024).arrayBuffer());
+            if (!spz2glb.validateSpzHeader(headerBytes)) {
+                return { ok: false, message: 'SPZ 头部预检失败，请确认文件未损坏且格式正确' };
+            }
+
+            return { ok: true, message: 'SPZ 头部预检通过' };
+        }
+
         async function init() {
             memManager = new SmartMemoryManager();
             const info = memManager.getInfo();
@@ -200,6 +213,9 @@
                 spz2glb = await loadSpz2Glb('./spz2glb.wasm', { memory: memConfig.memory });
                 showStatus(`✅ WASM 模块加载成功！版本: ${spz2glb.getVersion()}<br>
                     <small style="opacity:0.7">建议文件大小 ≤ ${info.recommendedMaxFileSize}MB，硬上限 ${info.hardMaxFileSize}MB</small>`, 'success');
+                if (selectedFile) {
+                    handleFile(selectedFile);
+                }
                 setTimeout(() => document.getElementById('statusBox').style.display = 'none', 3000);
             } catch (err) {
                 showStatus('❌ WASM 加载失败: ' + err.message, 'error');
@@ -225,14 +241,24 @@
             if (file) handleFile(file);
         });
 
-        function handleFile(file) {
+        async function handleFile(file) {
             const recommendation = memManager.getRecommendation(file.size / (1024 * 1024));
             selectedFile = file;
             fileInfo.style.display = 'block';
 
+            const validation = await validateSelectedFile(file);
+            if (!validation.ok) {
+                fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})<br>
+                    <span style="color:var(--error)">✖ ${validation.message}</span><br>
+                    <small style="opacity:0.7">${formatRecommendation(recommendation)}</small>`;
+                convertBtn.disabled = true;
+                convertBtn.textContent = '文件头校验失败';
+                return;
+            }
+
             if (recommendation.state === 'standard') {
                 fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})<br>
-                    <small style="opacity:0.7">${formatRecommendation(recommendation)}</small>`;
+                    <small style="opacity:0.7">${validation.message} | ${formatRecommendation(recommendation)}</small>`;
                 convertBtn.disabled = false;
                 convertBtn.textContent = '转换 ' + file.name;
                 return;
@@ -241,7 +267,7 @@
             if (recommendation.state === 'light') {
                 fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})<br>
                     <span style="color:var(--warning)">⚠️ ${recommendation.message}</span><br>
-                    <small style="opacity:0.7">${formatRecommendation(recommendation)} | CLI: ${recommendation.cliCommand}</small>`;
+                    <small style="opacity:0.7">${validation.message} | ${formatRecommendation(recommendation)} | CLI: ${recommendation.cliCommand}</small>`;
                 convertBtn.disabled = false;
                 convertBtn.textContent = '继续转换（接近上限）';
                 return;
@@ -249,7 +275,7 @@
 
             fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})<br>
                 <span style="color:var(--error)">✖ ${recommendation.message}</span><br>
-                <small style="opacity:0.7">${formatRecommendation(recommendation)} | CLI: ${recommendation.cliCommand}</small>`;
+                <small style="opacity:0.7">${validation.message} | ${formatRecommendation(recommendation)} | CLI: ${recommendation.cliCommand}</small>`;
             convertBtn.disabled = true;
             convertBtn.textContent = '文件超出浏览器上限';
         }
@@ -260,6 +286,14 @@
             const recommendation = memManager.getRecommendation(selectedFile.size / (1024 * 1024));
             if (!recommendation.allowConversion) {
                 showStatus(`❌ ${recommendation.message}<br><small style="opacity:0.7">命令行: ${recommendation.cliCommand}</small>`, 'error');
+                return;
+            }
+
+            const validation = await validateSelectedFile(selectedFile);
+            if (!validation.ok) {
+                showStatus(`❌ ${validation.message}`, 'error');
+                convertBtn.disabled = true;
+                convertBtn.textContent = '文件头校验失败';
                 return;
             }
 

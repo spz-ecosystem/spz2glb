@@ -178,49 +178,55 @@ SpzResult loadSpzFile(const std::string& spzPath) {
     return SpzResult::ok(std::move(rawBuffer));
 }
 
-SpzResult decompressSpzData(const uint8_t* compressedData, size_t compressedSize) {
-    if (compressedData == nullptr || compressedSize == 0) {
-        return SpzResult::error(SpzErrorCode::FailedToDecompress, "SPZ input is empty");
-    }
+bool isGzipData(const uint8_t* data, size_t size) {
+    return data != nullptr && size >= 2 && data[0] == 0x1f && data[1] == 0x8b;
+}
 
-    if (compressedSize < 2 || compressedData[0] != 0x1f || compressedData[1] != 0x8b) {
-        std::vector<uint8_t> passthrough(compressedData, compressedData + compressedSize);
-        return SpzResult::ok(std::move(passthrough));
+bool peekSpzHeaderFromGzip(const uint8_t* compressedData, size_t compressedSize, SpzHeader& header) {
+    spz2glb::BumpAllocator arena(sizeof(SpzHeader));
+    auto* headerBytes = static_cast<uint8_t*>(arena.alloc(sizeof(SpzHeader), alignof(SpzHeader)));
+    if (headerBytes == nullptr) {
+        std::cerr << "[ERROR] Failed to allocate SPZ header scratch buffer" << std::endl;
+        return false;
     }
-
-    std::vector<uint8_t> decompressed(compressedSize * 10);
 
     z_stream strm = {};
     strm.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(compressedData));
     strm.avail_in = static_cast<uInt>(compressedSize);
-    strm.next_out = reinterpret_cast<Bytef*>(decompressed.data());
-    strm.avail_out = static_cast<uInt>(decompressed.size());
+    strm.next_out = reinterpret_cast<Bytef*>(headerBytes);
+    strm.avail_out = static_cast<uInt>(sizeof(SpzHeader));
 
     if (inflateInit2(&strm, 16 + MAX_WBITS) != Z_OK) {
-        return SpzResult::error(SpzErrorCode::FailedToInitZlib,
-            "Failed to initialize zlib decompression");
+        std::cerr << "[ERROR] Failed to initialize zlib decompression" << std::endl;
+        return false;
     }
 
     int ret = Z_OK;
-    while (ret == Z_OK) {
-        if (strm.avail_out == 0) {
-            const size_t oldSize = decompressed.size();
-            decompressed.resize(oldSize * 2);
-            strm.next_out = reinterpret_cast<Bytef*>(decompressed.data() + oldSize);
-            strm.avail_out = static_cast<uInt>(oldSize);
-        }
+    while (ret == Z_OK && strm.total_out < sizeof(SpzHeader)) {
         ret = inflate(&strm, Z_NO_FLUSH);
     }
 
-    if (ret != Z_STREAM_END) {
-        inflateEnd(&strm);
-        return SpzResult::error(SpzErrorCode::FailedToDecompress,
-            "Failed to decompress SPZ file");
+    const bool hasHeader = strm.total_out >= sizeof(SpzHeader);
+    inflateEnd(&strm);
+    if (!hasHeader || (ret != Z_OK && ret != Z_STREAM_END)) {
+        std::cerr << "[ERROR] Failed to peek SPZ header from gzip stream" << std::endl;
+        return false;
     }
 
-    decompressed.resize(strm.total_out);
-    inflateEnd(&strm);
-    return SpzResult::ok(std::move(decompressed));
+    return parseSpzHeader(headerBytes, sizeof(SpzHeader), header);
+}
+
+bool peekSpzHeader(const uint8_t* data, size_t size, SpzHeader& header) {
+    if (data == nullptr || size == 0) {
+        std::cerr << "[ERROR] SPZ input is empty" << std::endl;
+        return false;
+    }
+
+    if (!isGzipData(data, size)) {
+        return parseSpzHeader(data, size, header);
+    }
+
+    return peekSpzHeaderFromGzip(data, size, header);
 }
 
 
@@ -284,15 +290,8 @@ fastgltf::Asset createGltfAsset(fastgltf::span<const std::byte> spzData, const S
 
 
 bool convertSpzToGlbCore(const uint8_t* spzData, size_t spzSize, std::vector<std::byte>& glbData) {
-    auto decompressResult = decompressSpzData(spzData, spzSize);
-    if (!decompressResult.success) {
-        std::cerr << "[ERROR] " << decompressResult.errorMessage << std::endl;
-        return false;
-    }
-
-    const std::vector<uint8_t>& decompressedData = decompressResult.data;
     SpzHeader header;
-    if (!parseSpzHeader(decompressedData.data(), decompressedData.size(), header)) {
+    if (!peekSpzHeader(spzData, spzSize, header)) {
         std::cerr << "[ERROR] Failed to parse SPZ header" << std::endl;
         return false;
     }

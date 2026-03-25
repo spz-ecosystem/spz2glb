@@ -11,9 +11,22 @@ export async function loadSpz2Glb(wasmUrl, options = {}) {
 
     return {
         validateHeader(buffer) {
+            return this.validateGlbHeader(buffer);
+        },
+
+        validateGlbHeader(buffer) {
             const [ptr, size] = writeBuffer(module, buffer);
             try {
-                return module._spz2glb_validate_header(ptr, size);
+                return module._spz2glb_validate_glb_header(ptr, size);
+            } finally {
+                freeBuffer(module, ptr);
+            }
+        },
+
+        validateSpzHeader(buffer) {
+            const [ptr, size] = writeBuffer(module, buffer);
+            try {
+                return module._spz2glb_validate_spz_header(ptr, size);
             } finally {
                 freeBuffer(module, ptr);
             }

@@ -71,7 +71,14 @@ std::vector<uint8_t> makeMinimalSpzGzip() {
     return gzipBytes(makeMinimalSpzPayload());
 }
 
+std::vector<uint8_t> makeInvalidSpzPayload() {
+    auto payload = makeMinimalSpzPayload();
+    payload[0] = 0;
+    return payload;
+}
+
 }  // namespace
+
 
 int main() {
     spz2glb_reset_memory_stats();
@@ -85,8 +92,15 @@ int main() {
     CHECK(stats.failed_allocations == 0);
 
     std::vector<uint8_t> spzData = makeMinimalSpzGzip();
+    std::vector<uint8_t> rawSpzData = makeMinimalSpzPayload();
+    std::vector<uint8_t> invalidSpzData = makeInvalidSpzPayload();
+
+    CHECK(spz2glb_validate_spz_header(rawSpzData.data(), rawSpzData.size()));
+    CHECK(spz2glb_validate_spz_header(spzData.data(), spzData.size()));
+    CHECK(!spz2glb_validate_spz_header(invalidSpzData.data(), invalidSpzData.size()));
 
     std::vector<std::byte> coreOutput;
+
     CHECK(convertSpzToGlbCore(spzData.data(), spzData.size(), coreOutput));
     CHECK(!coreOutput.empty());
     CHECK(spz2glb_validate_header(reinterpret_cast<const uint8_t*>(coreOutput.data()), coreOutput.size()));
@@ -113,7 +127,13 @@ int main() {
     CHECK(stats.current_usage_bytes >= reserved + outSize);
     CHECK(stats.peak_usage_bytes >= stats.current_usage_bytes);
 
+    spz2glb_reset_memory_stats();
+    spz2glb_get_memory_stats(&stats);
+    CHECK(stats.current_usage_bytes >= reserved + outSize);
+    CHECK(stats.peak_usage_bytes >= stats.current_usage_bytes);
+
     spz2glb_release_output(output);
+
     CHECK(spz2glb_reserve_input(0) == 0);
     CHECK(spz2glb_get_input_ptr() == nullptr);
 

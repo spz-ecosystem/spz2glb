@@ -46,6 +46,8 @@ void spz2glb_release_output(uint8_t* ptr);
 
 uint8_t* spz2glb_convert(const uint8_t* spzData, size_t spzSize, size_t* outSize);
 bool spz2glb_validate_header(const uint8_t* data, size_t size);
+bool spz2glb_validate_glb_header(const uint8_t* data, size_t size);
+bool spz2glb_validate_spz_header(const uint8_t* data, size_t size);
 void spz2glb_get_version(int* major, int* minor, int* patch);
 void spz2glb_get_memory_stats(Spz2GlbMemoryStats* stats);
 void spz2glb_reset_memory_stats(void);
