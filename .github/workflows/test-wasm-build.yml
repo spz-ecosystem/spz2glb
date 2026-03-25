@@ -48,23 +48,48 @@ jobs:
           echo "=== Build Warnings/Errors Summary ==="
           grep -iE "(warning|error)" build.log | head -20 || echo "No warnings/errors found"
 
+      - name: Locate WASM artifacts
+        run: |
+          echo "=== Locate WASM Artifacts ==="
+          WASM_FILE=$(find . -type f -name spz2glb.wasm | head -n 1)
+          if [ -z "$WASM_FILE" ]; then
+            echo "❌ spz2glb.wasm not found"
+            find . -maxdepth 5 -type d -name dist -print
+            exit 1
+          fi
+
+          WASM_DIR=$(dirname "$WASM_FILE")
+          echo "WASM_FILE=$WASM_FILE" >> "$GITHUB_ENV"
+          echo "WASM_DIR=$WASM_DIR" >> "$GITHUB_ENV"
+
+          mkdir -p dist
+          cp "$WASM_FILE" dist/spz2glb.wasm
+          for f in spz2glb.js spz2glb.data; do
+            if [ -f "$WASM_DIR/$f" ]; then
+              cp "$WASM_DIR/$f" "dist/$f"
+            fi
+          done
+
+          ls -la "$WASM_DIR"
+          ls -la dist/
+
       - name: Analyze WASM imports/exports
         run: |
           echo "=== WASM File Info ==="
           ls -la dist/
-          
+
           echo ""
           echo "=== WASM Full Analysis (wasm-objdump) ==="
           wasm-objdump -x dist/spz2glb.wasm 2>/dev/null | tee wasm_analysis.txt || echo "wasm-objdump failed"
-          
+
           echo ""
           echo "=== Import Section ==="
           grep -A 20 "Import" wasm_analysis.txt | head -25 || echo "No imports found"
-          
+
           echo ""
           echo "=== Export Section ==="
           grep -A 30 "Export" wasm_analysis.txt | head -35 || echo "No exports found"
-          
+
           echo ""
           echo "=== Memory Section ==="
           grep -A 5 "Memory" wasm_analysis.txt | head -10 || echo "No memory section found"
@@ -74,26 +99,25 @@ jobs:
           echo "=== Testing WASM Instantiation ==="
           cat > test_wasm.js << 'EOF'
           const fs = require('fs');
-          
+
           async function testWasm() {
               try {
-                  const buffer = fs.readFileSync('./dist/spz2glb.wasm');
+                  const wasmPath = process.env.WASM_FILE || './dist/spz2glb.wasm';
+                  const buffer = fs.readFileSync(wasmPath);
+                  console.log('✓ WASM file path:', wasmPath);
                   console.log('✓ WASM file size:', buffer.length, 'bytes');
-                  
-                  // Analyze WASM imports first
+
                   const wasmModule = await WebAssembly.compile(buffer);
                   const imports = WebAssembly.Module.imports(wasmModule);
                   console.log('✓ WASM imports:', imports.length);
                   imports.forEach((imp, i) => {
                       console.log(`  Import ${i}: ${imp.module}.${imp.name} (${imp.kind})`);
                   });
-                  
-                  // Build import object based on actual imports
+
                   const importObject = { env: {} };
                   imports.forEach(imp => {
                       if (imp.module === 'env') {
                           if (imp.name === 'memory') {
-                              // WASM exports its own memory, we don't need to provide it
                               console.log('  Note: WASM imports memory from env (but we will use exported memory)');
                           } else if (imp.name === 'emscripten_notify_memory_growth') {
                               importObject.env[imp.name] = (index) => {
@@ -105,22 +129,18 @@ jobs:
                           }
                       }
                   });
-                  
-                  // Try to instantiate
+
                   const { instance } = await WebAssembly.instantiate(buffer, importObject);
                   console.log('✅ WASM instantiated successfully!');
-                  
-                  // Check exports
+
                   const exports = Object.keys(instance.exports);
                   console.log('✓ Exports:', exports.join(', '));
-                  
-                  // Check for memory export
+
                   if (instance.exports.memory) {
                       const mem = instance.exports.memory;
                       console.log('✓ WASM-managed memory:', mem.buffer.byteLength, 'bytes initial');
                   }
-                  
-                  // Test version function
+
                   if (instance.exports._spz2glb_get_version && instance.exports._spz2glb_alloc) {
                       const ptr = instance.exports._spz2glb_alloc(12);
                       instance.exports._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
@@ -129,7 +149,7 @@ jobs:
                       console.log('✅ Version:', version);
                       instance.exports._spz2glb_free(ptr);
                   }
-                  
+
                   return true;
               } catch (err) {
                   console.error('❌ WASM instantiation failed:', err.message);
@@ -137,10 +157,10 @@ jobs:
                   return false;
               }
           }
-          
+
           testWasm().then(success => process.exit(success ? 0 : 1));
           EOF
-          
+
           node test_wasm.js
 
       - name: Upload build artifacts
@@ -152,4 +172,5 @@ jobs:
             build.log
             wasm_analysis.txt
             test_wasm.js
-            dist/spz2glb.wasm
+            dist/
+            build_wasm/dist/
