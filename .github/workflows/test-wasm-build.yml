@@ -37,11 +37,13 @@ jobs:
 
       - name: Configure WASM build
         run: |
+          set -euo pipefail
           echo "=== CMake Configuration ==="
           emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON 2>&1 | tee cmake.log
 
       - name: Build spz2glb WASM (verbose)
         run: |
+          set -euo pipefail
           echo "=== WASM Build Output ==="
           emmake cmake --build build_wasm --config Release --target spz2glb-wasm --verbose 2>&1 | tee build.log
           echo ""
