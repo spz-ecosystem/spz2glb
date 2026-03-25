@@ -6,16 +6,22 @@ echo === SPZ2GLB 快速测试 ===
 echo.
 
 REM 检查可执行文件
-if not exist "build\spz2glb.exe" (
-    echo 错误：找不到 build\spz2glb.exe
+set "SPZ2GLB=dist\spz2glb.exe"
+set "SPZ_VERIFY=dist\spz_verify.exe"
+
+if not exist "%SPZ2GLB%" set "SPZ2GLB=build\spz2glb.exe"
+if not exist "%SPZ_VERIFY%" set "SPZ_VERIFY=build\spz_verify.exe"
+
+if not exist "%SPZ2GLB%" (
+    echo 错误：找不到 dist\spz2glb.exe 或 build\spz2glb.exe
     echo 请先编译项目
     echo cmake -B build -DCMAKE_BUILD_TYPE=Release
     echo cmake --build build --config Release
     goto :eof
 )
 
-if not exist "build\spz_verify.exe" (
-    echo 错误：找不到 build\spz_verify.exe
+if not exist "%SPZ_VERIFY%" (
+    echo 错误：找不到 dist\spz_verify.exe 或 build\spz_verify.exe
     goto :eof
 )
 
@@ -32,11 +38,11 @@ if not exist "..\tests\data\triangle.spz" (
     echo 跳过文件测试，仅测试工具可用性...
     
     echo 测试 spz2glb 帮助...
-    ..\build\spz2glb.exe 2>&1 | findstr /N "^" | more +0
+    ..\%SPZ2GLB% 2>&1 | findstr /N "^" | more +0
     echo.
     
     echo 测试 spz_verify 帮助...
-    ..\build\spz_verify.exe 2>&1 | findstr /N "^" | more +0
+    ..\%SPZ_VERIFY% 2>&1 | findstr /N "^" | more +0
     echo.
     
     echo ✓ 工具可以正常运行
@@ -47,7 +53,7 @@ if not exist "..\tests\data\triangle.spz" (
 
 REM 运行测试
 echo [测试 1] 转换测试...
-..\build\spz2glb.exe ..\tests\data\triangle.spz triangle.glb
+..\%SPZ2GLB% ..\tests\data\triangle.spz triangle.glb
 if %ERRORLEVEL% neq 0 (
     echo ✗ 转换失败
     cd ..
@@ -58,7 +64,7 @@ echo ✓ 转换成功
 echo.
 
 echo [测试 2] Layer 1 - GLB 结构验证...
-..\build\spz_verify.exe layer1 triangle.glb
+..\%SPZ_VERIFY% layer1 triangle.glb
 if %ERRORLEVEL% neq 0 (
     echo ✗ Layer 1 失败
     cd ..
@@ -69,7 +75,7 @@ echo ✓ Layer 1 通过
 echo.
 
 echo [测试 3] Layer 2 - 二进制无损验证...
-..\build\spz_verify.exe layer2 ..\tests\data\triangle.spz triangle.glb
+..\%SPZ_VERIFY% layer2 ..\tests\data\triangle.spz triangle.glb
 if %ERRORLEVEL% neq 0 (
     echo ✗ Layer 2 失败
     cd ..
@@ -80,7 +86,7 @@ echo ✓ Layer 2 通过
 echo.
 
 echo [测试 4] Layer 3 - 解码一致性验证...
-..\build\spz_verify.exe layer3 ..\tests\data\triangle.spz triangle.glb
+..\%SPZ_VERIFY% layer3 ..\tests\data\triangle.spz triangle.glb
 if %ERRORLEVEL% neq 0 (
     echo ✗ Layer 3 失败
     cd ..

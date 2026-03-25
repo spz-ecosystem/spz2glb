@@ -27,7 +27,9 @@
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <span>
 #include <zlib.h>
+
 
 #include "memory_pool.h"
 
@@ -35,8 +37,10 @@
 #include <fastgltf/types.hpp>
 
 #ifdef __EMSCRIPTEN__
+#ifndef SPZ2GLB_DISABLE_EMBIND
 #include <emscripten/bind.h>
 #include "emscripten_utils.h"
+#endif
 #endif
 
 enum class SpzErrorCode {
@@ -65,49 +69,39 @@ struct SpzResult {
 
 /**
  * SPZ 文件格式头结构（16 字节）
- * 
- * SPZ 文件使用大端序存储，包含高斯泼溅的元数据
- * Magic: "NGSP" (0x5053474e) - 标识 SPZ 文件
  */
 struct SpzHeader {
-    uint32_t magic;        // 魔术数字：0x5053474e ("NGSP")，用于标识 SPZ 文件
-    uint32_t version;      // SPZ 规范版本：2 或 3
-    uint32_t numPoints;    // 高斯泼溅点数量，决定渲染质量
-    uint8_t shDegree;      // 球谐函数阶数：0-3（0=无 SH，3=最高质量）
-    uint8_t fractionalBits; // 定点数精度位数
-    uint8_t flags;         // 标志位
-    uint8_t reserved;      // 保留字节（对齐用）
+    uint32_t magic;
+    uint32_t version;
+    uint32_t numPoints;
+    uint8_t shDegree;
+    uint8_t fractionalBits;
+    uint8_t flags;
+    uint8_t reserved;
 };
 
-/**
- * 解析 SPZ 文件头
- * 
- * @param data SPZ 文件的二进制数据（已解压）
- * @param header 输出参数，存储解析后的头信息
- * @return true 如果头解析成功，false 如果格式错误
- * 
- * 验证步骤：
- * 1. 检查数据大小是否足够（至少 16 字节）
- * 2. 复制二进制数据到结构体
- * 3. 验证魔术数字是否为 "NGSP"
- */
-bool parseSpzHeader(const std::vector<uint8_t>& data, SpzHeader& header) {
-    // 数据必须至少包含完整的头结构（16 字节）
-    if (data.size() < sizeof(SpzHeader)) {
+constexpr uint32_t kSpzMagic = 0x5053474e;
+
+fastgltf::span<const std::byte> asByteSpan(const uint8_t* data, size_t size) {
+    return fastgltf::span<const std::byte>(reinterpret_cast<const std::byte*>(data), size);
+}
+
+
+
+bool parseSpzHeader(const uint8_t* data, size_t size, SpzHeader& header) {
+    if (data == nullptr || size < sizeof(SpzHeader)) {
         return false;
     }
 
-    // 从二进制数据复制头结构
-    memcpy(&header, data.data(), sizeof(SpzHeader));
-
-    // 验证魔术数字：必须是 0x5053474e ("NGSP")
-    if (header.magic != 0x5053474e) {
+    std::memcpy(&header, data, sizeof(SpzHeader));
+    if (header.magic != kSpzMagic) {
         std::cerr << "[ERROR] Invalid SPZ magic number: 0x" << std::hex << header.magic << std::dec << std::endl;
         return false;
     }
 
     return true;
 }
+
 
 /**
  * 计算 glTF accessor 数量（基于球谐函数阶数）
@@ -184,106 +178,54 @@ SpzResult loadSpzFile(const std::string& spzPath) {
     return SpzResult::ok(std::move(rawBuffer));
 }
 
-/**
- * 解压 SPZ gzip 数据（仅用于头解析）
- * 
- * @param compressedData gzip 压缩的 SPZ 数据
- * @return 解压后的 SPZ 内部格式数据
- * 
- * 用途：
- * - 仅用于解析 SPZ 头部元数据
- * - 不用于存储（存储时保持压缩状态）
- * 
- * gzip 格式识别：
- * - 前两个字节：0x1f 0x8b
- * - 如果不是 gzip，直接返回原始数据
- * 
- * 解压流程：
- * 1. 检测 gzip 魔数（0x1f8b）
- * 2. 初始化 zlib 解压流（16 + MAX_WBITS 表示 gzip 格式）
- * 3. 动态扩展输出缓冲区（按需 2 倍增长）
- * 4. 循环解压直到 Z_STREAM_END
- * 5. 调整最终大小并返回
- */
-SpzResult decompressSpzData(std::vector<uint8_t> compressedData) {
-    // 检查 gzip 魔数：前两个字节必须是 0x1f 0x8b
-    if (compressedData.size() < 2 || compressedData[0] != 0x1f || compressedData[1] != 0x8b) {
-        // 不是 gzip 压缩，直接返回原始数据（使用移动语义）
-        return SpzResult::ok(std::move(compressedData));
+SpzResult decompressSpzData(const uint8_t* compressedData, size_t compressedSize) {
+    if (compressedData == nullptr || compressedSize == 0) {
+        return SpzResult::error(SpzErrorCode::FailedToDecompress, "SPZ input is empty");
     }
 
-    // 预分配解压缓冲区（假设压缩率约 10 倍）
-    std::vector<uint8_t> decompressed;
-    decompressed.resize(compressedData.size() * 10);
+    if (compressedSize < 2 || compressedData[0] != 0x1f || compressedData[1] != 0x8b) {
+        std::vector<uint8_t> passthrough(compressedData, compressedData + compressedSize);
+        return SpzResult::ok(std::move(passthrough));
+    }
 
-    // 初始化 zlib 流结构
+    std::vector<uint8_t> decompressed(compressedSize * 10);
+
     z_stream strm = {};
-    strm.next_in = const_cast<uint8_t*>(compressedData.data());        // 输入数据指针
-    strm.avail_in = static_cast<uInt>(compressedData.size());          // 输入数据大小
-    strm.next_out = decompressed.data();                                // 输出缓冲区指针
-    strm.avail_out = static_cast<uInt>(decompressed.size());            // 输出缓冲区大小
+    strm.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(compressedData));
+    strm.avail_in = static_cast<uInt>(compressedSize);
+    strm.next_out = reinterpret_cast<Bytef*>(decompressed.data());
+    strm.avail_out = static_cast<uInt>(decompressed.size());
 
-    // 初始化解压：16 + MAX_WBITS 表示使用 gzip 格式（而不是 zlib）
     if (inflateInit2(&strm, 16 + MAX_WBITS) != Z_OK) {
         return SpzResult::error(SpzErrorCode::FailedToInitZlib,
             "Failed to initialize zlib decompression");
     }
 
-    // 循环解压直到完成
-    int ret;
-    do {
-        // 如果输出缓冲区满了，扩展 2 倍
+    int ret = Z_OK;
+    while (ret == Z_OK) {
         if (strm.avail_out == 0) {
-            size_t oldSize = decompressed.size();
+            const size_t oldSize = decompressed.size();
             decompressed.resize(oldSize * 2);
-            // 设置新的输出位置到扩展后的位置
-            strm.next_out = decompressed.data() + oldSize;
+            strm.next_out = reinterpret_cast<Bytef*>(decompressed.data() + oldSize);
             strm.avail_out = static_cast<uInt>(oldSize);
         }
-        // 解压一块数据
         ret = inflate(&strm, Z_NO_FLUSH);
-    } while (ret == Z_OK);  // Z_OK 表示还有更多数据
+    }
 
-    // 检查解压结果：必须是 Z_STREAM_END
     if (ret != Z_STREAM_END) {
         inflateEnd(&strm);
         return SpzResult::error(SpzErrorCode::FailedToDecompress,
             "Failed to decompress SPZ file");
     }
 
-    // 调整到实际解压的大小
     decompressed.resize(strm.total_out);
-    // 释放 zlib 资源
     inflateEnd(&strm);
-
     return SpzResult::ok(std::move(decompressed));
 }
 
-/**
- * 创建 glTF 资产（包含 SPZ 压缩扩展）
- * 
- * @param spzData SPZ 压缩数据（保持 gzip 压缩状态）
- * @param header SPZ 头部信息（预留未来使用）
- * @return 完整的 glTF 资产对象
- * 
- * glTF 结构：
- * - Asset: 根对象，包含元数据
- * - Buffers: 二进制数据（SPZ 压缩流）
- * - BufferViews: Buffer 的视图（指向整个 SPZ 数据）
- * - Mesh/Primitive: 点云几何体（使用 SPZ 扩展）
- * - Node: 场景节点
- * - Scene: 默认场景
- * 
- * 关键扩展：
- * - KHR_gaussian_splatting: 高斯泼溅支持
- * - KHR_gaussian_splatting_compression_spz_2: SPZ 压缩格式
- * 
- * 压缩流模式特点：
- * - 没有 accessors（数据在压缩流中）
- * - 没有 attributes（数据在压缩流中）
- * - 渲染器需要 SPZ 解码器
- */
-fastgltf::Asset createGltfAsset(std::vector<uint8_t> spzData, const SpzHeader& header) {
+
+fastgltf::Asset createGltfAsset(fastgltf::span<const std::byte> spzData, const SpzHeader& header) {
+
     (void)header;
 
     fastgltf::Asset asset;
@@ -298,18 +240,14 @@ fastgltf::Asset createGltfAsset(std::vector<uint8_t> spzData, const SpzHeader& h
     asset.assetInfo->copyright = "";
     asset.assetInfo->generator = "spz_to_glb_fastgltf";
 
-    size_t spzSize = spzData.size();
+    const size_t spzSize = spzData.size();
 
-    // 创建 Buffer（存储 SPZ 压缩数据）
-    // 使用 Vector 而不是 Array，因为 Vector 有 std::vector<std::byte>
     fastgltf::Buffer buffer;
-    fastgltf::sources::Vector vectorData;
-    vectorData.bytes.reserve(spzSize);
-    for (size_t i = 0; i < spzSize; i++) {
-        vectorData.bytes.push_back(static_cast<std::byte>(spzData[i]));
-    }
-    vectorData.mimeType = fastgltf::MimeType::None;
-    buffer.data = std::move(vectorData);
+    fastgltf::sources::ByteView viewData;
+    viewData.bytes = spzData;
+    viewData.mimeType = fastgltf::MimeType::None;
+
+    buffer.data = viewData;
     buffer.byteLength = spzSize;
     asset.buffers.emplace_back(std::move(buffer));
 
@@ -319,111 +257,65 @@ fastgltf::Asset createGltfAsset(std::vector<uint8_t> spzData, const SpzHeader& h
     spzBufferView.byteLength = spzSize;
     asset.bufferViews.emplace_back(std::move(spzBufferView));
 
-    // 创建 Primitive（使用 SPZ 压缩扩展）
     fastgltf::Primitive primitive;
-    primitive.type = fastgltf::PrimitiveType::Points;  // 点云类型
+    primitive.type = fastgltf::PrimitiveType::Points;
 
-    // 配置 SPZ 压缩扩展
-    // 这是压缩流模式的核心：通过扩展引用 bufferView 中的压缩数据
     auto gaussianSplat = std::make_unique<fastgltf::GaussianSplatExtension>();
     auto spzCompression = std::make_unique<fastgltf::GaussianSplatSpzCompression>();
-    spzCompression->bufferView = 0;  // 引用第 0 个 bufferView
+    spzCompression->bufferView = 0;
     gaussianSplat->spzCompression = std::move(spzCompression);
     primitive.gaussianSplat = std::move(gaussianSplat);
 
-    // 创建 Mesh 并添加 Primitive
     fastgltf::Mesh mesh;
     mesh.primitives.emplace_back(std::move(primitive));
     asset.meshes.emplace_back(std::move(mesh));
 
-    // 创建 Node（场景中的对象）
     fastgltf::Node node;
-    node.meshIndex = 0;  // 引用第 0 个 Mesh
+    node.meshIndex = 0;
     asset.nodes.emplace_back(std::move(node));
 
-    // 创建 Scene（场景根节点）
     fastgltf::Scene scene;
-    scene.nodeIndices.emplace_back(0);  // 包含第 0 个 Node
+    scene.nodeIndices.emplace_back(0);
     asset.scenes.emplace_back(std::move(scene));
-    asset.defaultScene = 0;  // 默认显示第 0 个场景
+    asset.defaultScene = 0;
 
     return asset;
 }
 
-/**
- * 程序入口：SPZ 到 GLB 转换器
- *
- * 使用方法：spz_to_glb <input.spz> <output.glb>
- *
- * 转换流程：
- * 1. 读取 SPZ 文件（保持 gzip 压缩状态）
- * 2. 解压副本用于解析头部（获取元数据）
- * 3. 创建 glTF 资产（包含 SPZ 压缩扩展）
- * 4. 导出 GLB 二进制文件
- *
- * 输出信息：
- * - SPZ 版本号
- * - 高斯点数量
- * - 球谐函数阶数
- * - SPZ 文件大小（压缩后）
- * - GLB 文件大小
- */
 
-/**
- * 核心转换函数（桌面版和 WASM 共用）
- *
- * @param spzData SPZ 压缩数据
- * @param glbData 输出 GLB 数据
- * @return true 如果转换成功
- *
- * 转换流程：
- * 1. 解压副本用于解析头部
- * 2. 解析 SPZ 头部
- * 3. 创建 glTF 资产
- * 4. 导出 GLB
- */
-bool convertSpzToGlbCore(std::vector<uint8_t> spzData, std::vector<uint8_t>& glbData) {
-    // 步骤 1: 解压（传引用，因为后面还需要 spzData）
-    auto decompressResult = decompressSpzData(spzData);  // 不 move，保留 spzData
+bool convertSpzToGlbCore(const uint8_t* spzData, size_t spzSize, std::vector<std::byte>& glbData) {
+    auto decompressResult = decompressSpzData(spzData, spzSize);
     if (!decompressResult.success) {
         std::cerr << "[ERROR] " << decompressResult.errorMessage << std::endl;
         return false;
     }
-    std::vector<uint8_t> decompressedData = std::move(decompressResult.data);
 
-    // 步骤 2: 解析 SPZ 头部（使用解压后数据）
+    const std::vector<uint8_t>& decompressedData = decompressResult.data;
     SpzHeader header;
-    if (!parseSpzHeader(decompressedData, header)) {
+    if (!parseSpzHeader(decompressedData.data(), decompressedData.size(), header)) {
         std::cerr << "[ERROR] Failed to parse SPZ header" << std::endl;
         return false;
     }
 
-    // 步骤 3: 打印 SPZ 元数据
-    std::cout << "[INFO] SPZ version: " << (int)header.version << std::endl;
+    std::cout << "[INFO] SPZ version: " << static_cast<int>(header.version) << std::endl;
     std::cout << "[INFO] Num points: " << header.numPoints << std::endl;
-    std::cout << "[INFO] SH degree: " << (int)header.shDegree << std::endl;
-
-    // 步骤 4: 创建 glTF 资产（存储原始压缩数据）
+    std::cout << "[INFO] SH degree: " << static_cast<int>(header.shDegree) << std::endl;
     std::cout << "[INFO] Creating glTF Asset with KHR extensions" << std::endl;
-    auto asset = createGltfAsset(spzData, header);
 
-    // 步骤 5: 导出 GLB
+    auto asset = createGltfAsset(asByteSpan(spzData, spzSize), header);
+
     std::cout << "[INFO] Exporting GLB..." << std::endl;
     fastgltf::Exporter exporter;
-
     auto result = exporter.writeGltfBinary(asset);
     if (result.error() != fastgltf::Error::None) {
         std::cerr << "[ERROR] GLB export failed: " << std::string(fastgltf::getErrorMessage(result.error())) << std::endl;
         return false;
     }
 
-    // 步骤 6: 获取 GLB 数据（移动语义，避免拷贝）
-    std::vector<std::byte> output = std::move(result.get().output);
-    glbData.resize(output.size());
-    std::memcpy(glbData.data(), output.data(), output.size());
-
+    glbData = std::move(result.get().output);
     return true;
 }
+
 
 #ifdef __EMSCRIPTEN__
 
@@ -439,28 +331,29 @@ bool convertSpzToGlbCore(std::vector<uint8_t> spzData, std::vector<uint8_t>& glb
  * const glbData = Module.convertSpzToGlb(spzData);
  */
 emscripten::val convertSpzToGlb(const emscripten::val& spzBuffer) {
-    // JavaScript Uint8Array 转 C++ vector（Embind 标准做法）
     std::vector<uint8_t> spzData = spz2glb::vectorFromJsArray(spzBuffer);
 
-    // 调用核心转换函数
-    std::vector<uint8_t> glbData;
-    if (!convertSpzToGlbCore(spzData, glbData)) {
+    std::vector<std::byte> glbData;
+    if (!convertSpzToGlbCore(spzData.data(), spzData.size(), glbData)) {
         return emscripten::val::null();
     }
 
-    // 返回 JavaScript Uint8Array
-    return spz2glb::jsUint8ArrayFromVector(glbData);
+    return spz2glb::jsUint8ArrayFromBytes(glbData);
 }
 
+
+#ifndef SPZ2GLB_DISABLE_EMBIND
 EMSCRIPTEN_BINDINGS(spz2glb_module) {
     emscripten::function("convertSpzToGlb", &convertSpzToGlb);
     emscripten::function("getMemoryStats", &spz2glb::getMemoryStats);
 }
+#endif
 
 #else  // __EMSCRIPTEN__
 
 #include "spz_verifier.h"
 
+#ifndef SPZ2GLB_NO_CLI_MAIN
 void printUsage(const char* progName) {
     std::cout << "SPZ to GLB Converter\n";
     std::cout << "Usage: " << progName << " <input.spz> <output.glb> [options]\n\n";
@@ -508,8 +401,8 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "[INFO] Converting to GLB..." << std::endl;
-    std::vector<uint8_t> glbData;
-    if (!convertSpzToGlbCore(spzResult.data, glbData)) {
+    std::vector<std::byte> glbData;
+    if (!convertSpzToGlbCore(spzResult.data.data(), spzResult.data.size(), glbData)) {
         std::cerr << "[ERROR] Conversion failed" << std::endl;
         return 1;
     }
@@ -521,18 +414,23 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    file.write(reinterpret_cast<const char*>(glbData.data()), glbData.size());
+    file.write(reinterpret_cast<const char*>(glbData.data()), static_cast<std::streamsize>(glbData.size()));
 
     std::cout << "[SUCCESS] GLB exported: " << outputPath << std::endl;
     std::cout << "[INFO] GLB size: " << (glbData.size() / 1024.0 / 1024.0) << " MB" << std::endl;
 
     if (doVerify) {
+
         std::cout << "\n============================================================\n";
         std::cout << "Running Three-Layer Verification...\n";
         std::cout << "============================================================\n\n";
         
+        std::vector<uint8_t> glbBytes(glbData.size());
+        std::memcpy(glbBytes.data(), glbData.data(), glbData.size());
+
         spz::Verifier verifier;
-        auto result = verifier.verify(spzResult.data, glbData);
+        auto result = verifier.verify(spzResult.data, glbBytes);
+
         
         std::cout << result.layer1_detail << "\n";
         std::cout << result.layer2_detail << "\n";
@@ -555,5 +453,6 @@ int main(int argc, char** argv) {
 
     return 0;
 }
+#endif
 
 #endif  // __EMSCRIPTEN__

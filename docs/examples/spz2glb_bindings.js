@@ -1,88 +1,154 @@
-/**
- * High-Performance WebAssembly bindings for spz2glb
- * Uses WebAssembly.instantiate directly with external memory
- */
-
-function createSpz2GlbBindings(instance, memory) {
-    const exports = instance.exports;
-
-    function validateHeader(buffer) {
-        const [ptr, size] = writeBuffer(buffer);
-        const result = exports._spz2glb_validate_header(ptr, size);
-        freeBuffer(ptr);
-        return result;
-    }
-
-    function convert(spzBuffer) {
-        const [inputPtr, inputSize] = writeBuffer(spzBuffer);
-        const outSizePtr = exports._spz2glb_alloc(8);
-        const resultPtr = exports._spz2glb_convert(inputPtr, inputSize, outSizePtr);
-        freeBuffer(inputPtr);
-
-        if (!resultPtr) {
-            freeBuffer(outSizePtr);
-            return null;
-        }
-
-        const heapU32 = new Uint32Array(memory.buffer);
-        const outSize = heapU32[outSizePtr / 4];
-        freeBuffer(outSizePtr);
-
-        if (!outSize) {
-            exports._spz2glb_free(resultPtr);
-            return null;
-        }
-
-        const result = readBuffer(resultPtr, outSize);
-        exports._spz2glb_free(resultPtr);
-        return result;
-    }
-
-    function writeBuffer(jsBuffer) {
-        const size = jsBuffer.byteLength;
-        const ptr = exports._spz2glb_alloc(size);
-        const heap = new Uint8Array(memory.buffer);
-        heap.set(new Uint8Array(jsBuffer.buffer, jsBuffer.byteOffset, size), ptr);
-        return [ptr, size];
-    }
-
-    function readBuffer(ptr, size) {
-        const heap = new Uint8Array(memory.buffer);
-        return new Uint8Array(heap.slice(ptr, ptr + size));
-    }
-
-    function freeBuffer(ptr) {
-        if (ptr) exports._spz2glb_free(ptr);
-    }
-
-    function getVersion() {
-        const ptr = exports._spz2glb_alloc(12);
-        exports._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
-        const heapU32 = new Uint32Array(memory.buffer);
-        const version = `${heapU32[ptr / 4]}.${heapU32[ptr / 4 + 1]}.${heapU32[ptr / 4 + 2]}`;
-        freeBuffer(ptr);
-        return version;
-    }
-
-    return { validateHeader, convert, getVersion };
-}
-
 export async function loadSpz2Glb(wasmUrl, options = {}) {
-    const response = await fetch(wasmUrl);
-    if (!response.ok) throw new Error(`Failed to fetch WASM: ${response.status}`);
-    const buffer = await response.arrayBuffer();
+    const moduleUrl = wasmUrl.replace(/\.wasm($|[?#])/, '.js$1');
+    const { default: createModule } = await import(moduleUrl);
 
-    // 创建内存（使用传入的配置或默认值）
-    const initialPages = options.initialPages || 1024;  // 1024 * 64KB = 64MB
-    const maximumPages = options.maximumPages || 16384; // 16384 * 64KB = 1GB
-    const memory = new WebAssembly.Memory({
-        initial: initialPages,
-        maximum: maximumPages
+    const module = await createModule({
+        ...options,
+        print: options.print ?? ((text) => console.log('[WASM]', text)),
+        printErr: options.printErr ?? ((text) => console.error('[WASM]', text)),
+        locateFile: options.locateFile ?? ((path) => path.endsWith('.wasm') ? wasmUrl : path),
     });
 
-    const { instance } = await WebAssembly.instantiate(buffer, {
-        env: { memory }
-    });
+    return {
+        validateHeader(buffer) {
+            const [ptr, size] = writeBuffer(module, buffer);
+            try {
+                return module._spz2glb_validate_header(ptr, size);
+            } finally {
+                freeBuffer(module, ptr);
+            }
+        },
 
-    return createSpz2GlbBindings(instance, memory);
+        convert(spzBuffer) {
+            const size = spzBuffer.byteLength;
+            const inputPtr = reserveInput(module, size);
+            try {
+                getHeap(module).set(new Uint8Array(spzBuffer.buffer, spzBuffer.byteOffset, size), inputPtr);
+                return convertReservedInput(module, size);
+            } finally {
+                releaseReservedInput(module);
+            }
+        },
+
+        async convertFile(file, options = {}) {
+            const chunkSize = options.chunkSize ?? 1024 * 1024;
+            const inputPtr = reserveInput(module, file.size);
+            try {
+                await writeFileToReservedInput(module, file, inputPtr, chunkSize);
+                return convertReservedInput(module, file.size);
+            } finally {
+                releaseReservedInput(module);
+            }
+        },
+
+        getVersion() {
+            const ptr = module._malloc(12);
+            try {
+                module._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
+                const major = module.getValue(ptr, 'i32');
+                const minor = module.getValue(ptr + 4, 'i32');
+                const patch = module.getValue(ptr + 8, 'i32');
+                return `${major}.${minor}.${patch}`;
+            } finally {
+                freeBuffer(module, ptr);
+            }
+        },
+
+        module,
+    };
 }
+
+function getHeap(module) {
+    return module.HEAPU8;
+}
+
+function reserveInput(module, size) {
+    const reserved = module._spz2glb_reserve_input(size);
+    if (reserved !== size) {
+        throw new Error('WASM 输入缓冲预留失败');
+    }
+
+    const inputPtr = module._spz2glb_get_input_ptr();
+    if (!inputPtr) {
+        throw new Error('WASM 输入缓冲不可用');
+    }
+    return inputPtr;
+}
+
+function releaseReservedInput(module) {
+    module._spz2glb_reserve_input(0);
+}
+
+function convertReservedInput(module, size) {
+    const outPtrPtr = module._malloc(4);
+    const outSizePtr = module._malloc(4);
+
+    try {
+        const ok = module._spz2glb_convert_reserved_input(size, outPtrPtr, outSizePtr);
+        if (!ok) {
+            return null;
+        }
+
+        const resultPtr = module.getValue(outPtrPtr, 'i32') >>> 0;
+        const outSize = module.getValue(outSizePtr, 'i32') >>> 0;
+        if (!resultPtr || !outSize) {
+            if (resultPtr) {
+                module._spz2glb_release_output(resultPtr);
+            }
+            return null;
+        }
+
+        return createOutputHandle(module, resultPtr, outSize);
+    } finally {
+        freeBuffer(module, outPtrPtr);
+        freeBuffer(module, outSizePtr);
+    }
+}
+
+function createOutputHandle(module, ptr, size) {
+    let released = false;
+
+    return {
+        size,
+        get bytes() {
+            if (released) {
+                throw new Error('WASM 输出已释放');
+            }
+            return getHeap(module).subarray(ptr, ptr + size);
+        },
+        release() {
+            if (!released) {
+                module._spz2glb_release_output(ptr);
+                released = true;
+            }
+        },
+    };
+}
+
+async function writeFileToReservedInput(module, file, inputPtr, chunkSize) {
+    let offset = 0;
+    while (offset < file.size) {
+        const end = Math.min(offset + chunkSize, file.size);
+        const chunk = new Uint8Array(await file.slice(offset, end).arrayBuffer());
+        getHeap(module).set(chunk, inputPtr + offset);
+        offset = end;
+    }
+}
+
+function writeBuffer(module, jsBuffer) {
+    const size = jsBuffer.byteLength;
+    const ptr = module._malloc(size);
+    if (!ptr) {
+        throw new Error('Memory allocation failed');
+    }
+
+    getHeap(module).set(new Uint8Array(jsBuffer.buffer, jsBuffer.byteOffset, size), ptr);
+    return [ptr, size];
+}
+
+function freeBuffer(module, ptr) {
+    if (ptr) {
+        module._free(ptr);
+    }
+}
+

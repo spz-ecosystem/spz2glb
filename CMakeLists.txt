@@ -13,61 +13,87 @@ option(ENABLE_KHR_GAUSSIAN_SPLATTING "Enable KHR_gaussian_splatting support" ON)
 add_subdirectory(third_party)
 
 # 添加 fastgltf include 路径
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
+include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
 
 # ============================================================
-# spz_verify 构建（命令行验证工具）
+# 根据编译器设置警告选项
 # ============================================================
 
-add_executable(spz_verify
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
-)
-
-target_link_libraries(spz_verify PRIVATE fastgltf)
-
-if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-  target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+if(MSVC)
+  # MSVC 编译器选项
+  set(STRICT_WARNINGS
+    "/W4"
+    "/WX"
+    "/wd4100"  # 禁用未使用参数警告
+  )
+else()
+  # GCC/Clang 编译器选项
+  set(STRICT_WARNINGS
+    "-Wall"
+    "-Wextra"
+    "-Wpedantic"
+    "-Werror"
+    "-Wno-unused-parameter"
+  )
 endif()
 
-# 严格警告
-target_compile_options(spz_verify PRIVATE
-  "-Wall"
-  "-Wextra"
-  "-Wpedantic"
-  "-Werror"
-  "-Wno-unused-parameter"
-)
-
-set_target_properties(spz_verify PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
-)
-
 # ============================================================
-# spz2glb 主程序构建
+# 原生构建 (非 WASM)
 # ============================================================
 
-add_executable(spz2glb
-  ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
-)
+if(NOT SPZ2GLB_BUILD_WASM)
+  # 查找 ZLIB
+  find_package(ZLIB REQUIRED)
 
-target_link_libraries(spz2glb PRIVATE fastgltf)
+  # ============================================================
+  # spz_verify 构建（命令行验证工具）
+  # ============================================================
 
-if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-  target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+  add_executable(spz_verify
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+  )
+
+  target_link_libraries(spz_verify PRIVATE fastgltf)
+
+  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+    target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+  endif()
+
+  # 严格警告
+  target_compile_options(spz_verify PRIVATE ${STRICT_WARNINGS})
+
+  set_target_properties(spz_verify PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
+  )
+
+  # ============================================================
+  # spz2glb 主程序构建
+  # ============================================================
+
+  add_executable(spz2glb
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
+  )
+
+  target_link_libraries(spz2glb PRIVATE fastgltf ZLIB::ZLIB)
+
+  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+    target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+  endif()
+
+  # 严格警告
+  target_compile_options(spz2glb PRIVATE ${STRICT_WARNINGS})
+
+  set_target_properties(spz2glb PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
+  )
+
+  option(BUILD_TESTS "Build native tests" OFF)
+  if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+  endif()
 endif()
-
-# 严格警告
-target_compile_options(spz2glb PRIVATE
-  "-Wall"
-  "-Wextra"
-  "-Wpedantic"
-  "-Werror"
-  "-Wno-unused-parameter"
-)
-
-set_target_properties(spz2glb PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
-)
 
 # ============================================================
 # WASM 构建
@@ -95,6 +121,7 @@ if(SPZ2GLB_BUILD_WASM)
   target_compile_options(spz2glb-wasm PRIVATE
     "-O3"
     "-fno-exceptions"
+    "-fno-lto"
     "-Wall"
     "-Wextra"
     "-Wpedantic"
@@ -104,16 +131,17 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wno-sign-conversion"
   )
 
-  # 链接优化（无 LTO）
+  # 链接优化（使用 JS 胶水代码，禁用 embind）
   target_link_options(spz2glb-wasm PRIVATE
     "-O3"
+    "-fno-lto"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
 
-    # 内存配置 - 支持外部导入内存（智能内存管理）
-    "-sIMPORTED_MEMORY=1"
+    # 内存配置
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
+    "-sALLOW_MEMORY_GROWTH=1"
     "-sSTACK_SIZE=10485760"
 
     # Web 环境
@@ -122,6 +150,14 @@ if(SPZ2GLB_BUILD_WASM)
 
     # 文件系统
     "-sFILESYSTEM=0"
+
+    # 生成 JS 胶水代码
+    "-sMODULARIZE=1"
+    "-sEXPORT_NAME=createSpz2glbModule"
+
+    # 禁用 embind（避免 _embind_register_function 错误）
+    "-sEMBIND_STD_STRING_IS_UTF8=0"
+    "-sDISABLE_EXCEPTION_CATCHING=1"
 
     # 生产优化
     "-sASSERTIONS=0"
@@ -134,8 +170,9 @@ if(SPZ2GLB_BUILD_WASM)
     # 单独文件
     "-sSINGLE_FILE=0"
 
-    # C API 导出
-    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats"
+    # C API 导出 + malloc/free
+    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_reserve_input,_spz2glb_get_input_ptr,_spz2glb_convert_reserved_input,_spz2glb_release_output,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats,_malloc,_free"
+    "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8"
   )
 
   set_target_properties(spz2glb-wasm PROPERTIES
@@ -179,6 +216,7 @@ if(SPZ2GLB_BUILD_WASM)
     "--use-port=zlib"
     "-sINITIAL_MEMORY=67108864"
     "-sMAXIMUM_MEMORY=1073741824"
+    "-sALLOW_MEMORY_GROWTH=1"
     "-sSTACK_SIZE=10485760"
     "-sENVIRONMENT=web"
     "-sEXPORT_ES6=1"
@@ -190,7 +228,6 @@ if(SPZ2GLB_BUILD_WASM)
     "-sWASM_BIGINT=1"
     "-sMALLOC=emmalloc"
     "-sSINGLE_FILE=0"
-    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats"
   )
 
   set_target_properties(spz_verify-wasm PROPERTIES

@@ -1,210 +1,255 @@
 // Copyright (c) 2026 Pu Junhan
 // SPDX-License-Identifier: MIT
-//
-// Implementation of high-performance WASM C API
-//
-// CODE QUALITY ENFORCED:
-// - All pointers validated before use
-// - Memory leak detection
-// - Failed allocation tracking
-// - No silent failures
+
+#define SPZ2GLB_DISABLE_EMBIND 1
+#define SPZ2GLB_NO_CLI_MAIN 1
 
 #include "spz2glb_wasm_c_api.h"
 #include "spz_to_glb.cpp"
+
+#include <cstdio>
 #include <cstring>
-#include <cstdlib>
+#include <memory>
+#include <new>
+#include <vector>
 
-// Memory tracking
-static Spz2GlbMemoryStats g_stats = {0, 0, 0, 0, 0};
-static bool g_initialized = false;
+namespace {
 
-// Debug: track active allocations
+constexpr size_t kMaxAllocationBytes = 1024ULL * 1024ULL * 1024ULL;
+
+struct OwnedOutput {
+    std::vector<std::byte> bytes;
+    OwnedOutput* next = nullptr;
+};
+
+Spz2GlbMemoryStats g_stats{0, 0, 0, 0, 0};
+uint8_t* g_reserved_input = nullptr;
+size_t g_reserved_input_capacity = 0;
+OwnedOutput* g_owned_outputs = nullptr;
+
 #if SPZ2GLB_DEBUG_ALLOC
-#include <stdio.h>
-#define DEBUG_LOG(...) fprintf(stderr, "[spz2glb] " __VA_ARGS__ "\n")
+#define DEBUG_LOG(...) do { std::fprintf(stderr, "[spz2glb] " __VA_ARGS__); std::fprintf(stderr, "\n"); } while (0)
 #else
-#define DEBUG_LOG(...) do { } while(0)
+#define DEBUG_LOG(...) do { } while (0)
 #endif
 
-// Initialization flag
-static inline void ensure_initialized(void) {
-    if (!g_initialized) {
-        g_initialized = true;
-        DEBUG_LOG("Initialized");
-    }
-}
-
-uint8_t* spz2glb_alloc(size_t size) {
-    ensure_initialized();
-
-    // Check for reasonable size
-    if (size == 0) {
-        DEBUG_LOG("WARNING: alloc(0) called");
-        g_stats.failed_allocations++;
-        return NULL;
-    }
-
-    // Check for excessive size (potential overflow or bug)
-    if (size > 1024 * 1024 * 1024) { // 1GB limit
-        DEBUG_LOG("ERROR: alloc size too large: %zu", size);
-        g_stats.failed_allocations++;
-        return NULL;
-    }
-
-    uint8_t* ptr = new (std::nothrow) uint8_t[size];
-    if (ptr == NULL) {
-        DEBUG_LOG("ERROR: allocation failed for size %zu", size);
-        g_stats.failed_allocations++;
-        return NULL;
-    }
-
+void track_alloc(size_t size) {
     g_stats.current_usage_bytes += size;
-    g_stats.total_allocations++;
-
+    ++g_stats.total_allocations;
     if (g_stats.current_usage_bytes > g_stats.peak_usage_bytes) {
         g_stats.peak_usage_bytes = g_stats.current_usage_bytes;
     }
-
-    DEBUG_LOG("alloc(%zu) = %p, total: %zu", size, (void*)ptr, g_stats.current_usage_bytes);
-    return ptr;
 }
 
-void spz2glb_free(uint8_t* ptr) {
-    // NULL is valid (no-op)
-    if (ptr == NULL) {
-        DEBUG_LOG("free(NULL) - no-op");
+void track_free(size_t size) {
+    if (g_stats.current_usage_bytes >= size) {
+        g_stats.current_usage_bytes -= size;
+    } else {
+        g_stats.current_usage_bytes = 0;
+    }
+    ++g_stats.total_frees;
+}
+
+uint8_t* alloc_tracked(size_t size) {
+    if (size == 0 || size > kMaxAllocationBytes) {
+        ++g_stats.failed_allocations;
+        return nullptr;
+    }
+
+    const size_t rawSize = size + sizeof(size_t);
+    auto* raw = new (std::nothrow) uint8_t[rawSize];
+    if (raw == nullptr) {
+        ++g_stats.failed_allocations;
+        return nullptr;
+    }
+
+    std::memcpy(raw, &size, sizeof(size_t));
+    auto* userPtr = raw + sizeof(size_t);
+    track_alloc(size);
+
+    DEBUG_LOG("alloc(%zu) -> %p", size, static_cast<void*>(userPtr));
+    return userPtr;
+}
+
+size_t get_allocation_size(const uint8_t* ptr) {
+    if (ptr == nullptr) {
+        return 0;
+    }
+
+    size_t size = 0;
+    std::memcpy(&size, ptr - sizeof(size_t), sizeof(size_t));
+    return size;
+}
+
+void free_tracked(uint8_t* ptr) {
+    if (ptr == nullptr) {
         return;
     }
 
-    // Note: We can't track exact size without keeping a map
-    // This is a limitation of simple allocation tracking
-    g_stats.total_frees++;
-    DEBUG_LOG("free(%p)", (void*)ptr);
+    const size_t size = get_allocation_size(ptr);
+    track_free(size);
 
-    delete[] ptr;
+    auto* raw = ptr - sizeof(size_t);
+    DEBUG_LOG("free(%p)", static_cast<void*>(ptr));
+    delete[] raw;
+}
+
+void clear_reserved_input() {
+    if (g_reserved_input != nullptr) {
+        free_tracked(g_reserved_input);
+        g_reserved_input = nullptr;
+        g_reserved_input_capacity = 0;
+    }
+}
+
+uint8_t* register_output(std::vector<std::byte>&& output, size_t* outSize) {
+    if (outSize == nullptr || output.empty() || output.size() > kMaxAllocationBytes) {
+        ++g_stats.failed_allocations;
+        return nullptr;
+    }
+
+    auto owner = std::unique_ptr<OwnedOutput>(new (std::nothrow) OwnedOutput());
+    if (!owner) {
+        ++g_stats.failed_allocations;
+        return nullptr;
+    }
+
+    owner->bytes = std::move(output);
+    auto* resultPtr = reinterpret_cast<uint8_t*>(owner->bytes.data());
+    if (resultPtr == nullptr) {
+        ++g_stats.failed_allocations;
+        return nullptr;
+    }
+
+    *outSize = owner->bytes.size();
+    track_alloc(*outSize);
+
+    owner->next = g_owned_outputs;
+    g_owned_outputs = owner.release();
+    return resultPtr;
+}
+
+bool release_owned_output(uint8_t* ptr) {
+    OwnedOutput** current = &g_owned_outputs;
+    while (*current != nullptr) {
+        auto* owner = *current;
+        if (reinterpret_cast<uint8_t*>(owner->bytes.data()) == ptr) {
+            *current = owner->next;
+            track_free(owner->bytes.size());
+            delete owner;
+            return true;
+        }
+        current = &owner->next;
+    }
+
+    return false;
+}
+
+uint8_t* convert_input(const uint8_t* spzData, size_t spzSize, size_t* outSize) {
+    if (outSize == nullptr) {
+        return nullptr;
+    }
+
+    *outSize = 0;
+    if (spzData == nullptr || spzSize == 0) {
+        return nullptr;
+    }
+
+    std::vector<std::byte> output;
+    if (!convertSpzToGlbCore(spzData, spzSize, output) || output.empty()) {
+        return nullptr;
+    }
+
+    return register_output(std::move(output), outSize);
+}
+
+}  // namespace
+
+uint8_t* spz2glb_alloc(size_t size) {
+    return alloc_tracked(size);
+}
+
+void spz2glb_free(uint8_t* ptr) {
+    free_tracked(ptr);
+}
+
+size_t spz2glb_reserve_input(size_t size) {
+    clear_reserved_input();
+    if (size == 0) {
+        return 0;
+    }
+
+    g_reserved_input = alloc_tracked(size);
+    if (g_reserved_input == nullptr) {
+        return 0;
+    }
+
+    g_reserved_input_capacity = size;
+    return g_reserved_input_capacity;
+}
+
+uint8_t* spz2glb_get_input_ptr(void) {
+    return g_reserved_input;
+}
+
+int spz2glb_convert_reserved_input(size_t size, uint8_t** outPtr, size_t* outSize) {
+    if (outPtr == nullptr || outSize == nullptr) {
+        return 0;
+    }
+
+    *outPtr = nullptr;
+    *outSize = 0;
+
+    if (g_reserved_input == nullptr || size == 0 || size > g_reserved_input_capacity) {
+        return 0;
+    }
+
+    *outPtr = convert_input(g_reserved_input, size, outSize);
+    return *outPtr != nullptr ? 1 : 0;
+}
+
+void spz2glb_release_output(uint8_t* ptr) {
+    if (!release_owned_output(ptr)) {
+        free_tracked(ptr);
+    }
 }
 
 uint8_t* spz2glb_convert(const uint8_t* spzData, size_t spzSize, size_t* outSize) {
-    ensure_initialized();
-
-    // Validate inputs
-    if (spzData == NULL) {
-        DEBUG_LOG("ERROR: spzData is NULL");
-        if (outSize) *outSize = 0;
-        return NULL;
-    }
-
-    if (spzSize == 0) {
-        DEBUG_LOG("ERROR: spzSize is 0");
-        if (outSize) *outSize = 0;
-        return NULL;
-    }
-
-    if (outSize == NULL) {
-        DEBUG_LOG("ERROR: outSize is NULL");
-        return NULL;
-    }
-
-    DEBUG_LOG("convert: size=%zu", spzSize);
-
-    // Create input vector
-    std::vector<uint8_t> input(spzData, spzData + spzSize);
-
-    // Create output vector
-    std::vector<uint8_t> output;
-
-    // Call core conversion
-    if (!convertSpzToGlbCore(input, output)) {
-        DEBUG_LOG("ERROR: convertSpzToGlbCore failed");
-        *outSize = 0;
-        return NULL;
-    }
-
-    // Check output is valid
-    if (output.empty()) {
-        DEBUG_LOG("ERROR: output is empty");
-        *outSize = 0;
-        return NULL;
-    }
-
-    // Allocate result buffer
-    size_t resultSize = output.size();
-    uint8_t* result = spz2glb_alloc(resultSize);
-    if (result == NULL) {
-        DEBUG_LOG("ERROR: failed to allocate result buffer");
-        *outSize = 0;
-        return NULL;
-    }
-
-    // Copy data
-    std::memcpy(result, output.data(), resultSize);
-    *outSize = resultSize;
-
-    DEBUG_LOG("convert: success, output size=%zu", resultSize);
-    return result;
+    return convert_input(spzData, spzSize, outSize);
 }
 
 bool spz2glb_validate_header(const uint8_t* data, size_t size) {
-    ensure_initialized();
-
-    // Validate inputs
-    if (data == NULL) {
-        DEBUG_LOG("ERROR: data is NULL in validate_header");
+    if (data == nullptr || size < 12) {
         return false;
     }
 
-    if (size < 12) {
-        DEBUG_LOG("ERROR: size %zu < 12 in validate_header", size);
-        return false;
-    }
-
-    // Read magic and version
-    // Using memcpy for strict aliasing safety
     uint32_t magic = 0;
     uint32_t version = 0;
     std::memcpy(&magic, data, sizeof(uint32_t));
     std::memcpy(&version, data + 4, sizeof(uint32_t));
 
-    // GLB magic: 0x46546C67 ('glTF')
-    if (magic != 0x46546C67) {
-        DEBUG_LOG("ERROR: invalid magic: 0x%08X", magic);
-        return false;
-    }
-
-    // Only version 2 is supported
-    if (version != 2) {
-        DEBUG_LOG("ERROR: unsupported version: %u", version);
-        return false;
-    }
-
-    DEBUG_LOG("validate_header: valid");
-    return true;
+    return magic == 0x46546C67 && version == 2;
 }
 
 void spz2glb_get_version(int* major, int* minor, int* patch) {
-    if (major) *major = 1;
-    if (minor) *minor = 0;
-    if (patch) *patch = 0;
+    if (major != nullptr) {
+        *major = 1;
+    }
+    if (minor != nullptr) {
+        *minor = 0;
+    }
+    if (patch != nullptr) {
+        *patch = 0;
+    }
 }
 
 void spz2glb_get_memory_stats(Spz2GlbMemoryStats* stats) {
-    if (stats == NULL) {
-        return;
+    if (stats != nullptr) {
+        *stats = g_stats;
     }
-    *stats = g_stats;
 }
 
 void spz2glb_reset_memory_stats(void) {
-    DEBUG_LOG("reset_memory_stats: peak=%zu, current=%zu, allocs=%zu, frees=%zu, failed=%zu",
-              g_stats.peak_usage_bytes,
-              g_stats.current_usage_bytes,
-              g_stats.total_allocations,
-              g_stats.total_frees,
-              g_stats.failed_allocations);
-
-    g_stats.peak_usage_bytes = 0;
-    g_stats.current_usage_bytes = 0;
-    g_stats.total_allocations = 0;
-    g_stats.total_frees = 0;
-    g_stats.failed_allocations = 0;
+    g_stats = {0, 0, 0, 0, 0};
 }
+

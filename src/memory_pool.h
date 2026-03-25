@@ -5,10 +5,6 @@
 #include <cstdint>
 #include <cstring>
 
-#ifdef __EMSCRIPTEN__
-#include <emscripten/bind.h>
-#endif
-
 namespace spz2glb {
 
 struct MemoryStats {

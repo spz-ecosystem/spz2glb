@@ -1,0 +1,152 @@
+# WASM 构建测试工作流 - 收集日志和警告
+
+name: Test WASM Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'CMakeLists.txt'
+      - 'src/**'
+      - '.github/workflows/test-wasm-build.yml'
+
+jobs:
+  test-wasm-build:
+    name: Test WASM Build with Logging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Install wabt tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wabt
+
+      - name: Configure WASM build
+        run: |
+          echo "=== CMake Configuration ==="
+          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON 2>&1 | tee cmake.log
+
+      - name: Build spz2glb WASM (verbose)
+        run: |
+          echo "=== WASM Build Output ==="
+          emmake cmake --build build_wasm --config Release --target spz2glb-wasm --verbose 2>&1 | tee build.log
+          echo ""
+          echo "=== Build Warnings/Errors Summary ==="
+          grep -iE "(warning|error)" build.log | head -20 || echo "No warnings/errors found"
+
+      - name: Analyze WASM imports/exports
+        run: |
+          echo "=== WASM File Info ==="
+          ls -la dist/
+          
+          echo ""
+          echo "=== WASM Full Analysis (wasm-objdump) ==="
+          wasm-objdump -x dist/spz2glb.wasm 2>/dev/null | tee wasm_analysis.txt || echo "wasm-objdump failed"
+          
+          echo ""
+          echo "=== Import Section ==="
+          grep -A 20 "Import" wasm_analysis.txt | head -25 || echo "No imports found"
+          
+          echo ""
+          echo "=== Export Section ==="
+          grep -A 30 "Export" wasm_analysis.txt | head -35 || echo "No exports found"
+          
+          echo ""
+          echo "=== Memory Section ==="
+          grep -A 5 "Memory" wasm_analysis.txt | head -10 || echo "No memory section found"
+
+      - name: Test WASM instantiation
+        run: |
+          echo "=== Testing WASM Instantiation ==="
+          cat > test_wasm.js << 'EOF'
+          const fs = require('fs');
+          
+          async function testWasm() {
+              try {
+                  const buffer = fs.readFileSync('./dist/spz2glb.wasm');
+                  console.log('✓ WASM file size:', buffer.length, 'bytes');
+                  
+                  // Analyze WASM imports first
+                  const wasmModule = await WebAssembly.compile(buffer);
+                  const imports = WebAssembly.Module.imports(wasmModule);
+                  console.log('✓ WASM imports:', imports.length);
+                  imports.forEach((imp, i) => {
+                      console.log(`  Import ${i}: ${imp.module}.${imp.name} (${imp.kind})`);
+                  });
+                  
+                  // Build import object based on actual imports
+                  const importObject = { env: {} };
+                  imports.forEach(imp => {
+                      if (imp.module === 'env') {
+                          if (imp.name === 'memory') {
+                              // WASM exports its own memory, we don't need to provide it
+                              console.log('  Note: WASM imports memory from env (but we will use exported memory)');
+                          } else if (imp.name === 'emscripten_notify_memory_growth') {
+                              importObject.env[imp.name] = (index) => {
+                                  console.log('[WASM] Memory growth notification, index:', index);
+                              };
+                          } else {
+                              console.warn('  Warning: Unknown import:', imp.name);
+                              importObject.env[imp.name] = () => {};
+                          }
+                      }
+                  });
+                  
+                  // Try to instantiate
+                  const { instance } = await WebAssembly.instantiate(buffer, importObject);
+                  console.log('✅ WASM instantiated successfully!');
+                  
+                  // Check exports
+                  const exports = Object.keys(instance.exports);
+                  console.log('✓ Exports:', exports.join(', '));
+                  
+                  // Check for memory export
+                  if (instance.exports.memory) {
+                      const mem = instance.exports.memory;
+                      console.log('✓ WASM-managed memory:', mem.buffer.byteLength, 'bytes initial');
+                  }
+                  
+                  // Test version function
+                  if (instance.exports._spz2glb_get_version && instance.exports._spz2glb_alloc) {
+                      const ptr = instance.exports._spz2glb_alloc(12);
+                      instance.exports._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
+                      const heapU32 = new Uint32Array(instance.exports.memory.buffer);
+                      const version = `${heapU32[ptr/4]}.${heapU32[ptr/4+1]}.${heapU32[ptr/4+2]}`;
+                      console.log('✅ Version:', version);
+                      instance.exports._spz2glb_free(ptr);
+                  }
+                  
+                  return true;
+              } catch (err) {
+                  console.error('❌ WASM instantiation failed:', err.message);
+                  console.error(err.stack);
+                  return false;
+              }
+          }
+          
+          testWasm().then(success => process.exit(success ? 0 : 1));
+          EOF
+          
+          node test_wasm.js
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: wasm-build-logs
+          path: |
+            cmake.log
+            build.log
+            wasm_analysis.txt
+            test_wasm.js
+            dist/spz2glb.wasm
