@@ -102,6 +102,23 @@ endif()
 if(SPZ2GLB_BUILD_WASM)
   message(STATUS "Building WASM version")
 
+  set(SPZ2GLB_WASM_PROFILE "compat" CACHE STRING "WASM memory profile: compat or perf-lite")
+  set_property(CACHE SPZ2GLB_WASM_PROFILE PROPERTY STRINGS compat perf-lite)
+
+  if(SPZ2GLB_WASM_PROFILE STREQUAL "perf-lite")
+    set(SPZ2GLB_WASM_INITIAL_MEMORY 134217728)
+    set(SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH 0)
+    set(SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION "")
+  elseif(SPZ2GLB_WASM_PROFILE STREQUAL "compat")
+    set(SPZ2GLB_WASM_INITIAL_MEMORY 67108864)
+    set(SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH 1)
+    set(SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION "-sMAXIMUM_MEMORY=1073741824")
+  else()
+    message(FATAL_ERROR "Unsupported SPZ2GLB_WASM_PROFILE: ${SPZ2GLB_WASM_PROFILE}")
+  endif()
+
+  message(STATUS "WASM memory profile: ${SPZ2GLB_WASM_PROFILE}")
+
   # spz2glb-wasm: 高性能版本（纯 C API，无 LTO 避免导入名压缩问题）
   # ============================================================
   add_executable(spz2glb-wasm
@@ -138,10 +155,10 @@ if(SPZ2GLB_BUILD_WASM)
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
 
-    # 内存配置
-    "-sINITIAL_MEMORY=67108864"
-    "-sMAXIMUM_MEMORY=1073741824"
-    "-sALLOW_MEMORY_GROWTH=1"
+    # 内存配置（Phase 6: compat / perf-lite）
+    "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
+    "${SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION}"
+    "-sALLOW_MEMORY_GROWTH=${SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH}"
     "-sSTACK_SIZE=10485760"
 
     # Web 环境
@@ -214,9 +231,9 @@ if(SPZ2GLB_BUILD_WASM)
     "-O3"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
-    "-sINITIAL_MEMORY=67108864"
-    "-sMAXIMUM_MEMORY=1073741824"
-    "-sALLOW_MEMORY_GROWTH=1"
+    "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
+    "${SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION}"
+    "-sALLOW_MEMORY_GROWTH=${SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH}"
     "-sSTACK_SIZE=10485760"
     "-sENVIRONMENT=web"
     "-sEXPORT_ES6=1"

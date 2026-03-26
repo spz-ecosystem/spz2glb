@@ -17,8 +17,12 @@ on:
 
 jobs:
   test-wasm-build:
-    name: Test WASM Build with Logging
+    name: Test WASM Build with Logging (${{ matrix.wasm_profile }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        wasm_profile: [compat, perf-lite]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -39,7 +43,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "=== CMake Configuration ==="
-          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON 2>&1 | tee cmake.log
+          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_WASM_PROFILE=${{ matrix.wasm_profile }} -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON 2>&1 | tee cmake.log
 
       - name: Build spz2glb WASM (verbose)
         run: |
@@ -214,7 +218,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: wasm-build-logs
+          name: wasm-build-logs-${{ matrix.wasm_profile }}
           path: |
             cmake.log
             build.log

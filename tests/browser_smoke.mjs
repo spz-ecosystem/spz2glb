@@ -23,6 +23,29 @@ function createInvalidSpzBuffer() {
     return buffer;
 }
 
+function createOversizedSpzBuffer(sizeBytes) {
+    const header = createMinimalSpzBuffer();
+    const buffer = Buffer.alloc(sizeBytes, 0);
+    header.copy(buffer, 0, 0, header.length);
+    return buffer;
+}
+
+function parseRenderedSize(text) {
+    const normalized = String(text ?? '').trim();
+    const match = normalized.match(/^(\d+(?:\.\d+)?)\s*(B|KB|MB)$/i);
+    if (!match) {
+        throw new Error(`unexpected size format: ${normalized}`);
+    }
+    const value = Number(match[1]);
+    const unit = match[2].toUpperCase();
+    if (!Number.isFinite(value) || value < 0) {
+        throw new Error(`invalid size value: ${normalized}`);
+    }
+    if (unit === 'MB') return value * 1024 * 1024;
+    if (unit === 'KB') return value * 1024;
+    return value;
+}
+
 async function main() {
     const baseUrl = new URL(process.env.SPZ2GLB_SMOKE_URL ?? 'http://127.0.0.1:8000/index.html');
     const chunkSize = Number(process.env.SPZ2GLB_SMOKE_CHUNK_SIZE ?? 8);
@@ -31,8 +54,11 @@ async function main() {
     const tempDir = mkdtempSync(join(tmpdir(), 'spz2glb-smoke-'));
     const validPath = join(tempDir, 'valid.spz');
     const invalidPath = join(tempDir, 'invalid.spz');
+    const oversizedPath = join(tempDir, 'oversized.spz');
     writeFileSync(validPath, gzipSync(createMinimalSpzBuffer()));
     writeFileSync(invalidPath, gzipSync(createInvalidSpzBuffer()));
+    writeFileSync(oversizedPath, createOversizedSpzBuffer(72 * 1024 * 1024));
+
 
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
@@ -58,7 +84,19 @@ async function main() {
             throw new Error('invalid SPZ should keep convert button disabled');
         }
 
+        await page.locator('#fileInput').setInputFiles(oversizedPath);
+        await page.waitForFunction(
+            () => document.getElementById('fileInfo')?.textContent?.includes('文件超过浏览器安全上限'),
+            null,
+            { timeout: 10000 },
+        );
+        const oversizedDisabled = await page.locator('#convertBtn').isDisabled();
+        if (!oversizedDisabled) {
+            throw new Error('oversized SPZ should be rejected and keep convert button disabled');
+        }
+
         await page.locator('#fileInput').setInputFiles(validPath);
+
         await page.waitForFunction(
             () => !document.getElementById('convertBtn')?.disabled,
             null,
@@ -141,9 +179,23 @@ async function main() {
         if (Object.values(statValues).some((value) => !value || value === '-')) {
             throw new Error(`memory stats were not rendered: ${JSON.stringify(statValues)}`);
         }
+        const currentBytes = parseRenderedSize(statValues.current);
+        const peakBytes = parseRenderedSize(statValues.peak);
+        const workPeakBytes = parseRenderedSize(statValues.workPeak);
+        const hotAvailable = Number(statValues.hotAvailable);
+        if (peakBytes < currentBytes) {
+            throw new Error(`peak memory must be >= current memory: ${JSON.stringify(statValues)}`);
+        }
+        if (!Number.isFinite(workPeakBytes) || workPeakBytes <= 0) {
+            throw new Error(`work peak must be positive: ${JSON.stringify(statValues)}`);
+        }
+        if (!Number.isFinite(hotAvailable) || hotAvailable < 0) {
+            throw new Error(`hot pool availability is invalid: ${JSON.stringify(statValues)}`);
+        }
         if (pageErrors.length > 0) {
             throw new Error(`page errors: ${pageErrors.join(' | ')}`);
         }
+
     } finally {
         await page.close();
         await browser.close();
