@@ -43,6 +43,13 @@ add_library(spz2glb_core
 
 target_link_libraries(spz2glb_core PUBLIC fastgltf)
 
+if(SPZ2GLB_BUILD_WASM)
+  target_compile_options(spz2glb_core PRIVATE --use-port=zlib)
+else()
+  find_package(ZLIB REQUIRED)
+  target_link_libraries(spz2glb_core PUBLIC ZLIB::ZLIB)
+endif()
+
 if(ENABLE_KHR_GAUSSIAN_SPLATTING)
   target_compile_definitions(spz2glb_core PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
 endif()
