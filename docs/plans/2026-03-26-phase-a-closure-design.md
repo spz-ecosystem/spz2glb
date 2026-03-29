@@ -191,18 +191,34 @@
 
 ## S4：发布链收口（0.5 天）
 
+### 进入条件（Go/No-Go）
+- S3/S3.5 已完成且云端 CI 通过；
+- `spz2glb` 与 `spz_verify` 的最小回归全绿；
+- 当前分支无额外范围外改动（仅发布链相关改动）。
 
 ### 任务
-1. 清理发布流程中对外部 raw 文件下载依赖；
-2. Pages 与 WASM 产物全部来自同一次构建上下文；
-3. 产物命名与 profile 维度保持一致（compat/perf-lite）。
+1. 清理发布流程中对外部 raw 文件下载依赖，并显式定义允许依赖白名单（仓库内构建产物、同次 CI artifact）；
+2. 固定发布链路：Pages 与 WASM 产物必须来自同一次 CI run（同 run-id）；
+3. 统一产物命名与 profile 维度（`compat/perf-lite`），并在 workflow 中强校验命名规范；
+4. 增加发布门禁：`build/test/verify/package/publish` 任一失败即中断发布；
+5. 保留回滚路径：发布失败时回退至上一稳定 workflow 与 artifact 引用。
+
+### 里程碑（S4 内部）
+- S4-M1：workflow 改造完成（去外部 raw + 命名/矩阵校验）；
+- S4-M2：预发布演练通过（同次 run artifact 串联成功）；
+- S4-M3：正式发布通过并留档（CI、artifact、校验记录可追溯）。
 
 ### 产物
-- 更新后的 workflow；
-- 一次完整 CI 通过记录（含 artifact 链路）。
+- 更新后的 workflow（含门禁与命名校验）；
+- 一次完整 CI 通过记录（含 run-id 与 artifact 链路）；
+- 发布审计记录（产物清单 + `sha256` + 回滚点）。
 
-### 完成判定
-- 发布阶段在无外部 raw 拉取前提下可稳定执行。
+### 完成判定（硬门槛）
+- 在无外部 raw 拉取前提下，发布阶段连续通过；
+- Pages 与 WASM 产物 run-id 一致且校验值一致；
+- `compat/perf-lite` 双档产物命名与内容映射无冲突；
+- 任意单点失败可按预案回滚，不影响上一稳定发布结果。
+
 
 ---
 

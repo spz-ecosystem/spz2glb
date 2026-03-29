@@ -114,8 +114,12 @@ jobs:
           path: spz_verify*
 
   wasm-build:
-    name: Build WASM
+    name: Build WASM (${{ matrix.wasm_profile }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        wasm_profile: [compat, perf-lite]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -129,7 +133,10 @@ jobs:
 
       - name: Configure WASM build
         run: |
-          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
+          emcmake cmake -S . -B build_wasm \
+            -DSPZ2GLB_BUILD_WASM=ON \
+            -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON \
+            -DSPZ2GLB_WASM_PROFILE=${{ matrix.wasm_profile }}
 
       - name: Build spz2glb WASM
         run: |
@@ -139,11 +146,22 @@ jobs:
         run: |
           emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
+      - name: Validate WASM outputs
+        run: |
+          test -f dist/spz2glb.wasm
+          test -f dist/spz2glb.js
+          test -f dist/spz_verify.wasm
+          test -f dist/spz_verify.js
+
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: wasm-modules
-          path: dist/
+          name: wasm-modules-${{ matrix.wasm_profile }}
+          path: |
+            dist/spz2glb.wasm
+            dist/spz2glb.js
+            dist/spz_verify.wasm
+            dist/spz_verify.js
 
   deploy-pages:
     needs: [wasm-build]
@@ -154,30 +172,43 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Download HTML files
-        run: |
-          mkdir -p docs/examples
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/index.html -o index.html
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/spz2glb_bindings.js -o spz2glb_bindings.js
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/smart_memory.js -o smart_memory.js
-          ls -la
+      - name: Checkout
+        uses: actions/checkout@v5
 
-      - name: Download WASM artifacts
+      - name: Prepare Pages root from repository
+        run: |
+          mkdir -p site
+          cp docs/examples/index.html site/index.html
+          cp docs/examples/spz2glb_bindings.js site/spz2glb_bindings.js
+          cp docs/examples/smart_memory.js site/smart_memory.js
+
+      - name: Download WASM artifacts (compat)
         uses: actions/download-artifact@v5
         with:
-          name: wasm-modules
-          path: dist/
+          name: wasm-modules-compat
+          path: site/dist
 
-      - name: Copy WASM modules to root
+      - name: Validate and place WASM modules
         run: |
-          cp dist/spz2glb.wasm .
-          cp dist/spz2glb.js .
-          ls -la
+          test -f site/dist/spz2glb.wasm
+          test -f site/dist/spz2glb.js
+          cp site/dist/spz2glb.wasm site/spz2glb.wasm
+          cp site/dist/spz2glb.js site/spz2glb.js
+
+      - name: Generate Pages audit manifest
+        run: |
+          (cd site && sha256sum index.html spz2glb_bindings.js smart_memory.js spz2glb.wasm spz2glb.js > pages-artifact-sha256.txt)
+
+      - name: Upload Pages audit artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: pages-audit
+          path: site/pages-artifact-sha256.txt
 
       - name: Upload to GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
@@ -189,10 +220,30 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
-      - name: Download all artifacts
+      - name: Download release artifacts (CLI)
         uses: actions/download-artifact@v5
         with:
+          pattern: spz2glb-*
           path: artifacts
+          merge-multiple: true
+
+      - name: Download release artifacts (verify)
+        uses: actions/download-artifact@v5
+        with:
+          pattern: *-verify
+          path: artifacts
+          merge-multiple: true
+
+      - name: Download release artifacts (WASM profiles)
+        uses: actions/download-artifact@v5
+        with:
+          pattern: wasm-modules-*
+          path: artifacts/wasm
+          merge-multiple: false
+
+      - name: Generate release manifest
+        run: |
+          (cd artifacts && find . -type f -print0 | sort -z | xargs -0 sha256sum > release-sha256.txt)
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
