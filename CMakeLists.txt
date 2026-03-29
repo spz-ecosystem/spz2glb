@@ -70,9 +70,10 @@ if(NOT SPZ2GLB_BUILD_WASM)
 
   add_executable(spz_verify
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
-  target_link_libraries(spz_verify PRIVATE fastgltf)
+  target_link_libraries(spz_verify PRIVATE fastgltf ZLIB::ZLIB)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
@@ -224,6 +225,7 @@ if(SPZ2GLB_BUILD_WASM)
 
   add_executable(spz_verify-wasm
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
   target_link_libraries(spz_verify-wasm PRIVATE fastgltf)
