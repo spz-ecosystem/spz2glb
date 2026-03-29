@@ -159,7 +159,7 @@ jobs:
 
                 window.__hashResult = { status: 'pending' };
                 try {
-                  const api = await loadSpz2Glb('./dist/spz2glb.wasm', {
+                  const api = await loadSpz2Glb('/dist/spz2glb.wasm', {
                     print: () => {},
                     printErr: (text) => console.error(text),
                   });
