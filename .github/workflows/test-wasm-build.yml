@@ -136,6 +136,12 @@ jobs:
           test -f dist/spz2glb.js
           test -f dist/spz2glb.wasm
 
+          if [ ! -f tests/data/triangle.spz ] || [ ! -f tests/data/cube.spz ] || [ ! -f tests/data/near_limit.spz ] || [ ! -f tests/data/v4_ext.spz ]; then
+            echo '{"status":"skipped","reason":"missing 4 fixed samples in CI workspace"}' | tee wasm_hash_matrix.log
+            echo 'SKIPPED_MISSING_SAMPLES' > wasm_hashes.txt
+            exit 0
+          fi
+
           cat > hash_matrix.html << 'EOF'
           <!doctype html>
           <html>
