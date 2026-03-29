@@ -223,21 +223,21 @@ jobs:
       - name: Download release artifacts (CLI)
         uses: actions/download-artifact@v5
         with:
-          pattern: spz2glb-*
+          pattern: 'spz2glb-*'
           path: artifacts
           merge-multiple: true
 
       - name: Download release artifacts (verify)
         uses: actions/download-artifact@v5
         with:
-          pattern: *-verify
+          pattern: '*-verify'
           path: artifacts
           merge-multiple: true
 
       - name: Download release artifacts (WASM profiles)
         uses: actions/download-artifact@v5
         with:
-          pattern: wasm-modules-*
+          pattern: 'wasm-modules-*'
           path: artifacts/wasm
           merge-multiple: false
 
