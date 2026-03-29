@@ -5,7 +5,8 @@
 #define SPZ2GLB_NO_CLI_MAIN 1
 
 #include "spz2glb_wasm_c_api.h"
-#include "spz_to_glb.cpp"
+#include "spz2glb_core.h"
+#include "memory_pool.h"
 
 #include <cstdio>
 #include <cstring>
@@ -259,8 +260,7 @@ bool spz2glb_validate_glb_header(const uint8_t* data, size_t size) {
 }
 
 bool spz2glb_validate_spz_header(const uint8_t* data, size_t size) {
-    SpzHeader header{};
-    return peekSpzHeader(data, size, header);
+    return validateSpzHeaderCore(data, size);
 }
 
 bool spz2glb_validate_header(const uint8_t* data, size_t size) {

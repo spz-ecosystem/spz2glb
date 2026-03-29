@@ -93,24 +93,54 @@
 
 ---
 
-## S2：核心层解耦（1~1.5 天）
+## S2：核心层解耦（高风险重构，1~1.5 天）
 
-### 任务
-1. 抽离 `spz_to_glb` 核心转换逻辑为独立编译单元（Core）；
-2. CLI `main` 与 WASM C API 改为链接 Core，不再通过 `#include .cpp` 复用；
-3. 对外错误码/错误信息统一。
+### 目标（Goals）
+1. 抽离共享转换逻辑为独立 `Core` 编译单元，消除 WASM 端 `#include .cpp` 复用；
+2. CLI 与 WASM C API 统一改为链接 `Core`，适配层只保留平台职责；
+3. 在不改变用户侧体验前提下完成结构收敛：浏览器端继续轻任务，CLI/CI 端承担完整验证；
+4. 同一输入下，重构前后 GLB 必须逐字节一致（A 级硬门槛）。
 
-### 关键要求
-- 保持现有行为与输出字节契约不变；
-- 不引入额外拷贝路径。
+### 非目标（Non-Goals）
+- 不引入 gatekeeper 式双端协同基础设施（不做 evidence chain / dual-end report / policy matrix）；
+- 不扩展浏览器端为重验证主路径（不把三层完整验证并入浏览器主流程）；
+- 不在 S2 改造 verifier 体系（verifier 统一归 S3）；
+- 不改输出语义（不做 payload 解压重编码，不调整扩展挂载策略）。
 
-### 产物
-- Core 头/源文件；
-- CLI Adapter 与 WASM Adapter 的调用收敛；
-- 回归测试通过记录。
+### 冻结契约（Frozen Contracts）
+1. **输出字节契约**：`triangle/cube/near_limit/v4_ext` 上，CLI 与 WASM 产物均需与重构前 GLB `sha256` 完全一致；
+2. **payload 契约**：SPZ 压缩流保持 pass-through，不新增解压/重编码/二次封装路径；
+3. **WASM ABI 契约**：导出函数名、参数、返回语义、`reserve_input -> convert_reserved_input -> release_output` 生命周期不变；
+4. **双端职责契约**：浏览器端仅轻任务转换与轻量检查；CLI/CI 端负责三层验证与发布门禁。
 
-### 完成判定
-- 同一输入下，重构前后 GLB 二进制一致（或至少结构与关键字段一致、payload 一致）。
+### 文件拆分方案（File Split Plan）
+- 新增：`src/spz2glb_core.h`、`src/spz2glb_core.cpp`（仅承载共享转换逻辑）；
+- 保留：`src/spz_to_glb.cpp`（CLI Adapter：参数解析、文件 I/O、`--verify` 串联、退出码）；
+- 保留：`src/spz2glb_wasm_c_api.cpp`（WASM Adapter：输入预留、输出句柄、内存统计、ABI）；
+- 调整：`CMakeLists.txt` 新增 `spz2glb_core` 目标，并由 `spz2glb` / `spz2glb-wasm` 显式链接；
+- 清理：移除 WASM 端对 `spz_to_glb.cpp` 的源码级 include 复用。
+
+### 分步实施（Step-by-Step）
+1. **S2-0 基线冻结（先测后改）**：固定 4 样本，记录重构前 GLB 哈希、大小、关键元数据；
+2. **S2-1 先抽接口**：定义 Core API，CLI/WASM 先通过薄适配调用，保证可编译；
+3. **S2-2 迁移实现**：逐段迁移共享逻辑到 `spz2glb_core.cpp`，每步执行字节回归；
+4. **S2-3 断开 include 复用**：删除 `#include .cpp`，收敛到链接复用；
+5. **S2-4 回归收口**：native 快测 + browser smoke + 字节一致矩阵全通过后结束。
+
+### 硬验收矩阵（Hard Acceptance Matrix）
+| 维度 | 样本 | 执行端 | 验收标准 |
+|---|---|---|---|
+| 字节一致 | triangle/cube/near_limit/v4_ext | CLI | 重构前后 GLB `sha256` 完全一致 |
+| 字节一致 | triangle/cube/near_limit/v4_ext | WASM C API | 重构前后 GLB `sha256` 完全一致 |
+| 结构一致 | 全样本 | `spz_verify` | Layer1/Layer2/Layer3 全通过 |
+| ABI 稳定 | 固定调用序列 | Browser/WASM | 现有 `docs/examples/spz2glb_bindings.js` 无改动可通过 smoke |
+| 职责边界 | N/A | 设计审查 | 浏览器仍轻任务，CLI/CI 仍重验证 |
+
+**一票否决项（任一触发即 S2 不通过）**
+- 任一样本任一端出现字节不一致；
+- 任一现有 WASM API 行为破坏；
+- 引入新的 payload 拷贝/重编码路径；
+- 浏览器端职责扩张为重验证主路径。
 
 ---
 

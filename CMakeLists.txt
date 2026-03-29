@@ -37,6 +37,18 @@ else()
   )
 endif()
 
+add_library(spz2glb_core
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/spz2glb_core.cpp
+)
+
+target_link_libraries(spz2glb_core PUBLIC fastgltf)
+
+if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+  target_compile_definitions(spz2glb_core PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+endif()
+
+target_compile_options(spz2glb_core PRIVATE ${STRICT_WARNINGS})
+
 # ============================================================
 # 原生构建 (非 WASM)
 # ============================================================
@@ -75,7 +87,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
-  target_link_libraries(spz2glb PRIVATE fastgltf ZLIB::ZLIB)
+  target_link_libraries(spz2glb PRIVATE spz2glb_core fastgltf ZLIB::ZLIB)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
@@ -125,7 +137,7 @@ if(SPZ2GLB_BUILD_WASM)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz2glb_wasm_c_api.cpp
   )
 
-  target_link_libraries(spz2glb-wasm PRIVATE fastgltf)
+  target_link_libraries(spz2glb-wasm PRIVATE spz2glb_core fastgltf)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)

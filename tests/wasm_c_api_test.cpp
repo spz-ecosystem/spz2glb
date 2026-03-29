@@ -1,4 +1,5 @@
 #include "../src/spz2glb_wasm_c_api.h"
+#include "../src/spz2glb_core.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -9,7 +10,6 @@
 
 #include <zlib.h>
 
-bool convertSpzToGlbCore(const uint8_t* spzData, size_t spzSize, std::vector<std::byte>& glbData);
 
 namespace {
 
@@ -134,7 +134,10 @@ int main() {
     CHECK(spz2glb_convert_reserved_input(spzData.size(), &output, &outSize) == 1);
     CHECK(output != nullptr);
     CHECK(outSize > 0);
+    CHECK(outSize == coreOutput.size());
+    CHECK(std::memcmp(output, coreOutput.data(), outSize) == 0);
     CHECK(spz2glb_validate_header(output, outSize));
+
 
     spz2glb_get_memory_stats(&stats);
     CHECK(stats.current_usage_bytes >= reserved + outSize);

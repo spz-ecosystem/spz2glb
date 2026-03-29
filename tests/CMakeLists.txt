@@ -101,7 +101,7 @@ add_executable(wasm_c_api_test
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/spz2glb_wasm_c_api.cpp
 )
 
-target_link_libraries(wasm_c_api_test PRIVATE fastgltf ZLIB::ZLIB)
+target_link_libraries(wasm_c_api_test PRIVATE spz2glb_core fastgltf ZLIB::ZLIB)
 
 if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(wasm_c_api_test PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
