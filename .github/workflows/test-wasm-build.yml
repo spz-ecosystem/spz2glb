@@ -136,52 +136,108 @@ jobs:
           test -f dist/spz2glb.js
           test -f dist/spz2glb.wasm
 
-          node --input-type=module << 'EOF' | tee wasm_hash_matrix.log
-          import { createHash } from 'node:crypto';
-          import { readFileSync, writeFileSync } from 'node:fs';
-          import path from 'node:path';
-          import { pathToFileURL } from 'node:url';
+          cat > hash_matrix.html << 'EOF'
+          <!doctype html>
+          <html>
+            <body>
+              <script type="module">
+                import { loadSpz2Glb } from './docs/examples/spz2glb_bindings.js';
 
-          import { loadSpz2Glb } from './docs/examples/spz2glb_bindings.js';
+                const expected = {
+                  triangle: 'e4a17655d2bfe217da5fe14fe631f74d471465525818cfec340e1084250ae793',
+                  cube: '4ee04b6625de7529ab8c9330b97d1f829bb857aa2e4342da5bd76f2882470640',
+                  near_limit: '795b0aca8c6ea3543141910c254a7e7d5aeeeb34cceab6dfecb14aff944fa303',
+                  v4_ext: 'f2e5e38288b58d27afd4bdb71623a154cd0d3f90375184045a102832985b9363',
+                };
+                const samples = Object.keys(expected);
 
-          const expected = {
-            triangle: 'e4a17655d2bfe217da5fe14fe631f74d471465525818cfec340e1084250ae793',
-            cube: '4ee04b6625de7529ab8c9330b97d1f829bb857aa2e4342da5bd76f2882470640',
-            near_limit: '795b0aca8c6ea3543141910c254a7e7d5aeeeb34cceab6dfecb14aff944fa303',
-            v4_ext: 'f2e5e38288b58d27afd4bdb71623a154cd0d3f90375184045a102832985b9363',
-          };
+                const toHex = (bytes) => Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+                const sha256Hex = async (bytes) => {
+                  const digest = await crypto.subtle.digest('SHA-256', bytes);
+                  return toHex(new Uint8Array(digest));
+                };
 
-          const samples = Object.keys(expected);
-          const wasmUrl = pathToFileURL(path.resolve('dist/spz2glb.wasm')).href;
-          const api = await loadSpz2Glb(wasmUrl, {
-            print: () => {},
-            printErr: (text) => console.error(text),
-            locateFile: (p) => pathToFileURL(path.resolve('dist', p)).href,
+                window.__hashResult = { status: 'pending' };
+                try {
+                  const api = await loadSpz2Glb('./dist/spz2glb.wasm', {
+                    print: () => {},
+                    printErr: (text) => console.error(text),
+                  });
+                  const rows = [];
+
+                  for (const sample of samples) {
+                    const res = await fetch(`./tests/data/${sample}.spz`);
+                    if (!res.ok) throw new Error(`failed to fetch ${sample}.spz`);
+                    const input = await res.arrayBuffer();
+                    const handle = api.convert(input);
+                    if (!handle) throw new Error(`WASM convert failed: ${sample}`);
+
+                    let output;
+                    try {
+                      output = handle.getBytesView().slice();
+                    } finally {
+                      handle.release();
+                    }
+
+                    const hash = await sha256Hex(output.buffer);
+                    rows.push(`${hash}  ${sample}.glb`);
+                    if (hash !== expected[sample]) {
+                      throw new Error(`hash mismatch for ${sample}: got ${hash}, expected ${expected[sample]}`);
+                    }
+                  }
+
+                  rows.sort((a, b) => a.localeCompare(b));
+                  window.__hashResult = { status: 'ok', rows };
+                } catch (error) {
+                  window.__hashResult = {
+                    status: 'error',
+                    message: error?.message ?? String(error),
+                    stack: error?.stack ?? '',
+                  };
+                  console.error(error);
+                }
+              </script>
+            </body>
+          </html>
+          EOF
+
+          python3 -m http.server 8001 > hash_server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+
+          npm install --no-save playwright@1.53.0
+          npx playwright install --with-deps chromium
+          node << 'EOF' | tee wasm_hash_matrix.log
+          const { writeFileSync } = require('node:fs');
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage();
+            page.on('console', (msg) => console.log(`[browser:${msg.type()}] ${msg.text()}`));
+            page.on('pageerror', (err) => console.error('[pageerror]', err.stack || err.message));
+
+            await page.goto('http://127.0.0.1:8001/hash_matrix.html', { waitUntil: 'load' });
+            await page.waitForFunction(
+              () => window.__hashResult && window.__hashResult.status !== 'pending',
+              null,
+              { timeout: 120000 }
+            );
+
+            const result = await page.evaluate(() => window.__hashResult);
+            console.log(JSON.stringify(result));
+            await browser.close();
+
+            if (result.status !== 'ok') {
+              console.error(result.stack || result.message || 'wasm hash matrix failed');
+              process.exit(1);
+            }
+
+            writeFileSync('wasm_hashes.txt', `${result.rows.join('\n')}\n`);
+          })().catch((error) => {
+            console.error(error.stack || error.message);
+            process.exit(1);
           });
-
-          const rows = [];
-          for (const sample of samples) {
-            const input = readFileSync(path.resolve('tests/data', `${sample}.spz`));
-            const handle = api.convert(input);
-            if (!handle) {
-              throw new Error(`WASM convert failed: ${sample}`);
-            }
-            let output;
-            try {
-              output = Buffer.from(handle.getBytesView());
-            } finally {
-              handle.release();
-            }
-            const hash = createHash('sha256').update(output).digest('hex');
-            rows.push(`${hash}  ${sample}.glb`);
-            if (hash !== expected[sample]) {
-              throw new Error(`hash mismatch for ${sample}: got ${hash}, expected ${expected[sample]}`);
-            }
-          }
-
-          rows.sort((a, b) => a.localeCompare(b));
-          writeFileSync('wasm_hashes.txt', `${rows.join('\n')}\n`);
-          console.log(JSON.stringify({ status: 'ok', count: rows.length }));
           EOF
 
       - name: Test browser glue loading
@@ -238,8 +294,6 @@ jobs:
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
 
-          npm install --no-save playwright@1.53.0
-          npx playwright install --with-deps chromium
           node << 'EOF' | tee browser_smoke.log
           const { chromium } = require('playwright');
 
