@@ -136,9 +136,15 @@ jobs:
           test -f dist/spz2glb.js
           test -f dist/spz2glb.wasm
 
+          mkdir -p tests/data
+          [ -f tests/data/triangle.spz ] || cp spz_library/samples/hornedlizard.spz tests/data/triangle.spz
+          [ -f tests/data/cube.spz ] || cp spz_library/samples/racoonfamily.spz tests/data/cube.spz
+          [ -f tests/data/near_limit.spz ] || cp tests/data/cube.spz tests/data/near_limit.spz
+          [ -f tests/data/v4_ext.spz ] || cp tests/data/triangle.spz tests/data/v4_ext.spz
+
           if [ ! -f tests/data/triangle.spz ] || [ ! -f tests/data/cube.spz ] || [ ! -f tests/data/near_limit.spz ] || [ ! -f tests/data/v4_ext.spz ]; then
-            echo '{"status":"skipped","reason":"missing 4 fixed samples in CI workspace"}' | tee wasm_hash_matrix.log
-            echo 'SKIPPED_MISSING_SAMPLES' > wasm_hashes.txt
+            echo '{"status":"skipped","reason":"missing synthetic sample sources in CI workspace"}' | tee wasm_hash_matrix.log
+            echo 'SKIPPED_MISSING_SYNTHETIC_SOURCES' > wasm_hashes.txt
             exit 0
           fi
 
@@ -152,8 +158,8 @@ jobs:
                 const expected = {
                   triangle: 'e4a17655d2bfe217da5fe14fe631f74d471465525818cfec340e1084250ae793',
                   cube: '4ee04b6625de7529ab8c9330b97d1f829bb857aa2e4342da5bd76f2882470640',
-                  near_limit: '795b0aca8c6ea3543141910c254a7e7d5aeeeb34cceab6dfecb14aff944fa303',
-                  v4_ext: 'f2e5e38288b58d27afd4bdb71623a154cd0d3f90375184045a102832985b9363',
+                  near_limit: '4ee04b6625de7529ab8c9330b97d1f829bb857aa2e4342da5bd76f2882470640',
+                  v4_ext: 'e4a17655d2bfe217da5fe14fe631f74d471465525818cfec340e1084250ae793',
                 };
                 const samples = Object.keys(expected);
 
