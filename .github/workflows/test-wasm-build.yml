@@ -129,6 +129,61 @@ jobs:
           echo "=== Memory Section ==="
           grep -A 5 "Memory" wasm_analysis.txt | head -10 || echo "No memory section found"
 
+      - name: Validate WASM hash matrix (4 samples)
+        run: |
+          set -euo pipefail
+          echo "=== Validate WASM hash matrix ==="
+          test -f dist/spz2glb.js
+          test -f dist/spz2glb.wasm
+
+          node --input-type=module << 'EOF' | tee wasm_hash_matrix.log
+          import { createHash } from 'node:crypto';
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import path from 'node:path';
+          import { pathToFileURL } from 'node:url';
+
+          import { loadSpz2Glb } from './docs/examples/spz2glb_bindings.js';
+
+          const expected = {
+            triangle: 'e4a17655d2bfe217da5fe14fe631f74d471465525818cfec340e1084250ae793',
+            cube: '4ee04b6625de7529ab8c9330b97d1f829bb857aa2e4342da5bd76f2882470640',
+            near_limit: '795b0aca8c6ea3543141910c254a7e7d5aeeeb34cceab6dfecb14aff944fa303',
+            v4_ext: 'f2e5e38288b58d27afd4bdb71623a154cd0d3f90375184045a102832985b9363',
+          };
+
+          const samples = Object.keys(expected);
+          const wasmUrl = pathToFileURL(path.resolve('dist/spz2glb.wasm')).href;
+          const api = await loadSpz2Glb(wasmUrl, {
+            print: () => {},
+            printErr: (text) => console.error(text),
+            locateFile: (p) => path.resolve('dist', p),
+          });
+
+          const rows = [];
+          for (const sample of samples) {
+            const input = readFileSync(path.resolve('tests/data', `${sample}.spz`));
+            const handle = api.convert(input);
+            if (!handle) {
+              throw new Error(`WASM convert failed: ${sample}`);
+            }
+            let output;
+            try {
+              output = Buffer.from(handle.getBytesView());
+            } finally {
+              handle.release();
+            }
+            const hash = createHash('sha256').update(output).digest('hex');
+            rows.push(`${hash}  ${sample}.glb`);
+            if (hash !== expected[sample]) {
+              throw new Error(`hash mismatch for ${sample}: got ${hash}, expected ${expected[sample]}`);
+            }
+          }
+
+          rows.sort((a, b) => a.localeCompare(b));
+          writeFileSync('wasm_hashes.txt', `${rows.join('\n')}\n`);
+          console.log(JSON.stringify({ status: 'ok', count: rows.length }));
+          EOF
+
       - name: Test browser glue loading
         run: |
           set -euo pipefail
@@ -223,6 +278,8 @@ jobs:
             cmake.log
             build.log
             wasm_analysis.txt
+            wasm_hash_matrix.log
+            wasm_hashes.txt
             smoke.html
             browser_server.log
             browser_smoke.log
