@@ -368,6 +368,26 @@ std::vector<uint8_t> extractSpzPayload(const std::vector<uint8_t>& glbData,
     return std::vector<uint8_t>(glbData.begin() + payloadStart, glbData.begin() + payloadEnd);
 }
 
+struct PreparedPayload {
+    ParsedGlb parsed;
+    std::vector<uint8_t> extracted;
+};
+
+bool preparePayloadForVerification(const std::vector<uint8_t>& glbData,
+                                   PreparedPayload& prepared,
+                                   std::string& err) {
+    if (!parseGlb(glbData, prepared.parsed, err)) {
+        return false;
+    }
+
+    prepared.extracted = extractSpzPayload(glbData, prepared.parsed, prepared.parsed.json, err);
+    if (!err.empty()) {
+        return false;
+    }
+
+    return true;
+}
+
 } // namespace
 
 VerifyResult Verifier::verify(const std::vector<uint8_t>& spz_data,
@@ -385,12 +405,21 @@ VerifyResult Verifier::verify_files(const std::string& spz_path,
     std::vector<uint8_t> spzData;
     std::vector<uint8_t> glbData;
 
+    auto markAllFailed = [&result](const std::string& message) {
+        result.layer1_passed = false;
+        result.layer2_passed = false;
+        result.layer3_passed = false;
+        result.layer1_detail = message;
+        result.layer2_detail = message;
+        result.layer3_detail = message;
+    };
+
     if (!readFileBytes(spz_path, spzData)) {
-        result.layer1_detail = "Cannot open SPZ file: " + spz_path;
+        markAllFailed("Cannot open SPZ file: " + spz_path);
         return result;
     }
     if (!readFileBytes(glb_path, glbData)) {
-        result.layer1_detail = "Cannot open GLB file: " + glb_path;
+        markAllFailed("Cannot open GLB file: " + glb_path);
         return result;
     }
 
@@ -399,6 +428,15 @@ VerifyResult Verifier::verify_files(const std::string& spz_path,
 
 bool Verifier::verify_layer1(const std::vector<uint8_t>& glb_data, std::string& detail) {
     return layer1_validate_glb_structure(glb_data, detail);
+}
+
+bool Verifier::verify_layer1_file(const std::string& glb_path, std::string& detail) {
+    std::vector<uint8_t> glbData;
+    if (!readFileBytes(glb_path, glbData)) {
+        detail = "Cannot open GLB file: " + glb_path;
+        return false;
+    }
+    return verify_layer1(glbData, detail);
 }
 
 bool Verifier::verify_layer2(const std::vector<uint8_t>& spz_data,
@@ -492,32 +530,24 @@ bool Verifier::layer2_verify_lossless(const std::vector<uint8_t>& spz_data,
     std::ostringstream oss;
     oss << "=== Layer 2: Payload Extraction & Byte Equality ===\n";
 
-    ParsedGlb parsed;
-    std::string parseErr;
-    if (!parseGlb(glb_data, parsed, parseErr)) {
-        oss << "[FAIL] " << parseErr << "\n";
-        detail = oss.str();
-        return false;
-    }
-
-    std::string extractErr;
-    const auto extracted = extractSpzPayload(glb_data, parsed, parsed.json, extractErr);
-    if (!extractErr.empty()) {
-        oss << "[FAIL] " << extractErr << "\n";
+    PreparedPayload prepared;
+    std::string prepareErr;
+    if (!preparePayloadForVerification(glb_data, prepared, prepareErr)) {
+        oss << "[FAIL] " << prepareErr << "\n";
         detail = oss.str();
         return false;
     }
 
     oss << "SPZ input bytes: " << spz_data.size() << "\n";
-    oss << "Extracted bytes: " << extracted.size() << "\n";
+    oss << "Extracted bytes: " << prepared.extracted.size() << "\n";
 
-    if (extracted.size() != spz_data.size()) {
+    if (prepared.extracted.size() != spz_data.size()) {
         oss << "[FAIL] size mismatch\n";
         detail = oss.str();
         return false;
     }
 
-    const auto mismatch = std::mismatch(spz_data.begin(), spz_data.end(), extracted.begin());
+    const auto mismatch = std::mismatch(spz_data.begin(), spz_data.end(), prepared.extracted.begin());
     if (mismatch.first != spz_data.end()) {
         oss << "[FAIL] byte mismatch at index " << std::distance(spz_data.begin(), mismatch.first) << "\n";
         detail = oss.str();
@@ -536,23 +566,15 @@ bool Verifier::layer3_verify_decoding(const std::vector<uint8_t>& spz_data,
     std::ostringstream oss;
     oss << "=== Layer 3: Decoding Consistency & v4 Header/Trailer Checks ===\n";
 
-    ParsedGlb parsed;
-    std::string parseErr;
-    if (!parseGlb(glb_data, parsed, parseErr)) {
-        oss << "[FAIL] " << parseErr << "\n";
+    PreparedPayload prepared;
+    std::string prepareErr;
+    if (!preparePayloadForVerification(glb_data, prepared, prepareErr)) {
+        oss << "[FAIL] " << prepareErr << "\n";
         detail = oss.str();
         return false;
     }
 
-    std::string extractErr;
-    const auto extracted = extractSpzPayload(glb_data, parsed, parsed.json, extractErr);
-    if (!extractErr.empty()) {
-        oss << "[FAIL] " << extractErr << "\n";
-        detail = oss.str();
-        return false;
-    }
-
-    if (extracted.size() != spz_data.size()) {
+    if (prepared.extracted.size() != spz_data.size()) {
         oss << "[FAIL] extracted payload size mismatch\n";
         detail = oss.str();
         return false;
@@ -560,7 +582,7 @@ bool Verifier::layer3_verify_decoding(const std::vector<uint8_t>& spz_data,
 
     SpzHeader header{};
     bool fromGzip = false;
-    if (!tryPeekSpzHeader(extracted, header, fromGzip)) {
+    if (!tryPeekSpzHeader(prepared.extracted, header, fromGzip)) {
         oss << "[FAIL] cannot parse SPZ header from extracted payload\n";
         detail = oss.str();
         return false;
@@ -572,13 +594,13 @@ bool Verifier::layer3_verify_decoding(const std::vector<uint8_t>& spz_data,
         << ", flags=0x" << std::hex << static_cast<unsigned>(header.flags) << std::dec << "\n";
 
     if (header.version >= 4) {
-        if (extracted.size() <= sizeof(SpzHeader)) {
+        if (prepared.extracted.size() <= sizeof(SpzHeader)) {
             oss << "[FAIL] v4 payload too small (no data after header)\n";
             detail = oss.str();
             return false;
         }
         oss << "[PASS] v4 payload has trailing bytes that remain skippable ("
-            << (extracted.size() - sizeof(SpzHeader)) << " bytes)\n";
+            << (prepared.extracted.size() - sizeof(SpzHeader)) << " bytes)\n";
     } else {
         oss << "[PASS] non-v4 payload (v" << header.version << ") header checks complete\n";
     }

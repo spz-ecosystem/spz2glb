@@ -5,10 +5,8 @@
 
 #include "spz_verifier.h"
 
-#include <fstream>
 #include <iostream>
 #include <string>
-#include <vector>
 
 namespace {
 
@@ -33,23 +31,8 @@ void printSummary(const spz::VerifyResult& result) {
 }
 
 bool runLayer1(spz::Verifier& verifier, const std::string& glbPath) {
-    std::vector<uint8_t> glbBytes;
-
-    std::ifstream file(glbPath, std::ios::binary | std::ios::ate);
-    if (!file) {
-        std::cerr << "[ERROR] Cannot open GLB file: " << glbPath << "\n";
-        return false;
-    }
-    const auto size = file.tellg();
-    file.seekg(0, std::ios::beg);
-    glbBytes.resize(static_cast<size_t>(size));
-    if (!glbBytes.empty() && !file.read(reinterpret_cast<char*>(glbBytes.data()), size)) {
-        std::cerr << "[ERROR] Failed to read GLB file: " << glbPath << "\n";
-        return false;
-    }
-
     std::string detail;
-    const bool ok = verifier.verify_layer1(glbBytes, detail);
+    const bool ok = verifier.verify_layer1_file(glbPath, detail);
     std::cout << detail;
     std::cout << (ok ? "[PASS] Layer 1 validation passed\n" : "[FAIL] Layer 1 validation failed\n");
     return ok;

@@ -41,6 +41,8 @@ public:
 
     // L1：仅验证 GLB 契约与结构完整性，不做字节对比。
     bool verify_layer1(const std::vector<uint8_t>& glb_data, std::string& detail);
+    // L1 文件入口：用于 CLI 直接按路径执行单层校验。
+    bool verify_layer1_file(const std::string& glb_path, std::string& detail);
     // L2：验证从 GLB 抽取出的 SPZ payload 与输入 SPZ 字节级一致。
     bool verify_layer2(const std::vector<uint8_t>& spz_data,
                        const std::vector<uint8_t>& glb_data,
