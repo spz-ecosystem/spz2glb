@@ -156,7 +156,7 @@ jobs:
           const api = await loadSpz2Glb(wasmUrl, {
             print: () => {},
             printErr: (text) => console.error(text),
-            locateFile: (p) => path.resolve('dist', p),
+            locateFile: (p) => pathToFileURL(path.resolve('dist', p)).href,
           });
 
           const rows = [];
