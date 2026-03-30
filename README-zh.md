@@ -1,6 +1,14 @@
 # spz2glb - SPZ to GLB Converter
 
-将 SPZ (Gaussian Splatting Compression) 文件转换为 glTF 2.0 GLB 格式的工具。
+**无损打包 SPZ 为 GLB 格式** —— 保持 SPZ 压缩流完整，支持“网页轻量处理 + 本地重任务”双场景协同。
+
+## 发布状态
+
+- **v2.0.0 已发布** —— 以大规模重构为主线，统一 CLI/WASM 核心链路
+- 核心定位：**无损打包**（SPZ 压缩流原封不动存入 GLB）
+- 重点增强：WASM 内存与 API 能力（预分配、显式释放、统计与双档配置）
+- 双端协同：按场景分工 —— 浏览器侧负责轻量预览/快速校验，本地 CLI 负责重任务转换/批处理/深度验证
+- 验证闭环：内置三层验证（结构/无损/解码一致性）+ 云端 browser smoke
 
 ## 📚 文档
 
@@ -16,14 +24,48 @@
   - [构建指南](https://github.com/spz-ecosystem/spz2glb/wiki/Building)
   - [贡献指南](https://github.com/spz-ecosystem/spz2glb/wiki/Contributing)
 
-## 特性
+## 核心特性
 
-- **SPZ 转 GLB**: 支持将压缩的 SPZ 文件转换为标准 GLB 格式
-- **KHR_gaussian_splatting_compression_spz_2**: 集成 SPZ_2 压缩扩展
-- **无损转换**: 压缩流模式，保持原始 SPZ 数据完整
-- **跨平台**: 支持 Windows、Linux、macOS (x64 + ARM)
-- **自动构建**: GitHub Actions 提供预编译二进制
-- **三层验证**: 完整的 C++ 验证工具确保转换正确性
+- **无损打包**: SPZ 压缩流原封不动存入 GLB，100% 字节级保真
+- **SPZ_2 扩展**: 使用 `KHR_gaussian_splatting_compression_spz_2` 标准扩展
+- **大规模重构（v2.0）**: 统一 CLI/WASM 核心链路，减少双端分叉
+- **WASM 增强**: 预分配输入、显式输出释放、内存统计、compat/perf-lite 双档
+- **双端协同（双场景分工）**: 网页侧轻量交互与快速反馈；本地 CLI 侧重批处理、大文件与重验证
+- **三层验证**: 结构验证 / 无损验证 / 解码一致性验证
+- **跨平台**: Windows、Linux、macOS (x64 + ARM)
+- **零依赖运行时**: C++17 + WASM，无额外运行时依赖
+
+## 与 `splat-transform` 的对比
+
+> 说明：这里强调的是**工具定位差异**，不是绝对优劣判断。
+
+### 核心差异一句话
+
+- **`spz2glb`**：把 SPZ **无损打包**为 GLB（SPZ 压缩流原封不动存入 GLB）
+- **`splat-transform`**：读取 SPZ 后**解压并重建**为完整高斯数据，再写入 GLB（非无损打包）
+
+### 详细对比
+
+| 维度 | `spz2glb` (v2.0) | `splat-transform` (v1.10.1) |
+|------|------------------|-----------------------------|
+| **核心定位** | **无损打包 SPZ→GLB**（保持 SPZ 压缩流完整） | **数据变换/重建工具**（支持多种格式互转与编辑） |
+| **SPZ 处理方式** | 不解压 SPZ，直接作为二进制流打包进 GLB | 读取 SPZ → 解压为完整高斯数据 → 重建 GLB |
+| **GLB 产物** | 使用 `KHR_gaussian_splatting_compression_spz_2` 扩展，内含原始 SPZ 压缩流 | 使用标准 `KHR_gaussian_splatting` 扩展，内含解压后的高斯属性数据 |
+| **数据保真** | 100% 无损（SPZ 字节级原样保留） | 解压后重建，经历编解码转换 |
+| **功能范围** | 专注 SPZ↔GLB 转换与验证 | 支持 PLY/SOG/SPZ/KSPLAT/SPLAT 等格式的读取、变换、过滤、合并、生成 |
+| **运行环境** | C++17 + WASM，无运行时依赖 | TypeScript/Node.js，依赖 WebGPU 进行 SOG 压缩 |
+| **WASM 能力** | 预分配输入、显式释放、内存统计、双档配置 | 浏览器/Node 双端，但非以发布级内存治理为核心 |
+| **验证闭环** | 内置三层验证（结构/无损/解码一致性）+ 云端 browser smoke | 单元测试 + fixture 验证 |
+
+### 适用场景建议
+
+| 场景 | 推荐工具 |
+|------|----------|
+| 需要把 SPZ **无损嵌入** GLB，保持原始压缩率 | `spz2glb` |
+| 需要在 GLB 中直接存储可渲染的高斯数据（非压缩流） | `splat-transform` |
+| 需要做 splat 变换、过滤、合并、生成等编辑操作 | `splat-transform` |
+| 需要跨多格式（SOG/KSPLAT/SPLAT 等）批量处理 | `splat-transform` |
+| 需要“网页轻量 + 本地重任务”的双场景协同与发布级验证闭环 | `spz2glb` |
 
 ## 🎬 演示
 
@@ -48,8 +90,6 @@
 ```
 
 > **注意**: 路径应该是相对路径或绝对路径指向你的文件。不要使用硬编码路径。
-
-> **Demo**: Demo 演示视频将于第一个稳定版发布之后放出，敬请期待！
 
 ### 批量处理
 
@@ -350,16 +390,17 @@ const layer3Result = verifyModule.layer3ValidateDecoding(spzBuffer, glbBuffer);
 
 ### WASM 内存配置
 
-| 设置 | 值 | 说明 |
-|------|-----|------|
-| INITIAL_MEMORY | 64MB | 初始堆大小 |
-| MAXIMUM_MEMORY | 1GB | 最大堆大小 |
+| 档位 | INITIAL_MEMORY | ALLOW_MEMORY_GROWTH | MAXIMUM_MEMORY | 说明 |
+|------|----------------|---------------------|----------------|------|
+| `compat` | 64MB | `1` | 1GB | 兼容性优先，适配更广设备 |
+| `perf-lite` | 128MB | `0` | N/A | 轻中型输入稳定内存上限 |
 
 ### 性能优化
 
 WASM 构建包含以下优化：
-- **-O3 -flto**：链接时优化
+- **-O3 + 严格告警门禁**：优化构建并保持 warning clean
 - **-fno-exceptions**：无异常开销
+- **compat/perf-lite 双档**：按运行目标配置内存行为
 - **内存池**：bump allocator 快速分配
 - **热点对象池**：固定大小对象复用
 
@@ -380,21 +421,23 @@ WASM 构建包含以下优化：
 
 ```
 spz2glb/
-├── CMakeLists.txt          # 构建配置
-├── LICENSE                 # MIT 许可证
-├── README.md               # 英文版文档
-├── README-zh.md            # 中文版文档
+├── CMakeLists.txt              # 构建配置
+├── LICENSE                     # MIT 许可证
+├── README.md / README-zh.md    # 文档
 ├── src/
-│   ├── spz_to_glb.cpp     # 转换器源码
-│   └── spz_verify.cpp     # 三层验证工具源码
-├── third_party/            # 定制版 fastgltf + simdjson
-│   ├── CMakeLists.txt
+│   ├── spz2glb_core.cpp/.h     # 核心转换逻辑（v2.0 统一入口）
+│   ├── spz2glb_wasm_c_api.cpp/.h  # WASM C API（预分配/释放/统计）
+│   ├── memory_pool.cpp/.h      # 内存池与热点对象池
+│   ├── spz_to_glb.cpp          # CLI 主入口
+│   ├── spz_verify.cpp          # 验证工具主入口
+│   ├── spz_verifier.cpp/.h     # 三层验证实现
+│   └── base64.{h,cpp}          # Base64 编解码
+├── third_party/                # 定制版 fastgltf + simdjson
 │   ├── include/fastgltf/
 │   ├── src/
-│   └── deps/simdjson/     # simdjson v4.3.1 (内置)
-└── .github/
-    └── workflows/
-        └── release.yml    # CI/CD 工作流
+│   └── deps/simdjson/         # simdjson v4.3.1 (内置)
+├── tests/                      # 测试脚本与用例
+└── .github/workflows/          # CI/CD 工作流
 ```
 
 ## 技术细节
@@ -434,23 +477,39 @@ BIN Chunk
 └── Raw SPZ compressed data
 ```
 
-## 免责声明
+## 作者与版权
 
-**本项目为个人独立开发项目。**
+- 版权所有者：**Pu Junhan**
+- 起始年份：**2026**
 
-- 本项目由作者以个人身份独立开发
-- 本项目**不隶属于**任何院校、机构或雇主
-- 本项目**非职务成果**，非院校教学成果
-- 本项目观点仅代表作者个人立场
-- MIT License 授权 - 详见 [LICENSE](LICENSE)
+## 独立作品声明
+
+本项目为作者以个人身份独立开发，不隶属于任何院校、机构或雇主。
+
+本项目依赖以下公开技术规范：
+- SPZ 文件格式（Niantic, Inc.）
+- glTF 2.0 / KHR_gaussian_splatting（Khronos Group）
+- KHR_gaussian_splatting_compression_spz_2 扩展草案（SPZ 生态公开规范）
+
+本项目与 Niantic, Inc. 及其关联方不存在隶属、代言或关联关系。
 
 ## 许可证
 
 MIT License - 详见 [LICENSE](LICENSE)
 
-## 相关项目
+## 生态定位
 
-- [fastgltf](https://github.com/spycrab/fastgltf) - 高性能 glTF 库
+`spz2glb` 是 **SPZ 生态下游项目**，与上游 `spz_gatekeeper`（门卫）的关系如下：
+
+- **门卫（上游）**：负责 SPZ 格式合法性、扩展兼容性与治理规范（L2 校验、TLV 扩展登记、合规审查）。
+- **`spz2glb`（下游）**：负责将合规的 SPZ 文件无损打包为 GLB，遵循门卫给出的兼容性约束。
+
+> 一句话：**门卫管“准入与标准”，`spz2glb` 管“转换与交付”。**
+
+相关项目：
+
+- [spz_gatekeeper](https://github.com/spz-ecosystem/spz_gatekeeper) - SPZ 门卫：格式合法性校验与生态治理
+- [fastgltf](https://github.com/spnda/fastgltf) - 高性能 glTF 库（作者：Sean Apeler，MIT 许可证）
 - [simdjson](https://github.com/simdjson/simdjson) - 极速 JSON 解析库 v4.3.1
 - [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting 扩展
 
