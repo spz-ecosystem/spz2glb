@@ -154,12 +154,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Download HTML files
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Prepare Pages root from repository
         run: |
-          mkdir -p docs/examples
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/index.html -o index.html
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/spz2glb_bindings.js -o spz2glb_bindings.js
-          curl -sL https://raw.githubusercontent.com/spz-ecosystem/spz2glb/main/docs/examples/smart_memory.js -o smart_memory.js
+          cp docs/examples/index.html .
+          cp docs/examples/spz2glb_bindings.js .
+          cp docs/examples/smart_memory.js .
           ls -la
 
       - name: Download WASM artifacts

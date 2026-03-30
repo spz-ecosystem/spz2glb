@@ -35,8 +35,10 @@
 #include <fastgltf/types.hpp>
 
 #ifdef __EMSCRIPTEN__
-#include <emscripten/bind.h>
 #include "emscripten_utils.h"
+#if !defined(SPZ2GLB_DISABLE_EMBIND)
+#include <emscripten/bind.h>
+#endif
 #endif
 
 enum class SpzErrorCode {
@@ -425,7 +427,7 @@ bool convertSpzToGlbCore(std::vector<uint8_t> spzData, std::vector<uint8_t>& glb
     return true;
 }
 
-#ifdef __EMSCRIPTEN__
+#if defined(__EMSCRIPTEN__) && !defined(SPZ2GLB_DISABLE_EMBIND)
 
 /**
  * WASM 导出函数：SPZ 转 GLB
@@ -457,7 +459,7 @@ EMSCRIPTEN_BINDINGS(spz2glb_module) {
     emscripten::function("getMemoryStats", &spz2glb::getMemoryStats);
 }
 
-#else  // __EMSCRIPTEN__
+#else  // __EMSCRIPTEN__ && !SPZ2GLB_DISABLE_EMBIND
 
 #include "spz_verifier.h"
 

@@ -103,6 +103,7 @@ if(SPZ2GLB_BUILD_WASM)
   )
 
   target_link_libraries(spz2glb-wasm PRIVATE fastgltf)
+  target_compile_definitions(spz2glb-wasm PRIVATE SPZ2GLB_DISABLE_EMBIND=1)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
