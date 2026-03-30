@@ -229,14 +229,13 @@
 | 2 | 23722763905 | 失败（`Build WASM (compat/perf-lite)` 在 `Build spz_verify WASM` 步骤失败） | 仅产出 CLI/verify artifacts；`deploy-pages`/`release` 跳过 | 旧版 workflow |
 | 3 | 23722773318 | 失败（`Build WASM (compat/perf-lite)` 在 `Build spz_verify WASM` 步骤失败） | 仅产出 CLI/verify artifacts；`deploy-pages`/`release` 跳过 | 旧版 workflow |
 | 4 | 23723621721 | 失败（`Build WASM (compat/perf-lite)` 在 `Build spz_verify WASM` 步骤失败；`rollback-manifest` 因 `Find previous stable run` 失败） | CLI/verify 产物正常；`verify-native` 通过（`ctest`+`quick_test`）；`deploy-pages`/`release` 跳过；无 `pages-audit`/`release-sha256.txt` | `rollback-manifest` 失败，未生成回滚产物 |
+| 5 | 23723995087 | 通过（新版修复后全链路通过） | `build`（3 OS）+ `wasm-build`（compat/perf-lite）+ `verify-native` + `deploy-pages` 全绿；产物包含 `pages-audit` 与 `github-pages`；`release` 因非 tag 跳过 | `rollback-manifest` 按预期跳过（无失败触发） |
 
-> 23723621721 artifacts：`spz2glb-{linux-x64,macos-x64,windows-x64.exe}`、`{ubuntu-latest,macos-latest,windows-latest}-verify`。
+> 23723995087 artifacts：`spz2glb-{linux-x64,macos-x64,windows-x64.exe}`、`{ubuntu-latest,macos-latest,windows-latest}-verify`、`wasm-modules-{compat,perf-lite}`、`pages-audit`、`github-pages`。
 >
-> 关键成功：`build`（3 OS）、`verify-native`（`ctest`+`quick_test` 全绿）。
->
-> 关键失败：`wasm-build`（`spz_verify` WASM 编译失败）、`rollback-manifest`（GitHub Script 查找上一稳定 run 失败）。
->
-> 说明：`verify-native` 门禁已生效，但 `wasm-build` 与 `rollback-manifest` 仍需修复才能形成完整门禁链。
+> 关键修复：
+> 1) `src/spz_verifier.cpp` 用 `std::from_chars` 替代异常路径，消除 wasm exceptions-disabled 编译失败；
+> 2) `rollback-manifest` 改为 repo 级 run 查询并补 `actions: read` 权限，避免 `Find previous stable run` 步骤异常。
 
 
 ---
