@@ -220,9 +220,26 @@
 - 任意单点失败可按预案回滚，不影响上一稳定发布结果。
 
 
+
+### S4 执行记录（持续回填）
+
+| 次数 | run-id | 结论 | 产物一致性 | 回滚点 |
+|---|---:|---|---|---|
+| 1 | 23713232496 | 失败（已定位并修复 YAML `pattern` 引号问题） | 未形成完整链路（流程解析失败） | 参考上一稳定成功 run（由 `rollback-manifest` 自动记录） |
+| 2 | 23722763905 | 失败（`Build WASM (compat/perf-lite)` 在 `Build spz_verify WASM` 步骤失败） | 仅产出 CLI/verify artifacts；`deploy-pages`/`release` 跳过，未生成 `pages-audit`/`release-sha256.txt` | 旧版 workflow 无 `rollback-manifest` 自动产物 |
+| 3 | 23722773318 | 失败（`Build WASM (compat/perf-lite)` 在 `Build spz_verify WASM` 步骤失败） | 仅产出 CLI/verify artifacts；`deploy-pages`/`release` 跳过，未生成 `pages-audit`/`release-sha256.txt` | 旧版 workflow 无 `rollback-manifest` 自动产物 |
+
+> 23722763905 artifacts：`spz2glb-{linux-x64,macos-x64,windows-x64.exe}`、`{ubuntu-latest,macos-latest,windows-latest}-verify`。
+>
+> 23722773318 artifacts：`spz2glb-{linux-x64,macos-x64,windows-x64.exe}`、`{ubuntu-latest,macos-latest,windows-latest}-verify`。
+>
+> 说明：以上两次为远端旧版 `release.yml` 执行结果；本地新增 `verify-native`/`rollback_run_id`/`rollback-manifest` 尚未推送到远端，需在推送后再复跑两次以形成新版门禁证据链。
+
+
 ---
 
 ## S5：量化验收与收口声明（0.5 天）
+
 
 ### 任务
 1. 对比基线与收口后结果；
