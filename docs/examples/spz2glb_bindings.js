@@ -4,22 +4,21 @@
  */
 
 export async function loadSpz2Glb(wasmUrl, options = {}) {
-    // Import the Emscripten-generated JS glue code
-    const moduleUrl = wasmUrl.replace('.wasm', '.js');
-    
-    try {
-        // Dynamic import of the Emscripten module
+    const loadOnce = async (url) => {
+        const moduleUrl = url.replace('.wasm', '.js');
         const { default: createModule } = await import(moduleUrl);
-        
-        // Create module instance
+
         const module = await createModule({
             print: (text) => console.log('[WASM]', text),
             printErr: (text) => console.error('[WASM]', text),
         });
-        
-        // Get exported functions
+
+        if (!module || !module.HEAPU8 || !module.HEAPU8.buffer) {
+            throw new Error('WASM runtime not initialized (HEAPU8 missing)');
+        }
+
         const exports = module.asm || module;
-        
+
         return {
             validateHeader: (buffer) => {
                 const [ptr, size] = writeBuffer(module, buffer);
@@ -27,32 +26,32 @@ export async function loadSpz2Glb(wasmUrl, options = {}) {
                 freeBuffer(module, ptr);
                 return result;
             },
-            
+
             convert: (spzBuffer) => {
                 const [inputPtr, inputSize] = writeBuffer(module, spzBuffer);
                 const outSizePtr = exports._spz2glb_alloc(8);
                 const resultPtr = exports._spz2glb_convert(inputPtr, inputSize, outSizePtr);
                 freeBuffer(module, inputPtr);
-                
+
                 if (!resultPtr) {
                     freeBuffer(module, outSizePtr);
                     return null;
                 }
-                
+
                 const heapU32 = new Uint32Array(module.HEAPU8.buffer);
                 const outSize = heapU32[outSizePtr / 4];
                 freeBuffer(module, outSizePtr);
-                
+
                 if (!outSize) {
                     exports._spz2glb_free(resultPtr);
                     return null;
                 }
-                
+
                 const result = readBuffer(module, resultPtr, outSize);
                 exports._spz2glb_free(resultPtr);
                 return result;
             },
-            
+
             getVersion: () => {
                 const ptr = exports._spz2glb_alloc(12);
                 exports._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
@@ -61,13 +60,25 @@ export async function loadSpz2Glb(wasmUrl, options = {}) {
                 freeBuffer(module, ptr);
                 return version;
             },
-            
-            // Expose module for advanced usage
+
             module: module
         };
+    };
+
+    try {
+        return await loadOnce(wasmUrl);
     } catch (err) {
-        console.error('Failed to load WASM module:', err);
-        throw err;
+        const msg = String(err && err.message ? err.message : err);
+        const shouldRetry = msg.includes('buffer') || msg.includes('HEAPU8') || msg.includes('_embind_register_function');
+        if (!shouldRetry) {
+            console.error('Failed to load WASM module:', err);
+            throw err;
+        }
+
+        const sep = wasmUrl.includes('?') ? '&' : '?';
+        const retryUrl = `${wasmUrl}${sep}v=${Date.now()}`;
+        console.warn('Retrying WASM load with cache-busting URL:', retryUrl);
+        return await loadOnce(retryUrl);
     }
 }
 
