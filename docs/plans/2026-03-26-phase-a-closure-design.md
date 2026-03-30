@@ -226,14 +226,17 @@
 | 次数 | run-id | 结论 | 产物一致性 | 回滚点 |
 |---|---:|---|---|---|
 | 1 | 23713232496 | 失败（已定位并修复 YAML `pattern` 引号问题） | 未形成完整链路（流程解析失败） | 参考上一稳定成功 run（由 `rollback-manifest` 自动记录） |
-| 2 | 23722763905 | 失败（`Build WASM (compat/perf-lite)` 在 `Build spz_verify WASM` 步骤失败） | 仅产出 CLI/verify artifacts；`deploy-pages`/`release` 跳过，未生成 `pages-audit`/`release-sha256.txt` | 旧版 workflow 无 `rollback-manifest` 自动产物 |
-| 3 | 23722773318 | 失败（`Build WASM (compat/perf-lite)` 在 `Build spz_verify WASM` 步骤失败） | 仅产出 CLI/verify artifacts；`deploy-pages`/`release` 跳过，未生成 `pages-audit`/`release-sha256.txt` | 旧版 workflow 无 `rollback-manifest` 自动产物 |
+| 2 | 23722763905 | 失败（`Build WASM (compat/perf-lite)` 在 `Build spz_verify WASM` 步骤失败） | 仅产出 CLI/verify artifacts；`deploy-pages`/`release` 跳过 | 旧版 workflow |
+| 3 | 23722773318 | 失败（`Build WASM (compat/perf-lite)` 在 `Build spz_verify WASM` 步骤失败） | 仅产出 CLI/verify artifacts；`deploy-pages`/`release` 跳过 | 旧版 workflow |
+| 4 | 23723621721 | 失败（`Build WASM (compat/perf-lite)` 在 `Build spz_verify WASM` 步骤失败；`rollback-manifest` 因 `Find previous stable run` 失败） | CLI/verify 产物正常；`verify-native` 通过（`ctest`+`quick_test`）；`deploy-pages`/`release` 跳过；无 `pages-audit`/`release-sha256.txt` | `rollback-manifest` 失败，未生成回滚产物 |
 
-> 23722763905 artifacts：`spz2glb-{linux-x64,macos-x64,windows-x64.exe}`、`{ubuntu-latest,macos-latest,windows-latest}-verify`。
+> 23723621721 artifacts：`spz2glb-{linux-x64,macos-x64,windows-x64.exe}`、`{ubuntu-latest,macos-latest,windows-latest}-verify`。
 >
-> 23722773318 artifacts：`spz2glb-{linux-x64,macos-x64,windows-x64.exe}`、`{ubuntu-latest,macos-latest,windows-latest}-verify`。
+> 关键成功：`build`（3 OS）、`verify-native`（`ctest`+`quick_test` 全绿）。
 >
-> 说明：以上两次为远端旧版 `release.yml` 执行结果；本地新增 `verify-native`/`rollback_run_id`/`rollback-manifest` 尚未推送到远端，需在推送后再复跑两次以形成新版门禁证据链。
+> 关键失败：`wasm-build`（`spz_verify` WASM 编译失败）、`rollback-manifest`（GitHub Script 查找上一稳定 run 失败）。
+>
+> 说明：`verify-native` 门禁已生效，但 `wasm-build` 与 `rollback-manifest` 仍需修复才能形成完整门禁链。
 
 
 ---

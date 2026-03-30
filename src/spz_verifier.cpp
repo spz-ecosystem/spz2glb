@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -221,11 +222,15 @@ bool parseUnsignedAfterKey(const std::string& json, const std::string& key, uint
         ++end;
     }
 
-    try {
-        value = static_cast<uint32_t>(std::stoul(json.substr(pos, end - pos)));
-    } catch (...) {
+    uint32_t parsed = 0;
+    const char* begin = json.data() + pos;
+    const char* finish = json.data() + end;
+    const auto [ptr, ec] = std::from_chars(begin, finish, parsed);
+    if (ec != std::errc() || ptr != finish) {
         return false;
     }
+
+    value = parsed;
     return true;
 }
 

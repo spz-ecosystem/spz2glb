@@ -17,6 +17,7 @@ on:
         default: ''
 
 permissions:
+  actions: read
   contents: write
   pages: write
   id-token: write
@@ -331,16 +332,16 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const workflow_id = context.workflow;
-            const res = await github.rest.actions.listWorkflowRuns({
+            const res = await github.rest.actions.listWorkflowRunsForRepo({
               owner,
               repo,
-              workflow_id,
               status: 'completed',
-              per_page: 30
+              per_page: 100
             });
             const stable = res.data.workflow_runs.find(r =>
-              r.conclusion === 'success' && r.id !== context.runId
+              r.name === context.workflow &&
+              r.conclusion === 'success' &&
+              r.id !== context.runId
             );
             core.setOutput('run_id', stable ? String(stable.id) : '');
             core.setOutput('head_sha', stable ? String(stable.head_sha) : '');
