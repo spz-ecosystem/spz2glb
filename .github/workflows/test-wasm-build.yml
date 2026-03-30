@@ -4,18 +4,31 @@ name: Test WASM Build
 
 on:
   workflow_dispatch:
+    inputs:
+      run_private_fixed_samples:
+        description: 'Run fixed 4-sample hash + Layer1/2/3 on self-hosted runner'
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
+      - phase5-browser-lifecycle-20260325
     paths:
       - 'CMakeLists.txt'
       - 'src/**'
+      - 'docs/examples/**'
+      - 'tests/**'
       - '.github/workflows/test-wasm-build.yml'
 
 jobs:
   test-wasm-build:
-    name: Test WASM Build with Logging
+    name: Test WASM Build with Logging (${{ matrix.wasm_profile }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        wasm_profile: [compat, perf-lite]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -34,119 +47,496 @@ jobs:
 
       - name: Configure WASM build
         run: |
+          set -euo pipefail
           echo "=== CMake Configuration ==="
-          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON 2>&1 | tee cmake.log
+          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_WASM_PROFILE=${{ matrix.wasm_profile }} -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON 2>&1 | tee cmake.log
 
       - name: Build spz2glb WASM (verbose)
         run: |
+          set -euo pipefail
           echo "=== WASM Build Output ==="
           emmake cmake --build build_wasm --config Release --target spz2glb-wasm --verbose 2>&1 | tee build.log
           echo ""
           echo "=== Build Warnings/Errors Summary ==="
           grep -iE "(warning|error)" build.log | head -20 || echo "No warnings/errors found"
 
+      - name: Locate WASM artifacts
+        run: |
+          echo "=== Locate WASM Artifacts ==="
+          echo "[debug] candidate wasm files:"
+          find . -type f -name '*.wasm' | sort || true
+
+          WASM_FILE=$(find . -type f -name '*.wasm' | grep -E 'spz2glb(-wasm)?\.wasm$|spz2glb\.wasm$' | head -n 1 || true)
+          if [ -z "$WASM_FILE" ]; then
+            WASM_FILE=$(find . -type f -name '*spz2glb*.wasm' | head -n 1 || true)
+          fi
+
+          if [ -z "$WASM_FILE" ]; then
+            echo "❌ spz2glb wasm artifact not found"
+            echo "[debug] dist dirs:"
+            find . -type d -name dist -print || true
+            echo "[debug] build_wasm tree (depth 3):"
+            find build_wasm -maxdepth 3 -print || true
+            exit 1
+          fi
+
+          WASM_DIR=$(dirname "$WASM_FILE")
+          echo "WASM_FILE=$WASM_FILE" >> "$GITHUB_ENV"
+          echo "WASM_DIR=$WASM_DIR" >> "$GITHUB_ENV"
+
+          mkdir -p dist
+
+          copy_if_needed() {
+            local src="$1"
+            local dst="$2"
+            local src_abs dst_abs
+            src_abs=$(readlink -f "$src")
+            dst_abs=$(readlink -f "$dst" 2>/dev/null || true)
+            if [ -n "$dst_abs" ] && [ "$src_abs" = "$dst_abs" ]; then
+              echo "[debug] skip copy (same file): $src -> $dst"
+              return 0
+            fi
+            cp "$src" "$dst"
+          }
+
+          copy_if_needed "$WASM_FILE" dist/spz2glb.wasm
+
+          JS_CANDIDATE=$(find "$WASM_DIR" -maxdepth 1 -type f -name '*spz2glb*.js' | head -n 1 || true)
+          if [ -n "$JS_CANDIDATE" ]; then
+            copy_if_needed "$JS_CANDIDATE" dist/spz2glb.js
+          fi
+
+          DATA_CANDIDATE=$(find "$WASM_DIR" -maxdepth 1 -type f -name '*spz2glb*.data' | head -n 1 || true)
+          if [ -n "$DATA_CANDIDATE" ]; then
+            copy_if_needed "$DATA_CANDIDATE" dist/spz2glb.data
+          fi
+
+          ls -la "$WASM_DIR"
+          ls -la dist/
+
       - name: Analyze WASM imports/exports
         run: |
           echo "=== WASM File Info ==="
           ls -la dist/
-          
+
           echo ""
           echo "=== WASM Full Analysis (wasm-objdump) ==="
           wasm-objdump -x dist/spz2glb.wasm 2>/dev/null | tee wasm_analysis.txt || echo "wasm-objdump failed"
-          
+
           echo ""
           echo "=== Import Section ==="
           grep -A 20 "Import" wasm_analysis.txt | head -25 || echo "No imports found"
-          
+
           echo ""
           echo "=== Export Section ==="
           grep -A 30 "Export" wasm_analysis.txt | head -35 || echo "No exports found"
-          
+
           echo ""
           echo "=== Memory Section ==="
           grep -A 5 "Memory" wasm_analysis.txt | head -10 || echo "No memory section found"
 
-      - name: Test WASM instantiation
+      - name: Validate WASM hash matrix (4 samples)
         run: |
-          echo "=== Testing WASM Instantiation ==="
-          cat > test_wasm.js << 'EOF'
-          const fs = require('fs');
-          
-          async function testWasm() {
-              try {
-                  const buffer = fs.readFileSync('./dist/spz2glb.wasm');
-                  console.log('✓ WASM file size:', buffer.length, 'bytes');
-                  
-                  // Analyze WASM imports first
-                  const wasmModule = await WebAssembly.compile(buffer);
-                  const imports = WebAssembly.Module.imports(wasmModule);
-                  console.log('✓ WASM imports:', imports.length);
-                  imports.forEach((imp, i) => {
-                      console.log(`  Import ${i}: ${imp.module}.${imp.name} (${imp.kind})`);
+          set -euo pipefail
+          echo "=== Validate WASM hash matrix ==="
+          test -f dist/spz2glb.js
+          test -f dist/spz2glb.wasm
+
+          if [ ! -f tests/data/triangle.spz ] || [ ! -f tests/data/cube.spz ] || [ ! -f tests/data/near_limit.spz ] || [ ! -f tests/data/v4_ext.spz ]; then
+            echo '{"status":"skipped","reason":"missing 4 fixed samples in CI workspace"}' | tee wasm_hash_matrix.log
+            echo 'SKIPPED_MISSING_SAMPLES' > wasm_hashes.txt
+            exit 0
+          fi
+
+          cat > hash_matrix.html << 'EOF'
+          <!doctype html>
+          <html>
+            <body>
+              <script type="module">
+                import { loadSpz2Glb } from './docs/examples/spz2glb_bindings.js';
+
+                const expected = {
+                  triangle: 'e4a17655d2bfe217da5fe14fe631f74d471465525818cfec340e1084250ae793',
+                  cube: '4ee04b6625de7529ab8c9330b97d1f829bb857aa2e4342da5bd76f2882470640',
+                  near_limit: '795b0aca8c6ea3543141910c254a7e7d5aeeeb34cceab6dfecb14aff944fa303',
+                  v4_ext: 'f2e5e38288b58d27afd4bdb71623a154cd0d3f90375184045a102832985b9363',
+                };
+                const samples = Object.keys(expected);
+
+                const toHex = (bytes) => Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+                const sha256Hex = async (bytes) => {
+                  const digest = await crypto.subtle.digest('SHA-256', bytes);
+                  return toHex(new Uint8Array(digest));
+                };
+
+                window.__hashResult = { status: 'pending' };
+                try {
+                  const api = await loadSpz2Glb('/dist/spz2glb.wasm', {
+                    print: () => {},
+                    printErr: (text) => console.error(text),
                   });
-                  
-                  // Build import object based on actual imports
-                  const importObject = { env: {} };
-                  imports.forEach(imp => {
-                      if (imp.module === 'env') {
-                          if (imp.name === 'memory') {
-                              // WASM exports its own memory, we don't need to provide it
-                              console.log('  Note: WASM imports memory from env (but we will use exported memory)');
-                          } else if (imp.name === 'emscripten_notify_memory_growth') {
-                              importObject.env[imp.name] = (index) => {
-                                  console.log('[WASM] Memory growth notification, index:', index);
-                              };
-                          } else {
-                              console.warn('  Warning: Unknown import:', imp.name);
-                              importObject.env[imp.name] = () => {};
-                          }
-                      }
-                  });
-                  
-                  // Try to instantiate
-                  const { instance } = await WebAssembly.instantiate(buffer, importObject);
-                  console.log('✅ WASM instantiated successfully!');
-                  
-                  // Check exports
-                  const exports = Object.keys(instance.exports);
-                  console.log('✓ Exports:', exports.join(', '));
-                  
-                  // Check for memory export
-                  if (instance.exports.memory) {
-                      const mem = instance.exports.memory;
-                      console.log('✓ WASM-managed memory:', mem.buffer.byteLength, 'bytes initial');
+                  const rows = [];
+
+                  for (const sample of samples) {
+                    const res = await fetch(`./tests/data/${sample}.spz`);
+                    if (!res.ok) throw new Error(`failed to fetch ${sample}.spz`);
+                    const input = await res.arrayBuffer();
+                    const handle = api.convert(input);
+                    if (!handle) throw new Error(`WASM convert failed: ${sample}`);
+
+                    let output;
+                    try {
+                      output = handle.getBytesView().slice();
+                    } finally {
+                      handle.release();
+                    }
+
+                    const hash = await sha256Hex(output.buffer);
+                    rows.push(`${hash}  ${sample}.glb`);
+                    if (hash !== expected[sample]) {
+                      throw new Error(`hash mismatch for ${sample}: got ${hash}, expected ${expected[sample]}`);
+                    }
                   }
-                  
-                  // Test version function
-                  if (instance.exports._spz2glb_get_version && instance.exports._spz2glb_alloc) {
-                      const ptr = instance.exports._spz2glb_alloc(12);
-                      instance.exports._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
-                      const heapU32 = new Uint32Array(instance.exports.memory.buffer);
-                      const version = `${heapU32[ptr/4]}.${heapU32[ptr/4+1]}.${heapU32[ptr/4+2]}`;
-                      console.log('✅ Version:', version);
-                      instance.exports._spz2glb_free(ptr);
-                  }
-                  
-                  return true;
-              } catch (err) {
-                  console.error('❌ WASM instantiation failed:', err.message);
-                  console.error(err.stack);
-                  return false;
-              }
-          }
-          
-          testWasm().then(success => process.exit(success ? 0 : 1));
+
+                  rows.sort((a, b) => a.localeCompare(b));
+                  window.__hashResult = { status: 'ok', rows };
+                } catch (error) {
+                  window.__hashResult = {
+                    status: 'error',
+                    message: error?.message ?? String(error),
+                    stack: error?.stack ?? '',
+                  };
+                  console.error(error);
+                }
+              </script>
+            </body>
+          </html>
           EOF
-          
-          node test_wasm.js
+
+          python3 -m http.server 8001 > hash_server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+
+          npm install --no-save playwright@1.53.0
+          npx playwright install --with-deps chromium
+          node << 'EOF' | tee wasm_hash_matrix.log
+          const { writeFileSync } = require('node:fs');
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage();
+            page.on('console', (msg) => console.log(`[browser:${msg.type()}] ${msg.text()}`));
+            page.on('pageerror', (err) => console.error('[pageerror]', err.stack || err.message));
+
+            await page.goto('http://127.0.0.1:8001/hash_matrix.html', { waitUntil: 'load' });
+            await page.waitForFunction(
+              () => window.__hashResult && window.__hashResult.status !== 'pending',
+              null,
+              { timeout: 120000 }
+            );
+
+            const result = await page.evaluate(() => window.__hashResult);
+            console.log(JSON.stringify(result));
+            await browser.close();
+
+            if (result.status !== 'ok') {
+              console.error(result.stack || result.message || 'wasm hash matrix failed');
+              process.exit(1);
+            }
+
+            writeFileSync('wasm_hashes.txt', `${result.rows.join('\n')}\n`);
+          })().catch((error) => {
+            console.error(error.stack || error.message);
+            process.exit(1);
+          });
+          EOF
+
+      - name: Test browser glue loading
+        run: |
+          set -euo pipefail
+          echo "=== Testing browser glue loading ==="
+          test -f dist/spz2glb.js
+          test -f dist/spz2glb.wasm
+
+          cat > smoke.html << 'EOF'
+          <!doctype html>
+          <html>
+            <body>
+              <script type="module">
+                import createSpz2glbModule from './dist/spz2glb.js';
+
+                window.__smokeResult = { status: 'pending' };
+
+                try {
+                  const module = await createSpz2glbModule({
+                    locateFile(path) {
+                      return path.endsWith('.wasm') ? './dist/spz2glb.wasm' : path;
+                    },
+                    print() {},
+                    printErr(text) {
+                      console.error(text);
+                    },
+                  });
+
+                  const ptr = module._spz2glb_alloc(12);
+                  module._spz2glb_get_version(ptr, ptr + 4, ptr + 8);
+                  const version = `${module.getValue(ptr, 'i32')}.${module.getValue(ptr + 4, 'i32')}.${module.getValue(ptr + 8, 'i32')}`;
+                  module._spz2glb_free(ptr);
+
+                  window.__smokeResult = {
+                    status: 'ok',
+                    version,
+                    exports: Object.keys(module).filter((key) => key.startsWith('_')).slice(0, 10),
+                  };
+                } catch (error) {
+                  window.__smokeResult = {
+                    status: 'error',
+                    message: error?.message ?? String(error),
+                    stack: error?.stack ?? '',
+                  };
+                  console.error(error);
+                }
+              </script>
+            </body>
+          </html>
+          EOF
+
+          python3 -m http.server 8000 > browser_server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+
+          npm install --no-save playwright@1.53.0
+          npx playwright install --with-deps chromium
+          node << 'EOF' | tee browser_smoke.log
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage();
+            page.on('console', (msg) => console.log(`[browser:${msg.type()}] ${msg.text()}`));
+            page.on('pageerror', (err) => console.error('[pageerror]', err.stack || err.message));
+
+            await page.goto('http://127.0.0.1:8000/smoke.html', { waitUntil: 'load' });
+            await page.waitForFunction(
+              () => window.__smokeResult && window.__smokeResult.status !== 'pending',
+              null,
+              { timeout: 30000 }
+            );
+
+            const result = await page.evaluate(() => window.__smokeResult);
+            console.log(JSON.stringify(result));
+            await browser.close();
+
+            if (result.status !== 'ok') {
+              console.error(result.stack || result.message || 'browser glue smoke failed');
+              process.exit(1);
+            }
+          })().catch((error) => {
+            console.error(error.stack || error.message);
+            process.exit(1);
+          });
+          EOF
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: wasm-build-logs
+          name: wasm-build-logs-${{ matrix.wasm_profile }}
           path: |
             cmake.log
             build.log
             wasm_analysis.txt
-            test_wasm.js
-            dist/spz2glb.wasm
+            wasm_hash_matrix.log
+            wasm_hashes.txt
+            smoke.html
+            browser_server.log
+            browser_smoke.log
+            dist/
+            build_wasm/dist/
+
+  private-fixed-samples-validation:
+    name: Private fixed-samples verification (self-hosted)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_private_fixed_samples == true }}
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install wabt tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y wabt
+
+      - name: Verify fixed samples mounted
+        run: |
+          set -euo pipefail
+          for sample in triangle cube near_limit v4_ext; do
+            test -f "tests/data/${sample}.spz" || { echo "missing tests/data/${sample}.spz"; exit 1; }
+          done
+
+      - name: Build native CLI tools
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --target spz2glb spz_verify
+
+      - name: Validate Layer1/2/3 on fixed samples
+        run: |
+          set -euo pipefail
+          mkdir -p tests/output
+          : > fixed_samples_layer_verify.log
+          : > fixed_samples_cli_hashes.txt
+          for sample in triangle cube near_limit v4_ext; do
+            ./dist/spz2glb "tests/data/${sample}.spz" "tests/output/${sample}.glb" | tee -a fixed_samples_layer_verify.log
+            ./dist/spz_verify all "tests/data/${sample}.spz" "tests/output/${sample}.glb" | tee -a fixed_samples_layer_verify.log
+          done
+          sha256sum tests/output/triangle.glb tests/output/cube.glb tests/output/near_limit.glb tests/output/v4_ext.glb | awk '{print $1"  "$2}' > fixed_samples_cli_hashes.txt
+
+      - name: Build WASM
+        run: |
+          set -euo pipefail
+          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_WASM_PROFILE=compat -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
+          emmake cmake --build build_wasm --config Release --target spz2glb-wasm --verbose
+
+      - name: Locate WASM artifacts
+        run: |
+          set -euo pipefail
+          WASM_FILE=$(find . -type f -name '*.wasm' | grep -E 'spz2glb(-wasm)?\.wasm$|spz2glb\.wasm$' | head -n 1 || true)
+          test -n "$WASM_FILE"
+          WASM_DIR=$(dirname "$WASM_FILE")
+          mkdir -p dist
+          cp "$WASM_FILE" dist/spz2glb.wasm
+          JS_CANDIDATE=$(find "$WASM_DIR" -maxdepth 1 -type f -name '*spz2glb*.js' | head -n 1 || true)
+          test -n "$JS_CANDIDATE"
+          cp "$JS_CANDIDATE" dist/spz2glb.js
+
+      - name: Validate WASM hash matrix (fixed samples)
+        run: |
+          set -euo pipefail
+          cat > hash_matrix.html << 'EOF'
+          <!doctype html>
+          <html>
+            <body>
+              <script type="module">
+                import { loadSpz2Glb } from './docs/examples/spz2glb_bindings.js';
+
+                const expected = {
+                  triangle: 'e4a17655d2bfe217da5fe14fe631f74d471465525818cfec340e1084250ae793',
+                  cube: '4ee04b6625de7529ab8c9330b97d1f829bb857aa2e4342da5bd76f2882470640',
+                  near_limit: '795b0aca8c6ea3543141910c254a7e7d5aeeeb34cceab6dfecb14aff944fa303',
+                  v4_ext: 'f2e5e38288b58d27afd4bdb71623a154cd0d3f90375184045a102832985b9363',
+                };
+                const samples = Object.keys(expected);
+
+                const toHex = (bytes) => Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+                const sha256Hex = async (bytes) => {
+                  const digest = await crypto.subtle.digest('SHA-256', bytes);
+                  return toHex(new Uint8Array(digest));
+                };
+
+                window.__hashResult = { status: 'pending' };
+                try {
+                  const api = await loadSpz2Glb('/dist/spz2glb.wasm', {
+                    print: () => {},
+                    printErr: (text) => console.error(text),
+                  });
+                  const rows = [];
+
+                  for (const sample of samples) {
+                    const res = await fetch(`./tests/data/${sample}.spz`);
+                    if (!res.ok) throw new Error(`failed to fetch ${sample}.spz`);
+                    const input = await res.arrayBuffer();
+                    const handle = api.convert(input);
+                    if (!handle) throw new Error(`WASM convert failed: ${sample}`);
+
+                    let output;
+                    try {
+                      output = handle.getBytesView().slice();
+                    } finally {
+                      handle.release();
+                    }
+
+                    const hash = await sha256Hex(output.buffer);
+                    rows.push(`${hash}  ${sample}.glb`);
+                    if (hash !== expected[sample]) {
+                      throw new Error(`hash mismatch for ${sample}: got ${hash}, expected ${expected[sample]}`);
+                    }
+                  }
+
+                  rows.sort((a, b) => a.localeCompare(b));
+                  window.__hashResult = { status: 'ok', rows };
+                } catch (error) {
+                  window.__hashResult = {
+                    status: 'error',
+                    message: error?.message ?? String(error),
+                    stack: error?.stack ?? '',
+                  };
+                  console.error(error);
+                }
+              </script>
+            </body>
+          </html>
+          EOF
+
+          python3 -m http.server 8002 > private_hash_server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID"' EXIT
+
+          npm install --no-save playwright@1.53.0
+          npx playwright install --with-deps chromium
+          node << 'EOF' | tee fixed_samples_wasm_hash.log
+          const { writeFileSync } = require('node:fs');
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage();
+            page.on('console', (msg) => console.log(`[browser:${msg.type()}] ${msg.text()}`));
+            page.on('pageerror', (err) => console.error('[pageerror]', err.stack || err.message));
+
+            await page.goto('http://127.0.0.1:8002/hash_matrix.html', { waitUntil: 'load' });
+            await page.waitForFunction(
+              () => window.__hashResult && window.__hashResult.status !== 'pending',
+              null,
+              { timeout: 120000 }
+            );
+
+            const result = await page.evaluate(() => window.__hashResult);
+            console.log(JSON.stringify(result));
+            await browser.close();
+
+            if (result.status !== 'ok') {
+              console.error(result.stack || result.message || 'wasm hash matrix failed');
+              process.exit(1);
+            }
+
+            writeFileSync('fixed_samples_wasm_hashes.txt', `${result.rows.join('\n')}\n`);
+          })().catch((error) => {
+            console.error(error.stack || error.message);
+            process.exit(1);
+          });
+          EOF
+
+      - name: Upload private verification logs
+        uses: actions/upload-artifact@v5
+        with:
+          name: private-fixed-samples-logs
+          path: |
+            fixed_samples_layer_verify.log
+            fixed_samples_cli_hashes.txt
+            fixed_samples_wasm_hash.log
+            fixed_samples_wasm_hashes.txt
+            private_hash_server.log

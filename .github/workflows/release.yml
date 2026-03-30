@@ -9,8 +9,15 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      rollback_run_id:
+        description: '可选：指定稳定 run-id 以执行手动回退（复用该 run 的 artifact）'
+        required: false
+        type: string
+        default: ''
 
 permissions:
+  actions: read
   contents: write
   pages: write
   id-token: write
@@ -114,8 +121,12 @@ jobs:
           path: spz_verify*
 
   wasm-build:
-    name: Build WASM
+    name: Build WASM (${{ matrix.wasm_profile }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        wasm_profile: [compat, perf-lite]
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -129,7 +140,10 @@ jobs:
 
       - name: Configure WASM build
         run: |
-          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
+          emcmake cmake -S . -B build_wasm \
+            -DSPZ2GLB_BUILD_WASM=ON \
+            -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON \
+            -DSPZ2GLB_WASM_PROFILE=${{ matrix.wasm_profile }}
 
       - name: Build spz2glb WASM
         run: |
@@ -139,16 +153,57 @@ jobs:
         run: |
           emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
+      - name: Validate WASM outputs
+        run: |
+          test -f dist/spz2glb.wasm
+          test -f dist/spz2glb.js
+          test -f dist/spz_verify.wasm
+          test -f dist/spz_verify.js
+
       - name: Upload WASM artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: wasm-modules
-          path: dist/
+          name: wasm-modules-${{ matrix.wasm_profile }}
+          path: |
+            dist/spz2glb.wasm
+            dist/spz2glb.js
+            dist/spz_verify.wasm
+            dist/spz_verify.js
+
+  verify-native:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build native targets
+        run: |
+          cmake --build build --config Release --target spz2glb spz_verify -- -j4
+
+      - name: Run ctest
+        run: |
+          ctest --test-dir build --output-on-failure
+
+      - name: Run quick verification suite
+        run: |
+          bash tests/quick_test.sh
 
   deploy-pages:
-    needs: [wasm-build]
+    needs: [wasm-build, verify-native]
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    if: (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') && github.event.inputs.rollback_run_id == ''
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -159,41 +214,53 @@ jobs:
 
       - name: Prepare Pages root from repository
         run: |
-          cp docs/examples/index.html .
-          cp docs/examples/spz2glb_bindings.js .
-          cp docs/examples/smart_memory.js .
-          ls -la
+          mkdir -p site
+          cp docs/examples/index.html site/index.html
+          cp docs/examples/spz2glb_bindings.js site/spz2glb_bindings.js
+          cp docs/examples/smart_memory.js site/smart_memory.js
 
-      - name: Download WASM artifacts
+      - name: Download WASM artifacts (compat)
         uses: actions/download-artifact@v5
         with:
-          name: wasm-modules
-          path: dist/
+          name: wasm-modules-compat
+          path: site/dist
 
-      - name: Copy WASM modules to root
+      - name: Validate and place WASM modules
         run: |
-          cp dist/spz2glb.wasm .
-          cp dist/spz2glb.js .
-          ls -la
+          test -f site/dist/spz2glb.wasm
+          test -f site/dist/spz2glb.js
+          cp site/dist/spz2glb.wasm site/spz2glb.wasm
+          cp site/dist/spz2glb.js site/spz2glb.js
+
+      - name: Generate Pages audit manifest
+        run: |
+          (cd site && sha256sum index.html spz2glb_bindings.js smart_memory.js spz2glb.wasm spz2glb.js > pages-artifact-sha256.txt)
+
+      - name: Upload Pages audit artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: pages-audit
+          path: site/pages-artifact-sha256.txt
 
       - name: Upload to GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
 
   release:
-    needs: [build, wasm-build]
+    needs: [build, wasm-build, verify-native]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
-      - name: Download all artifacts
+      - name: Download release artifacts (CLI)
         uses: actions/download-artifact@v5
         with:
+          pattern: 'spz2glb-*'
           path: artifacts
           merge-multiple: true
 
@@ -237,3 +304,80 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  rollback-artifact-entry:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_run_id != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts from stable run
+        uses: actions/download-artifact@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.inputs.rollback_run_id }}
+          path: rollback_artifacts
+          merge-multiple: false
+
+      - name: Generate rollback execution manifest
+        run: |
+          {
+            echo "current_run_id=${{ github.run_id }}"
+            echo "rollback_source_run_id=${{ github.event.inputs.rollback_run_id }}"
+            echo "trigger_actor=${{ github.actor }}"
+            echo "trigger_ref=${{ github.ref }}"
+            echo "artifact_count=$(find rollback_artifacts -type f | wc -l)"
+          } > rollback-manual-manifest.txt
+
+      - name: Upload rollback restored artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: rollback-restored-${{ github.event.inputs.rollback_run_id }}
+          path: |
+            rollback_artifacts
+            rollback-manual-manifest.txt
+
+  rollback-manifest:
+    if: always() && contains(join(needs.*.result, ','), 'failure')
+    needs: [build, wasm-build, verify-native, deploy-pages, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find previous stable run
+        id: stable
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const res = await github.rest.actions.listWorkflowRunsForRepo({
+              owner,
+              repo,
+              status: 'completed',
+              per_page: 100
+            });
+            const stable = res.data.workflow_runs.find(r =>
+              r.name === context.workflow &&
+              r.conclusion === 'success' &&
+              r.id !== context.runId
+            );
+            core.setOutput('run_id', stable ? String(stable.id) : '');
+            core.setOutput('head_sha', stable ? String(stable.head_sha) : '');
+
+      - name: Generate rollback manifest
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+          STABLE_RUN_ID: ${{ steps.stable.outputs.run_id }}
+          STABLE_HEAD_SHA: ${{ steps.stable.outputs.head_sha }}
+        run: |
+          FAILED_JOBS=$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key' | paste -sd, -)
+          {
+            echo "current_run_id=${{ github.run_id }}"
+            echo "current_sha=${{ github.sha }}"
+            echo "previous_stable_run_id=${STABLE_RUN_ID}"
+            echo "previous_stable_commit=${STABLE_HEAD_SHA}"
+            echo "failed_jobs=${FAILED_JOBS}"
+          } > rollback-manifest.txt
+
+      - name: Upload rollback manifest
+        uses: actions/upload-artifact@v5
+        with:
+          name: rollback-manifest
+          path: rollback-manifest.txt

@@ -1,143 +1,162 @@
-/**
- * Smart Memory Manager for WebAssembly
- * 
- * Features:
- * - Detects device capabilities (mobile/PC, memory limits)
- * - Auto-adjusts WASM memory configuration
- * - Provides file size recommendations
- * - Redirects large files to CLI version
- */
-
 class SmartMemoryManager {
     constructor() {
         this.deviceInfo = null;
         this.memoryLimit = 512;
-        this.recommendedMaxFileSize = 100;
+        this.recommendedMaxFileSize = 32;
+        this.hardMaxFileSize = 48;
     }
 
     detectDevice() {
         const ua = navigator.userAgent;
+        const deviceMemory = navigator.deviceMemory ?? null;
+        const cores = navigator.hardwareConcurrency || 4;
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
         const isTablet = /iPad|Android(?!.*Mobile)|Tablet/i.test(ua);
-        const cores = navigator.hardwareConcurrency || 4;
-        const isLowEnd = cores <= 4 || isMobile;
 
-        let tier, type;
+        let type = 'desktop';
         if (isMobile && !isTablet) {
-            tier = isLowEnd ? 'low' : 'medium';
             type = 'mobile';
         } else if (isTablet) {
-            tier = 'medium';
             type = 'tablet';
-        } else {
-            tier = isLowEnd ? 'medium' : 'high';
-            type = 'desktop';
         }
 
-        this.deviceInfo = { type, tier, cores, isMobile, isLowEnd };
+        let tier = 'medium';
+        if (deviceMemory !== null && deviceMemory <= 2) {
+            tier = 'low';
+        } else if (type === 'desktop' && cores >= 8 && (deviceMemory === null || deviceMemory >= 8)) {
+            tier = 'high';
+        } else if (type !== 'desktop' || cores <= 4 || (deviceMemory !== null && deviceMemory <= 4)) {
+            tier = 'medium';
+        }
+
+        this.deviceInfo = { type, tier, cores, deviceMemory, isMobile, isTablet };
         return this.deviceInfo;
     }
 
     detectMemoryLimit() {
+        if (!this.deviceInfo) {
+            this.detectDevice();
+        }
+
         let limit = 512;
-
-        if (performance.memory) {
-            const heapLimit = performance.memory.jsHeapSizeLimit;
-            limit = Math.floor(heapLimit / (1024 * 1024));
+        if (navigator.deviceMemory) {
+            limit = Math.floor(navigator.deviceMemory * 256);
+        }
+        if (performance.memory?.jsHeapSizeLimit) {
+            const heapLimit = Math.floor(performance.memory.jsHeapSizeLimit / (1024 * 1024));
+            limit = Math.min(limit, heapLimit);
         }
 
-        if (this.deviceInfo) {
-            switch (this.deviceInfo.tier) {
-                case 'low':
-                    limit = Math.min(limit, 256);
-                    break;
-                case 'medium':
-                    limit = Math.min(limit, 512);
-                    break;
-                case 'high':
-                    limit = Math.min(limit, 1024);
-                    break;
-            }
+        if (this.deviceInfo.tier === 'low') {
+            limit = Math.min(limit, 256);
+        } else if (this.deviceInfo.tier === 'medium') {
+            limit = Math.min(limit, 512);
+        } else {
+            limit = Math.min(limit, 1024);
         }
 
-        this.memoryLimit = limit;
-        return limit;
+        this.memoryLimit = Math.max(limit, 128);
+        return this.memoryLimit;
     }
 
-    calculateSafeFileSize() {
-        if (!this.deviceInfo) this.detectDevice();
-        if (!this.memoryLimit) this.detectMemoryLimit();
-
-        const maxSafeSize = Math.floor(this.memoryLimit * 0.4);
-
-        switch (this.deviceInfo.tier) {
-            case 'low':
-                this.recommendedMaxFileSize = Math.min(maxSafeSize, 50);
-                break;
-            case 'medium':
-                this.recommendedMaxFileSize = Math.min(maxSafeSize, 100);
-                break;
-            case 'high':
-                this.recommendedMaxFileSize = Math.min(maxSafeSize, 200);
-                break;
+    calculateFileBudget() {
+        if (!this.deviceInfo) {
+            this.detectDevice();
+        }
+        if (!this.memoryLimit) {
+            this.detectMemoryLimit();
         }
 
-        return this.recommendedMaxFileSize;
-    }
+        const budgets = {
+            low: { recommended: 16, hardMax: 24 },
+            medium: { recommended: 32, hardMax: 48 },
+            high: { recommended: 48, hardMax: 64 },
+        };
 
-    canHandleFile(fileSizeMB) {
-        if (!this.recommendedMaxFileSize) this.calculateSafeFileSize();
-        return fileSizeMB <= this.recommendedMaxFileSize;
+        const budget = budgets[this.deviceInfo.tier] || budgets.medium;
+        const memoryRecommended = Math.max(8, Math.floor(this.memoryLimit * 0.25));
+        const memoryHardMax = Math.max(16, Math.floor(this.memoryLimit * 0.35));
+
+        this.recommendedMaxFileSize = Math.min(budget.recommended, memoryRecommended);
+        this.hardMaxFileSize = Math.max(
+            this.recommendedMaxFileSize + 8,
+            Math.min(budget.hardMax, memoryHardMax),
+        );
+
+        return {
+            recommendedMaxFileSize: this.recommendedMaxFileSize,
+            hardMaxFileSize: this.hardMaxFileSize,
+        };
     }
 
     getRecommendation(fileSizeMB) {
-        if (!this.deviceInfo) this.detectDevice();
-        if (!this.recommendedMaxFileSize) this.calculateSafeFileSize();
+        if (!this.deviceInfo) {
+            this.detectDevice();
+        }
+        this.calculateFileBudget();
 
         if (fileSizeMB <= this.recommendedMaxFileSize) {
-            return { canHandle: true };
+            return {
+                state: 'standard',
+                canHandle: true,
+                allowConversion: true,
+                message: '适合当前浏览器档位，可直接转换。',
+                recommendedMaxSize: this.recommendedMaxFileSize,
+                hardMaxSize: this.hardMaxFileSize,
+                cliCommand: 'spz2glb input.spz output.glb',
+            };
         }
 
-        const isLarge = fileSizeMB > this.recommendedMaxFileSize * 2;
+        if (fileSizeMB <= this.hardMaxFileSize) {
+            return {
+                state: 'light',
+                canHandle: true,
+                allowConversion: true,
+                message: '文件接近浏览器安全上限，建议优先使用桌面浏览器或 CLI。',
+                recommendedMaxSize: this.recommendedMaxFileSize,
+                hardMaxSize: this.hardMaxFileSize,
+                cliCommand: 'spz2glb input.spz output.glb',
+            };
+        }
 
         return {
+            state: 'reject',
             canHandle: false,
-            message: isLarge
-                ? '文件过大，建议使用命令行版本 spz2glb 处理'
-                : '此文件较大，建议使用桌面版浏览器处理',
-            cliCommand: `spz2glb input.spz output.glb`,
-            maxSize: this.recommendedMaxFileSize
+            allowConversion: false,
+            message: '文件超过浏览器安全上限，请改用 CLI。',
+            recommendedMaxSize: this.recommendedMaxFileSize,
+            hardMaxSize: this.hardMaxFileSize,
+            cliCommand: 'spz2glb input.spz output.glb',
         };
     }
 
     getWasmMemoryConfig() {
-        if (!this.deviceInfo) this.detectDevice();
-        if (!this.memoryLimit) this.detectMemoryLimit();
+        if (!this.deviceInfo) {
+            this.detectDevice();
+        }
+        if (!this.memoryLimit) {
+            this.detectMemoryLimit();
+        }
 
         const mb = 1024 * 1024;
         const limitBytes = this.memoryLimit * mb;
 
-        let initial, maximum;
-
-        switch (this.deviceInfo.tier) {
-            case 'low':
-                initial = 64 * mb;
-                maximum = Math.min(256 * mb, limitBytes);
-                break;
-            case 'medium':
-                initial = 128 * mb;
-                maximum = Math.min(512 * mb, limitBytes);
-                break;
-            case 'high':
-            default:
-                initial = 256 * mb;
-                maximum = Math.min(1024 * mb, limitBytes);
-                break;
+        let initial = 128 * mb;
+        let maximum = 512 * mb;
+        if (this.deviceInfo.tier === 'low') {
+            initial = 64 * mb;
+            maximum = 256 * mb;
+        } else if (this.deviceInfo.tier === 'high') {
+            initial = 256 * mb;
+            maximum = 768 * mb;
         }
+
+        maximum = Math.min(maximum, limitBytes);
+        initial = Math.min(initial, maximum);
 
         const memory = new WebAssembly.Memory({
             initial: Math.floor(initial / 65536),
-            maximum: Math.floor(maximum / 65536)
+            maximum: Math.floor(maximum / 65536),
         });
 
         return { memory, initial, maximum };
@@ -145,16 +164,16 @@ class SmartMemoryManager {
 
     getInfo() {
         const device = this.detectDevice();
-        const limit = this.detectMemoryLimit();
-        const safe = this.calculateSafeFileSize();
+        const memoryLimit = this.detectMemoryLimit();
+        const { recommendedMaxFileSize, hardMaxFileSize } = this.calculateFileBudget();
 
         return {
             device,
-            memoryLimit: limit,
-            recommendedMaxFileSize: safe,
-            canHandle: this.canHandleFile.bind(this),
+            memoryLimit,
+            recommendedMaxFileSize,
+            hardMaxFileSize,
             getRecommendation: this.getRecommendation.bind(this),
-            getWasmMemoryConfig: this.getWasmMemoryConfig.bind(this)
+            getWasmMemoryConfig: this.getWasmMemoryConfig.bind(this),
         };
     }
 }

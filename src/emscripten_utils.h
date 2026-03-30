@@ -13,7 +13,9 @@
 
 #include <emscripten/val.h>
 #include <vector>
+#include <cstddef>
 #include <cstdint>
+
 
 namespace spz2glb {
 
@@ -32,12 +34,6 @@ inline std::vector<uint8_t> vectorFromJsArray(const emscripten::val& array) {
     return out;
 }
 
-/**
- * C++ std::vector<uint8_t> 转 JavaScript Uint8Array
- *
- * @param buffer C++ vector 数据
- * @return JavaScript Uint8Array 对象
- */
 inline emscripten::val jsUint8ArrayFromVector(const std::vector<uint8_t>& buffer) {
     emscripten::val Uint8Array = emscripten::val::global("Uint8Array");
     emscripten::val array = Uint8Array.new_(buffer.size());
@@ -46,6 +42,16 @@ inline emscripten::val jsUint8ArrayFromVector(const std::vector<uint8_t>& buffer
     }
     return array;
 }
+
+inline emscripten::val jsUint8ArrayFromBytes(const std::vector<std::byte>& buffer) {
+    emscripten::val Uint8Array = emscripten::val::global("Uint8Array");
+    emscripten::val array = Uint8Array.new_(buffer.size());
+    for (size_t i = 0; i < buffer.size(); ++i) {
+        array.set(i, static_cast<uint8_t>(buffer[i]));
+    }
+    return array;
+}
+
 
 }  // namespace spz2glb
 

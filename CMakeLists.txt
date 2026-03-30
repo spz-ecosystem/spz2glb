@@ -13,7 +13,7 @@ option(ENABLE_KHR_GAUSSIAN_SPLATTING "Enable KHR_gaussian_splatting support" ON)
 add_subdirectory(third_party)
 
 # 添加 fastgltf include 路径
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
+include_directories(SYSTEM ${CMAKE_CURRENT_SOURCE_DIR}/third_party/include)
 
 # ============================================================
 # 根据编译器设置警告选项
@@ -37,6 +37,25 @@ else()
   )
 endif()
 
+add_library(spz2glb_core
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/spz2glb_core.cpp
+)
+
+target_link_libraries(spz2glb_core PUBLIC fastgltf)
+
+if(SPZ2GLB_BUILD_WASM)
+  target_compile_options(spz2glb_core PRIVATE --use-port=zlib)
+else()
+  find_package(ZLIB REQUIRED)
+  target_link_libraries(spz2glb_core PUBLIC ZLIB::ZLIB)
+endif()
+
+if(ENABLE_KHR_GAUSSIAN_SPLATTING)
+  target_compile_definitions(spz2glb_core PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+endif()
+
+target_compile_options(spz2glb_core PRIVATE ${STRICT_WARNINGS})
+
 # ============================================================
 # 原生构建 (非 WASM)
 # ============================================================
@@ -51,9 +70,10 @@ if(NOT SPZ2GLB_BUILD_WASM)
 
   add_executable(spz_verify
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
-  target_link_libraries(spz_verify PRIVATE fastgltf)
+  target_link_libraries(spz_verify PRIVATE fastgltf ZLIB::ZLIB)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
@@ -75,7 +95,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
-  target_link_libraries(spz2glb PRIVATE fastgltf ZLIB::ZLIB)
+  target_link_libraries(spz2glb PRIVATE spz2glb_core fastgltf ZLIB::ZLIB)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
@@ -87,6 +107,12 @@ if(NOT SPZ2GLB_BUILD_WASM)
   set_target_properties(spz2glb PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
   )
+
+  option(BUILD_TESTS "Build native tests" OFF)
+  if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+  endif()
 endif()
 
 # ============================================================
@@ -96,14 +122,30 @@ endif()
 if(SPZ2GLB_BUILD_WASM)
   message(STATUS "Building WASM version")
 
+  set(SPZ2GLB_WASM_PROFILE "compat" CACHE STRING "WASM memory profile: compat or perf-lite")
+  set_property(CACHE SPZ2GLB_WASM_PROFILE PROPERTY STRINGS compat perf-lite)
+
+  if(SPZ2GLB_WASM_PROFILE STREQUAL "perf-lite")
+    set(SPZ2GLB_WASM_INITIAL_MEMORY 134217728)
+    set(SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH 0)
+    set(SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION "")
+  elseif(SPZ2GLB_WASM_PROFILE STREQUAL "compat")
+    set(SPZ2GLB_WASM_INITIAL_MEMORY 67108864)
+    set(SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH 1)
+    set(SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION "-sMAXIMUM_MEMORY=1073741824")
+  else()
+    message(FATAL_ERROR "Unsupported SPZ2GLB_WASM_PROFILE: ${SPZ2GLB_WASM_PROFILE}")
+  endif()
+
+  message(STATUS "WASM memory profile: ${SPZ2GLB_WASM_PROFILE}")
+
   # spz2glb-wasm: 高性能版本（纯 C API，无 LTO 避免导入名压缩问题）
   # ============================================================
   add_executable(spz2glb-wasm
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz2glb_wasm_c_api.cpp
   )
 
-  target_link_libraries(spz2glb-wasm PRIVATE fastgltf)
-  target_compile_definitions(spz2glb-wasm PRIVATE SPZ2GLB_DISABLE_EMBIND=1)
+  target_link_libraries(spz2glb-wasm PRIVATE spz2glb_core fastgltf)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
@@ -133,10 +175,10 @@ if(SPZ2GLB_BUILD_WASM)
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
 
-    # 内存配置
-    "-sINITIAL_MEMORY=67108864"
-    "-sMAXIMUM_MEMORY=1073741824"
-    "-sALLOW_MEMORY_GROWTH=1"
+    # 内存配置（Phase 6: compat / perf-lite）
+    "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
+    "${SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION}"
+    "-sALLOW_MEMORY_GROWTH=${SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH}"
     "-sSTACK_SIZE=10485760"
 
     # Web 环境
@@ -166,8 +208,8 @@ if(SPZ2GLB_BUILD_WASM)
     "-sSINGLE_FILE=0"
 
     # C API 导出 + malloc/free
-    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats,_malloc,_free"
-    "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8"
+    "-sEXPORTED_FUNCTIONS=_spz2glb_alloc,_spz2glb_free,_spz2glb_reserve_input,_spz2glb_get_input_ptr,_spz2glb_convert_reserved_input,_spz2glb_release_output,_spz2glb_convert,_spz2glb_validate_header,_spz2glb_validate_glb_header,_spz2glb_validate_spz_header,_spz2glb_get_version,_spz2glb_get_memory_stats,_spz2glb_reset_memory_stats,_spz2glb_sizeof_size_t,_spz2glb_sizeof_memory_stats,_malloc,_free"
+    "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,getValue,setValue,UTF8ToString,stringToUTF8,lengthBytesUTF8,HEAPU8"
   )
 
   set_target_properties(spz2glb-wasm PROPERTIES
@@ -183,6 +225,7 @@ if(SPZ2GLB_BUILD_WASM)
 
   add_executable(spz_verify-wasm
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verify.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
   target_link_libraries(spz_verify-wasm PRIVATE fastgltf)
@@ -209,9 +252,9 @@ if(SPZ2GLB_BUILD_WASM)
     "-O3"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
-    "-sINITIAL_MEMORY=67108864"
-    "-sMAXIMUM_MEMORY=1073741824"
-    "-sALLOW_MEMORY_GROWTH=1"
+    "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
+    "${SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION}"
+    "-sALLOW_MEMORY_GROWTH=${SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH}"
     "-sSTACK_SIZE=10485760"
     "-sENVIRONMENT=web"
     "-sEXPORT_ES6=1"

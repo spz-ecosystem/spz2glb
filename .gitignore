@@ -5,6 +5,7 @@ cmake-build-*/
 # Test output
 tests/output/
 test_output/
+tests/data/*.spz
 *.glb
 *.tmp
 
