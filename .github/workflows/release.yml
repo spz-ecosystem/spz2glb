@@ -9,6 +9,12 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      rollback_run_id:
+        description: '可选：指定稳定 run-id 以执行手动回退（复用该 run 的 artifact）'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -163,10 +169,40 @@ jobs:
             dist/spz_verify.wasm
             dist/spz_verify.js
 
-  deploy-pages:
-    needs: [wasm-build]
+  verify-native:
+    needs: [build]
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build native targets
+        run: |
+          cmake --build build --config Release --target spz2glb spz_verify -- -j4
+
+      - name: Run ctest
+        run: |
+          ctest --test-dir build --output-on-failure
+
+      - name: Run quick verification suite
+        run: |
+          bash tests/quick_test.sh
+
+  deploy-pages:
+    needs: [wasm-build, verify-native]
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') && github.event.inputs.rollback_run_id == ''
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -215,7 +251,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   release:
-    needs: [build, wasm-build]
+    needs: [build, wasm-build, verify-native]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
 
@@ -252,3 +288,80 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  rollback-artifact-entry:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_run_id != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts from stable run
+        uses: actions/download-artifact@v5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.inputs.rollback_run_id }}
+          path: rollback_artifacts
+          merge-multiple: false
+
+      - name: Generate rollback execution manifest
+        run: |
+          {
+            echo "current_run_id=${{ github.run_id }}"
+            echo "rollback_source_run_id=${{ github.event.inputs.rollback_run_id }}"
+            echo "trigger_actor=${{ github.actor }}"
+            echo "trigger_ref=${{ github.ref }}"
+            echo "artifact_count=$(find rollback_artifacts -type f | wc -l)"
+          } > rollback-manual-manifest.txt
+
+      - name: Upload rollback restored artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: rollback-restored-${{ github.event.inputs.rollback_run_id }}
+          path: |
+            rollback_artifacts
+            rollback-manual-manifest.txt
+
+  rollback-manifest:
+    if: always() && contains(join(needs.*.result, ','), 'failure')
+    needs: [build, wasm-build, verify-native, deploy-pages, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find previous stable run
+        id: stable
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const workflow_id = context.workflow;
+            const res = await github.rest.actions.listWorkflowRuns({
+              owner,
+              repo,
+              workflow_id,
+              status: 'completed',
+              per_page: 30
+            });
+            const stable = res.data.workflow_runs.find(r =>
+              r.conclusion === 'success' && r.id !== context.runId
+            );
+            core.setOutput('run_id', stable ? String(stable.id) : '');
+            core.setOutput('head_sha', stable ? String(stable.head_sha) : '');
+
+      - name: Generate rollback manifest
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+          STABLE_RUN_ID: ${{ steps.stable.outputs.run_id }}
+          STABLE_HEAD_SHA: ${{ steps.stable.outputs.head_sha }}
+        run: |
+          FAILED_JOBS=$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key' | paste -sd, -)
+          {
+            echo "current_run_id=${{ github.run_id }}"
+            echo "current_sha=${{ github.sha }}"
+            echo "previous_stable_run_id=${STABLE_RUN_ID}"
+            echo "previous_stable_commit=${STABLE_HEAD_SHA}"
+            echo "failed_jobs=${FAILED_JOBS}"
+          } > rollback-manifest.txt
+
+      - name: Upload rollback manifest
+        uses: actions/upload-artifact@v5
+        with:
+          name: rollback-manifest
+          path: rollback-manifest.txt
