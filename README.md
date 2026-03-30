@@ -71,14 +71,14 @@
 
 ```bash
 # Convert SPZ to GLB
-./build/spz2glb model.spz model.glb
+spz2glb model.spz model.glb
 ```
 
 ### Three-Layer Verification
 
 ```bash
 # Run all verifications (provide your own SPZ and GLB files)
-./build/spz_verify all input.spz output.glb
+spz_verify all input.spz output.glb
 
 # Output:
 # Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
@@ -87,14 +87,14 @@
 # [SUCCESS] All verifications PASSED!
 ```
 
-> **Note**: Paths should be relative or absolute paths to your files. Do not use hardcoded paths.
+> **Note**: Use the actual executable path from your build output (for example `build/spz2glb` / `build/spz_verify`) or add binaries to `PATH`.
 
 ### Batch Processing
 
 ```bash
 # Batch convert all SPZ files
 for file in *.spz; do
-    ./build/spz2glb "$file" "${file%.spz}.glb"
+    spz2glb "$file" "${file%.spz}.glb"
 done
 ```
 
@@ -119,8 +119,8 @@ cd spz2glb
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 
-# 3. Run
-./build/spz2glb input.spz output.glb
+# 3. Run (use actual binary path or PATH command)
+spz2glb input.spz output.glb
 ```
 
 **Platform-Specific Dependencies** (install before building):
@@ -148,11 +148,11 @@ spz2glb <input.spz> <output.glb>
 
 ```bash
 # Convert a single file
-./build/spz2glb model.spz model.glb
+spz2glb model.spz model.glb
 
 # Batch conversion
 for file in *.spz; do
-    ./build/spz2glb "$file" "${file%.spz}.glb"
+    spz2glb "$file" "${file%.spz}.glb"
 done
 ```
 
@@ -198,15 +198,15 @@ spz_verify layer3 <input.spz> <output.glb>  # Decode consistency validation (fas
 
 ```bash
 # 1. Convert file
-./build/spz2glb model.spz model.glb
+spz2glb model.spz model.glb
 
 # 2. Run all verifications
-./build/spz_verify all model.spz model.glb
+spz_verify all model.spz model.glb
 
 # Or verify individually
-./build/spz_verify layer1 model.glb
-./build/spz_verify layer2 model.spz model.glb
-./build/spz_verify layer3 model.spz model.glb
+spz_verify layer1 model.glb
+spz_verify layer2 model.spz model.glb
+spz_verify layer3 model.spz model.glb
 ```
 
 **Verification Output**:
@@ -252,8 +252,8 @@ fi
 
 INPUT="$1"
 OUTPUT="${INPUT%.spz}.glb"
-SPZ2GLB="./build/spz2glb"
-VERIFY="./build/spz_verify"
+SPZ2GLB="spz2glb"
+VERIFY="spz_verify"
 
 echo "=== SPZ to GLB Conversion & Verification ==="
 echo "Input:  $INPUT"
@@ -334,57 +334,35 @@ emcmake cmake -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLI
 emmake cmake --build build_wasm --config Release --target spz2glb-wasm
 emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
-# Output in build_wasm/dist/
-# - spz2glb.js, spz2glb.wasm, spz2glb.data
-# - spz_verify.js, spz_verify.wasm, spz_verify.data
+# Output in build_wasm/dist/ (exact files depend on profile/toolchain)
+# - spz2glb.js, spz2glb.wasm
+# - spz_verify.js, spz_verify.wasm
+# - optional side files may appear; deploy files from the same build together
 ```
 
 ### Web Usage
 
-**Important**: For the WASM version, you must download **all** files:
-- `spz2glb.js`
-- `spz2glb.wasm`
-- `spz2glb.data`
-
-Place them in the same directory and load via HTTP server.
+**Important**: Keep `spz2glb.js` and `spz2glb.wasm` from the same build output in the same directory and load via HTTP server. If your build also produces side files, deploy them together with the same version set.
 
 ### JavaScript API
 
 ```javascript
-// Load the module
-const Module = await createSpz2GlbModule();
+import { loadSpz2Glb } from './spz2glb_bindings.js';
 
-// Convert SPZ to GLB
-const spzBuffer = new Uint8Array([...]);  // Your SPZ file data
-const glbBuffer = Module.convertSpzToGlb(spzBuffer);
+const api = await loadSpz2Glb('./spz2glb.wasm');
+const result = api.convert(spzUint8Array);
 
-if (glbBuffer) {
-    // Success: glbBuffer is Uint8Array
-    console.log('Conversion successful!');
-} else {
-    // Failed
-    console.error('Conversion failed');
-}
+if (!result) throw new Error('Conversion failed');
 
-// Get memory statistics (optional)
-const stats = Module.getMemoryStats();
-console.log(`Peak memory: ${stats.peak_usage / 1024 / 1024} MB`);
+const glbBytes = result.bytes;        // Uint8Array view on WASM memory
+const glbBlob = result.toBlob('model/gltf-binary');
+const stats = api.getMemoryStats();
+console.log('Peak MB:', (stats.peakUsageBytes / 1024 / 1024).toFixed(2));
+
+result.release(); // Required: release WASM output buffer
 ```
 
-### spz_verify JavaScript API
-
-```javascript
-const verifyModule = await createSpzVerifyModule();
-
-// Layer 1: GLB structure validation
-const layer1Result = verifyModule.layer1ValidateGlbStructure(glbBuffer);
-
-// Layer 2: Binary lossless verification
-const layer2Result = verifyModule.layer2ValidateLossless(spzBuffer, glbBuffer);
-
-// Layer 3: Decoding consistency
-const layer3Result = verifyModule.layer3ValidateDecoding(spzBuffer, glbBuffer);
-```
+> Note: `spz_verify` is currently provided as CLI/WASM artifact for verification workflows. The README does not claim a stable browser JS API surface for it.
 
 ### WASM Memory Configuration
 

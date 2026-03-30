@@ -4,7 +4,7 @@
 
 ## 发布状态
 
-- **v2.0.0 已发布** —— 以大规模重构为主线，统一 CLI/WASM 核心链路
+- 当前稳定版本线：**v2.x**（具体版本请以 [Releases](https://github.com/spz-ecosystem/spz2glb/releases) 与仓库 tag 为准）
 - 核心定位：**无损打包**（SPZ 压缩流原封不动存入 GLB）
 - 重点增强：WASM 内存与 API 能力（预分配、显式释放、统计与双档配置）
 - 双端协同：按场景分工 —— 浏览器侧负责轻量预览/快速校验，本地 CLI 负责重任务转换/批处理/深度验证
@@ -71,14 +71,14 @@
 
 ```bash
 # 转换 SPZ 到 GLB
-./build/spz2glb model.spz model.glb
+spz2glb model.spz model.glb
 ```
 
 ### 三层验证
 
 ```bash
 # 运行所有验证（提供你自己的 SPZ 和 GLB 文件）
-./build/spz_verify all input.spz output.glb
+spz_verify all input.spz output.glb
 
 # 输出：
 # Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
@@ -87,14 +87,14 @@
 # [SUCCESS] All verifications PASSED!
 ```
 
-> **注意**: 路径应该是相对路径或绝对路径指向你的文件。不要使用硬编码路径。
+> **注意**: 请使用你实际构建产物中的可执行文件路径（例如 `build/spz2glb` / `build/spz_verify`），或先加入 `PATH`。
 
 ### 批量处理
 
 ```bash
 # 批量转换所有 SPZ 文件
 for file in *.spz; do
-    ./build/spz2glb "$file" "${file%.spz}.glb"
+    spz2glb "$file" "${file%.spz}.glb"
 done
 ```
 
@@ -119,8 +119,8 @@ cd spz2glb
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 
-# 3. 运行
-./build/spz2glb input.spz output.glb
+# 3. 运行（使用实际二进制路径或 PATH 命令）
+spz2glb input.spz output.glb
 ```
 
 **平台特定依赖安装**（编译前）：
@@ -148,11 +148,11 @@ spz2glb <input.spz> <output.glb>
 
 ```bash
 # 转换单个文件
-./build/spz2glb model.spz model.glb
+spz2glb model.spz model.glb
 
 # 批量转换
 for file in *.spz; do
-    ./build/spz2glb "$file" "${file%.spz}.glb"
+    spz2glb "$file" "${file%.spz}.glb"
 done
 ```
 
@@ -198,15 +198,15 @@ spz_verify layer3 <input.spz> <output.glb>  # 解码一致性验证 (快速)
 
 ```bash
 # 1. 转换文件
-./build/spz2glb model.spz model.glb
+spz2glb model.spz model.glb
 
 # 2. 运行所有验证
-./build/spz_verify all model.spz model.glb
+spz_verify all model.spz model.glb
 
 # 或者单独验证
-./build/spz_verify layer1 model.glb
-./build/spz_verify layer2 model.spz model.glb
-./build/spz_verify layer3 model.spz model.glb
+spz_verify layer1 model.glb
+spz_verify layer2 model.spz model.glb
+spz_verify layer3 model.spz model.glb
 ```
 
 **验证输出**：
@@ -252,8 +252,8 @@ fi
 
 INPUT="$1"
 OUTPUT="${INPUT%.spz}.glb"
-SPZ2GLB="./build/spz2glb"
-VERIFY="./build/spz_verify"
+SPZ2GLB="spz2glb"
+VERIFY="spz_verify"
 
 echo "=== SPZ to GLB Conversion & Verification ==="
 echo "Input:  $INPUT"
@@ -334,57 +334,35 @@ emcmake cmake -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLI
 emmake cmake --build build_wasm --config Release --target spz2glb-wasm
 emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
-# 输出在 build_wasm/dist/
-# - spz2glb.js, spz2glb.wasm, spz2glb.data
-# - spz_verify.js, spz_verify.wasm, spz_verify.data
+# 输出在 build_wasm/dist/（具体文件取决于 profile/工具链）
+# - spz2glb.js, spz2glb.wasm
+# - spz_verify.js, spz_verify.wasm
+# - 可能出现附加侧文件；部署时请保持同一次构建产物一致
 ```
 
 ### Web 使用
 
-**重要**：WASM 版本需要下载所有文件：
-- `spz2glb.js`
-- `spz2glb.wasm`
-- `spz2glb.data`
-
-将它们放在同一目录，通过 HTTP 服务器加载。
+**重要**：请确保 `spz2glb.js` 与 `spz2glb.wasm` 来自同一次构建并放在同一目录，通过 HTTP 服务器加载。若构建产物包含附加侧文件，也应按同一版本集一起部署。
 
 ### JavaScript API
 
 ```javascript
-// 加载模块
-const Module = await createSpz2GlbModule();
+import { loadSpz2Glb } from './spz2glb_bindings.js';
 
-// 转换 SPZ 到 GLB
-const spzBuffer = new Uint8Array([...]);  // 你的 SPZ 文件数据
-const glbBuffer = Module.convertSpzToGlb(spzBuffer);
+const api = await loadSpz2Glb('./spz2glb.wasm');
+const result = api.convert(spzUint8Array);
 
-if (glbBuffer) {
-    // 成功：glbBuffer 是 Uint8Array
-    console.log('转换成功！');
-} else {
-    // 失败
-    console.error('转换失败');
-}
+if (!result) throw new Error('转换失败');
 
-// 获取内存统计（可选）
-const stats = Module.getMemoryStats();
-console.log(`峰值内存: ${stats.peak_usage / 1024 / 1024} MB`);
+const glbBytes = result.bytes;        // 指向 WASM 内存的 Uint8Array 视图
+const glbBlob = result.toBlob('model/gltf-binary');
+const stats = api.getMemoryStats();
+console.log('峰值内存(MB):', (stats.peakUsageBytes / 1024 / 1024).toFixed(2));
+
+result.release(); // 必须释放 WASM 输出缓冲
 ```
 
-### spz_verify JavaScript API
-
-```javascript
-const verifyModule = await createSpzVerifyModule();
-
-// 第 1 层：GLB 结构验证
-const layer1Result = verifyModule.layer1ValidateGlbStructure(glbBuffer);
-
-// 第 2 层：二进制无损验证
-const layer2Result = verifyModule.layer2ValidateLossless(spzBuffer, glbBuffer);
-
-// 第 3 层：解码一致性验证
-const layer3Result = verifyModule.layer3ValidateDecoding(spzBuffer, glbBuffer);
-```
+> 说明：`spz_verify` 当前主要作为 CLI/WASM 产物用于验证流程，README 不再声明稳定的浏览器 JS API 接口面。
 
 ### WASM 内存配置
 
