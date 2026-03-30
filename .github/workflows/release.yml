@@ -193,11 +193,45 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           path: artifacts
+          merge-multiple: true
+
+      - name: Download release artifacts (verify)
+        uses: actions/download-artifact@v5
+        with:
+          pattern: '*-verify'
+          path: artifacts
+          merge-multiple: true
+
+      - name: Download release artifacts (WASM profiles)
+        uses: actions/download-artifact@v5
+        with:
+          pattern: 'wasm-modules-*'
+          path: artifacts/wasm
+          merge-multiple: false
+
+      - name: Normalize WASM artifact names for release assets
+        run: |
+          for profile_dir in artifacts/wasm/wasm-modules-*; do
+            [ -d "$profile_dir" ] || continue
+            profile="${profile_dir##*/wasm-modules-}"
+            for file in spz2glb.js spz2glb.wasm spz_verify.js spz_verify.wasm; do
+              src="$profile_dir/$file"
+              [ -f "$src" ] || continue
+              base="${file%.*}"
+              ext="${file##*.}"
+              cp "$src" "artifacts/${base}-${profile}.${ext}"
+            done
+          done
+          rm -rf artifacts/wasm
+
+      - name: Generate release manifest
+        run: |
+          (cd artifacts && find . -type f -print0 | sort -z | xargs -0 sha256sum > release-sha256.txt)
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          files: artifacts/**/*
+          files: artifacts/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
