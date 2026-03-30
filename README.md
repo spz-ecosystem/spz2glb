@@ -4,7 +4,7 @@
 
 ## Release Status
 
-- **v2.0.0 Released** — large-scale refactor with unified CLI/WASM core path
+- Current stable line: **v2.x** (for exact version, see [Releases](https://github.com/spz-ecosystem/spz2glb/releases) and repository tags)
 - Core positioning: **lossless packaging** (SPZ stream stored as-is in GLB)
 - Key enhancement: WASM memory/API capabilities (reserved input, explicit release, stats, dual profile)
 - Dual-end collaboration: scenario split — browser side for lightweight preview/quick checks, local CLI for heavy conversion, batch jobs, and deep verification
