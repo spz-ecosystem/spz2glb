@@ -67,8 +67,6 @@
 | Need cross-format batch processing (SOG/KSPLAT/SPLAT/etc.) | `splat-transform` |
 | Need dual-scenario collaboration (lightweight web + heavy local tasks) with release-grade validation | `spz2glb` |
 
-## 🎬 Demo
-
 ### Basic Conversion
 
 ```bash
@@ -395,6 +393,26 @@ const layer3Result = verifyModule.layer3ValidateDecoding(spzBuffer, glbBuffer);
 | `compat` | 64MB | `1` | 1GB | Better compatibility on diverse devices |
 | `perf-lite` | 128MB | `0` | N/A | Stable memory ceiling for light/medium files |
 
+### Smart Memory Allocation (Browser + WASM)
+
+The smart memory strategy is a 3-layer pipeline, not a single fixed threshold:
+
+1. **Device tiering**: classify device capability (low/medium/high) from `navigator.deviceMemory`, `hardwareConcurrency`, and UA.
+2. **File budgeting**: compute `recommendedMaxFileSize` and `hardMaxFileSize` from tier + browser heap limits (e.g. high tier defaults to 64MB hard cap).
+3. **WASM-side reservation**: reserve one contiguous input region (`reserve_input`), stream file chunks into it, run `convert_reserved_input`, then explicitly release output buffers.
+
+Goal: maximize stability across devices (avoid OOM/browser stalls) while keeping memory telemetry visible (current/peak usage, failures, workspace usage).
+
+### Why WASM64 (memory64) is not enabled by default
+
+`WASM64` is intentionally not enabled by default for stability/compatibility reasons:
+
+- **ABI contract**: current JS bindings + C API assume 32-bit `size_t` (`size_t == 4`); switching to memory64 would break ABI expectations.
+- **Browser/toolchain consistency**: the memory64 ecosystem is improving but still less uniform than wasm32 across browser versions/toolchains.
+- **Product scope fit**: browser mode in this project targets lightweight preview and quick conversion; current wasm32 limits + compat profile are sufficient for this scope.
+
+If large-file browser processing becomes a hard requirement, a separate WASM64 build target can be evaluated while preserving backward compatibility.
+
 ### Performance Optimizations
 
 The WASM build includes:
@@ -403,6 +421,10 @@ The WASM build includes:
 - **compat/perf-lite dual profile**: Configurable memory behavior by runtime target
 - **Memory pool**: Bump allocator for fast allocation
 - **Hot object pool**: Fixed-size object reuse
+
+> Example: `dunhuang_000000.spz` (24.78 MB) converts successfully in browser in about `506 ms`, with peak memory around `49.56 MB`.
+
+![Browser conversion success screenshot](./docs/examples/images/dunhuang_000000_spz_web_success.png)
 
 ## Dependencies
 

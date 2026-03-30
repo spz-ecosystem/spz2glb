@@ -67,8 +67,6 @@
 | 需要跨多格式（SOG/KSPLAT/SPLAT 等）批量处理 | `splat-transform` |
 | 需要“网页轻量 + 本地重任务”的双场景协同与发布级验证闭环 | `spz2glb` |
 
-## 🎬 演示
-
 ### 基本转换
 
 ```bash
@@ -395,6 +393,26 @@ const layer3Result = verifyModule.layer3ValidateDecoding(spzBuffer, glbBuffer);
 | `compat` | 64MB | `1` | 1GB | 兼容性优先，适配更广设备 |
 | `perf-lite` | 128MB | `0` | N/A | 轻中型输入稳定内存上限 |
 
+### 智能内存分配（浏览器 + WASM）
+
+该项目的“智能内存分配”是三层协同，不是单一固定阈值：
+
+1. **设备分档**：基于 `navigator.deviceMemory`、`hardwareConcurrency`、UA 判断设备档位（low/medium/high）。
+2. **文件预算**：按设备档位和浏览器可用堆上限，计算 `recommendedMaxFileSize` 与 `hardMaxFileSize`（例如 high 档默认到 64MB）。
+3. **WASM 侧预分配**：转换前调用 `reserve_input` 预留整块输入区，前端分块写入该区，再执行 `convert_reserved_input`，输出由显式 `release_output` 回收。
+
+这套机制的目标是：在不同设备上优先保证稳定性（避免 OOM/卡死），同时保留可观测指标（当前/峰值内存、分配失败、工作区使用）。
+
+### 为什么默认不启用 WASM64（memory64）
+
+当前默认不启用 `WASM64`，主要是工程稳定性与兼容性考虑：
+
+- **ABI 约束**：现有 JS 绑定和 C API 以 32 位 `size_t` 为契约（`size_t == 4`），直接切到 memory64 会破坏现有 ABI。
+- **浏览器/工具链一致性**：`memory64` 生态仍在推进中，不同浏览器版本与工具链组合的一致性不如 wasm32 稳定。
+- **当前需求匹配**：本项目网页端定位是轻量预览与快速转换，默认阈值与 1GB 兼容档已覆盖当前目标场景。
+
+如后续需要超大文件网页端处理，可在保持 ABI 兼容的前提下评估单独的 WASM64 构建产物。
+
 ### 性能优化
 
 WASM 构建包含以下优化：
@@ -403,6 +421,10 @@ WASM 构建包含以下优化：
 - **compat/perf-lite 双档**：按运行目标配置内存行为
 - **内存池**：bump allocator 快速分配
 - **热点对象池**：固定大小对象复用
+
+> 示例：`dunhuang_000000.spz`（24.78 MB）在网页端转换成功，耗时约 `506 ms`，峰值内存约 `49.56 MB`。
+
+![浏览器端转换成功截图](./docs/examples/images/dunhuang_000000_spz_web_success.png)
 
 ## 依赖
 
