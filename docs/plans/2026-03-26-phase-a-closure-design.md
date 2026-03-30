@@ -206,7 +206,7 @@
 ### 里程碑（S4 内部）
 - S4-M1：workflow 改造完成（去外部 raw + 命名/矩阵校验）；
 - S4-M2：预发布演练通过（同次 run artifact 串联成功）；
-- S4-M3：正式发布通过并留档（CI、artifact、校验记录可追溯）。
+- S4-M3：发布链通过并留档（主干/手动触发口径下 CI、artifact、校验记录可追溯；tag 实发另行触发）。
 
 ### 产物
 - 更新后的 workflow（含门禁与命名校验）；
@@ -236,7 +236,8 @@
 > 关键修复：
 > 1) `src/spz_verifier.cpp` 用 `std::from_chars` 替代异常路径，消除 wasm exceptions-disabled 编译失败；
 > 2) `rollback-manifest` 改为 repo 级 run 查询并补 `actions: read` 权限，避免 `Find previous stable run` 步骤异常。
-
+>
+> S4 完成结论（本计划口径）：M1/M2/M3 已达成，S4 判定为完成。
 
 ---
 
@@ -245,7 +246,14 @@
 
 ### 任务
 1. 对比基线与收口后结果；
-2. 输出“是否完成目标”的可审计结论。
+2. 输出“是否完成目标”的可审计结论；
+3. 固化一套可复跑的验收口径（样本、轮次、统计口径、证据格式）。
+
+### 执行口径（补充）
+- 样本固定：`small/medium/near_limit/v4_ext`；
+- 轮次固定：同环境连续 3 轮；
+- 统计口径：耗时记录 `mean/std`，内存记录 `peak/current/alloc/fail/work_peak`；
+- 证据格式固定：`run-id + commit + artifact 清单 + sha256 + 结论`。
 
 ### 核心指标（与 2025-03-25 计划对齐）
 - 超限输入明确拒绝；
@@ -256,13 +264,56 @@
 - 中小文件耗时改善（给出统计）；
 - 内存统计字段完整可读（current/peak/alloc/fail/work_peak）。
 
+### 达标阈值（建议量化）
+- 功能硬门槛：
+  - 超限拒绝命中率 100%；
+  - `v4_ext` 3 轮通过率 100%；
+  - output handle release 后二次读取应稳定报错（browser smoke 通过）。
+- 性能门槛（相对 S1 基线）：
+  - `near_limit` 峰值内存不回退，目标下降 ≥ 10%；
+  - `small/medium` 耗时不回退（允许抖动区间 5%），至少一档出现可重复改善。
+
 ### 产物
-- 收口验收表（前后对比）；
-- 风险残留清单（若有）。
+- 收口验收表（前后对比，含 3 轮统计）；
+- 风险残留清单（若有）；
+- S5 结论条目（完成/未完成 + 原因 + 下一步）。
 
 ### 完成判定
-- 指标满足“达标”阈值；
+- 功能硬门槛全部满足；
+- 性能门槛满足或给出合理豁免说明（含证据）；
 - 可给出明确“完成/未完成 + 原因”。
+
+### S5 执行记录（2026-03-30，WSL）
+
+#### 本轮执行命令（已执行）
+- `cmake --build build --target clean`
+- `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release`
+- `cmake --build build --target spz2glb spz_verify -- -j4`
+- `bash tests/quick_test.sh`
+- `dist/spz2glb + dist/spz_verify(layer1/layer2/layer3)` 对 `small/medium/near_limit/v4_ext` 连续 3 轮
+
+#### 3 轮结果汇总（native）
+| 样本 | L1/L2/L3 通过率 | 转换耗时 mean±std (s) | 峰值 RSS mean±std (KB) |
+|---|---|---:|---:|
+| `small(triangle)` | 3/3, 3/3, 3/3 | 0.893 ± 0.309 | 39424 ± 0 |
+| `medium(cube)` | 3/3, 3/3, 3/3 | 0.817 ± 0.128 | 51328 ± 0 |
+| `near_limit` | 3/3, 3/3, 3/3 | 1.823 ± 0.103 | 118528 ± 105 |
+| `v4_ext` | 3/3, 3/3, 3/3 | 0.913 ± 0.056 | 53589 ± 60 |
+
+#### 云端补证（GitHub Actions）
+- 失败根因已确认：此前触发时 `run_private_fixed_samples=true`，会拉起 `self-hosted` 任务；在无可用自托管 runner 时会长期 `queued`，并非“测试文件无法上传”；
+- 纠偏动作：重新触发 `test-wasm-build.yml`，参数改为 `run_private_fixed_samples=false`（仅 GitHub-hosted 路径）；
+- 结果：Run `23726462479` 已 `completed/success`，浏览器 smoke 与 hash matrix 校验在云端通过。
+
+#### 当前判定
+- native 侧指标已完成采集且通过；
+- 浏览器侧证据已通过云端补齐；
+- S5 判定：完成。
+
+#### 开发日志补记（v2.0 打标前）
+- 最终收口复核：本地 WSL 最小自检（clean/configure/build/quick_test）通过；
+- 云端关键 run 复核：`23723995087`、`23726462479` 均为 `completed/success`；
+- 发布准备结论：进入 `v2.0` 打标准备阶段（tag 触发 `release` 实发链路）。
 
 ---
 

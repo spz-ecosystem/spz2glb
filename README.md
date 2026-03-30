@@ -1,6 +1,14 @@
 # spz2glb - SPZ to GLB Converter
 
-A tool to convert SPZ (Gaussian Splatting Compression) files to glTF 2.0 GLB format.
+**Lossless packaging of SPZ into GLB** — preserves SPZ compressed stream, with dual-scenario collaboration: lightweight web usage + heavy local workloads.
+
+## Release Status
+
+- **v2.0.0 Released** — large-scale refactor with unified CLI/WASM core path
+- Core positioning: **lossless packaging** (SPZ stream stored as-is in GLB)
+- Key enhancement: WASM memory/API capabilities (reserved input, explicit release, stats, dual profile)
+- Dual-end collaboration: scenario split — browser side for lightweight preview/quick checks, local CLI for heavy conversion, batch jobs, and deep verification
+- Validation closure: built-in 3-layer verification (structure/lossless/decoding consistency) + cloud browser smoke
 
 ## 📚 Documentation
 
@@ -16,14 +24,48 @@ A tool to convert SPZ (Gaussian Splatting Compression) files to glTF 2.0 GLB for
   - [Building Guide](https://github.com/spz-ecosystem/spz2glb/wiki/Building)
   - [Contributing](https://github.com/spz-ecosystem/spz2glb/wiki/Contributing)
 
-## Features
+## Core Features
 
-- **SPZ to GLB**: Convert compressed SPZ files to standard GLB format
-- **KHR_gaussian_splatting_compression_spz_2**: Integrated SPZ_2 compression extension
-- **Lossless Conversion**: Compression stream mode preserves original SPZ data integrity
-- **Cross-Platform**: Supports Windows, Linux, macOS (x64 + ARM)
-- **Automated Builds**: Pre-compiled binaries via GitHub Actions
-- **Three-Layer Verification**: Complete C++ verification tools ensure correct conversion
+- **Lossless Packaging**: SPZ compressed stream stored as-is in GLB, 100% byte-level fidelity
+- **SPZ_2 Extension**: Uses `KHR_gaussian_splatting_compression_spz_2` standard extension
+- **Large-Scale Refactor (v2.0)**: Unified CLI/WASM core path, reduced dual-end divergence
+- **WASM Enhancements**: Reserved input, explicit output release, memory stats, compat/perf-lite dual profile
+- **Dual-End Collaboration (scenario split)**: lightweight web interaction and fast feedback on browser side; batch, large-file, and heavy verification workflows on local CLI side
+- **Three-Layer Verification**: Structure validation / lossless validation / decoding consistency
+- **Cross-Platform**: Windows, Linux, macOS (x64 + ARM)
+- **Zero Runtime Dependencies**: C++17 + WASM, no additional runtime dependencies
+
+## Comparison with `splat-transform`
+
+> Note: this section describes **tool positioning differences**, not an absolute quality ranking.
+
+### Core Difference in One Line
+
+- **`spz2glb`**: **Lossless packaging** of SPZ into GLB (SPZ compressed stream stored as-is)
+- **`splat-transform`**: Reads SPZ, **decompresses and reconstructs** full Gaussian data, then writes GLB (not lossless packaging)
+
+### Detailed Comparison
+
+| Dimension | `spz2glb` (v2.0) | `splat-transform` (v1.10.1) |
+|-----------|-------------------|-----------------------------|
+| **Core positioning** | **Lossless SPZ→GLB packaging** (preserves SPZ compressed stream) | **Data transformation/reconstruction tool** (multi-format conversion & editing) |
+| **SPZ handling** | No decompression; SPZ stored as binary stream inside GLB | Read SPZ → decompress to full Gaussian data → rebuild GLB |
+| **GLB output** | Uses `KHR_gaussian_splatting_compression_spz_2` extension with original SPZ stream | Uses standard `KHR_gaussian_splatting` extension with decompressed Gaussian attributes |
+| **Data fidelity** | 100% lossless (byte-level SPZ preservation) | Decompress-rebuild cycle involves codec conversion |
+| **Feature scope** | Focused on SPZ↔GLB conversion and verification | Supports read/transform/filter/merge/generate across PLY/SOG/SPZ/KSPLAT/SPLAT formats |
+| **Runtime** | C++17 + WASM, no runtime dependencies | TypeScript/Node.js with WebGPU dependency for SOG compression |
+| **WASM capabilities** | Reserved input, explicit release, memory stats, dual profile | Browser/Node dual-end, not centered on release-grade memory governance |
+| **Validation** | Built-in 3-layer verification (structure/lossless/decoding consistency) + cloud browser smoke | Unit tests + fixture validation |
+
+### Usage Recommendations
+
+| Scenario | Recommended Tool |
+|----------|------------------|
+| Need to **losslessly embed** SPZ in GLB, preserving original compression | `spz2glb` |
+| Need GLB with directly renderable Gaussian data (not compressed stream) | `splat-transform` |
+| Need splat transformation, filtering, merging, generation | `splat-transform` |
+| Need cross-format batch processing (SOG/KSPLAT/SPLAT/etc.) | `splat-transform` |
+| Need dual-scenario collaboration (lightweight web + heavy local tasks) with release-grade validation | `spz2glb` |
 
 ## 🎬 Demo
 
@@ -48,8 +90,6 @@ A tool to convert SPZ (Gaussian Splatting Compression) files to glTF 2.0 GLB for
 ```
 
 > **Note**: Paths should be relative or absolute paths to your files. Do not use hardcoded paths.
-
-> **Demo**: Demo videos will be released after the first stable version. Stay tuned!
 
 ### Batch Processing
 
@@ -350,16 +390,17 @@ const layer3Result = verifyModule.layer3ValidateDecoding(spzBuffer, glbBuffer);
 
 ### WASM Memory Configuration
 
-| Setting | Value | Description |
-|---------|-------|-------------|
-| INITIAL_MEMORY | 64MB | Initial heap size |
-| MAXIMUM_MEMORY | 1GB | Maximum heap size |
+| Profile | INITIAL_MEMORY | ALLOW_MEMORY_GROWTH | MAXIMUM_MEMORY | Description |
+|---------|----------------|---------------------|----------------|-------------|
+| `compat` | 64MB | `1` | 1GB | Better compatibility on diverse devices |
+| `perf-lite` | 128MB | `0` | N/A | Stable memory ceiling for light/medium files |
 
 ### Performance Optimizations
 
 The WASM build includes:
-- **-O3 -flto**: Link-time optimization
+- **-O3 + strict warnings**: Optimized build with warning-clean gate
 - **-fno-exceptions**: No exception overhead
+- **compat/perf-lite dual profile**: Configurable memory behavior by runtime target
 - **Memory pool**: Bump allocator for fast allocation
 - **Hot object pool**: Fixed-size object reuse
 
@@ -380,21 +421,23 @@ The WASM build includes:
 
 ```
 spz2glb/
-├── CMakeLists.txt          # Build configuration
-├── LICENSE                 # MIT License
-├── README.md               # English documentation
-├── README-zh.md            # Chinese documentation
+├── CMakeLists.txt              # Build configuration
+├── LICENSE                     # MIT License
+├── README.md / README-zh.md    # Documentation
 ├── src/
-│   ├── spz_to_glb.cpp     # Converter source code
-│   └── spz_verify.cpp     # Three-layer verification tool source code
-├── third_party/            # Customized fastgltf + simdjson
-│   ├── CMakeLists.txt
+│   ├── spz2glb_core.cpp/.h     # Core conversion logic (v2.0 unified entry)
+│   ├── spz2glb_wasm_c_api.cpp/.h  # WASM C API (reserve/release/stats)
+│   ├── memory_pool.cpp/.h      # Memory pool and hot object pool
+│   ├── spz_to_glb.cpp          # CLI main entry
+│   ├── spz_verify.cpp          # Verification tool main entry
+│   ├── spz_verifier.cpp/.h     # Three-layer verification implementation
+│   └── base64.{h,cpp}          # Base64 codec
+├── third_party/                # Customized fastgltf + simdjson
 │   ├── include/fastgltf/
 │   ├── src/
-│   └── deps/simdjson/     # simdjson v4.3.1 (built-in)
-└── .github/
-    └── workflows/
-        └── release.yml    # CI/CD workflow
+│   └── deps/simdjson/         # simdjson v4.3.1 (built-in)
+├── tests/                      # Test scripts and fixtures
+└── .github/workflows/          # CI/CD workflows
 ```
 
 ## Technical Details
@@ -434,23 +477,39 @@ BIN Chunk
 └── Raw SPZ compressed data
 ```
 
-## Disclaimer
+## Author & Copyright
 
-**This is a personal independent development project.**
+- Copyright owner: **Pu Junhan**
+- Start year: **2026**
 
-- This project is developed independently by the author in their personal capacity
-- This project is **not affiliated** with any university, institution, or employer
-- This is **not a work-for-hire** or institutional teaching achievement
-- The views and opinions expressed in this project are solely those of the author
-- MIT License applies - see [LICENSE](LICENSE) for details
+## Independent Work Statement
+
+This project is developed independently by the author in their personal capacity and is not affiliated with any university, institution, or employer.
+
+This project depends on the following public technical specifications:
+- SPZ file format (Niantic, Inc.)
+- glTF 2.0 / KHR_gaussian_splatting (Khronos Group)
+- KHR_gaussian_splatting_compression_spz_2 extension draft (SPZ ecosystem public specification)
+
+This project is not affiliated with, endorsed by, or connected to Niantic, Inc. or its affiliates.
 
 ## License
 
 MIT License - See [LICENSE](LICENSE) for details
 
-## Related Projects
+## Ecosystem Position
 
-- [fastgltf](https://github.com/spycrab/fastgltf) - High-performance glTF library
+`spz2glb` is a **downstream project in the SPZ ecosystem**. Its relationship with the upstream `spz_gatekeeper` is:
+
+- **Gatekeeper (upstream)**: Defines and enforces SPZ format legality, extension compatibility, and governance standards (L2 validation, TLV extension registry, compliance auditing).
+- **`spz2glb` (downstream)**: Performs lossless packaging of compliant SPZ files into GLB, adhering to the compatibility constraints defined by the gatekeeper.
+
+> In short: **gatekeeper governs "admission and standards"; `spz2glb` handles "conversion and delivery."**
+
+Related projects:
+
+- [spz_gatekeeper](https://github.com/spz-ecosystem/spz_gatekeeper) - SPZ Gatekeeper: format legality validation and ecosystem governance
+- [fastgltf](https://github.com/spnda/fastgltf) - High-performance glTF library (by Sean Apeler, MIT License)
 - [simdjson](https://github.com/simdjson/simdjson) - Ultra-fast JSON parsing library v4.3.1
 - [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting Extension
 
