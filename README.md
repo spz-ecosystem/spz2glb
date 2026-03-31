@@ -10,9 +10,17 @@
 - Dual-end collaboration: scenario split — browser side for lightweight preview/quick checks, local CLI for heavy conversion, batch jobs, and deep verification
 - Validation closure: built-in 3-layer verification (structure/lossless/decoding consistency) + cloud browser smoke
 
+## Responsibility Boundary (Fixed)
+
+- `spz2glb` is responsible for only two things: **SPZ→GLB format packaging** and **GLB delivery/distribution workflow**.
+- `spz2glb` does not own compression algorithm R&D, rendering-engine capability expansion, or generic 3D editing pipelines.
+- GLB compliance and correctness are judged by the **three-layer verification** system (structure / lossless / decoding consistency).
+- The Web path is for lightweight single-file demos by default; batch and heavy workloads belong to the CLI path.
+
 ## 📚 Documentation
 
 - **Wiki**: https://github.com/spz-ecosystem/spz2glb/wiki
+- **Live Demo (CloudBase)**: https://openclaw-spz-3gt7x2sya7c10ef2-1355411679.tcloudbaseapp.com/
   - [Installation Guide](https://github.com/spz-ecosystem/spz2glb/wiki/Installation)
   - [Quick Start](https://github.com/spz-ecosystem/spz2glb/wiki/Quick-Start)
   - [Usage](https://github.com/spz-ecosystem/spz2glb/wiki/Usage)

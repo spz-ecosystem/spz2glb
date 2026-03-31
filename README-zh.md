@@ -10,9 +10,17 @@
 - 双端协同：按场景分工 —— 浏览器侧负责轻量预览/快速校验，本地 CLI 负责重任务转换/批处理/深度验证
 - 验证闭环：内置三层验证（结构/无损/解码一致性）+ 云端 browser smoke
 
+## 职责边界（固定）
+
+- `spz2glb` 只负责两件事：**SPZ→GLB 格式封装**与 **GLB 分发交付链路**。
+- `spz2glb` 不承担压缩算法研发、渲染引擎能力扩展、通用 3D 编辑流水线等超出边界的职责。
+- GLB 合规与正确性判定统一由**三层验证**负责（结构验证 / 无损验证 / 解码一致性验证）。
+- Web 侧默认面向轻量单文件演示；批量与重任务属于 CLI 路径，不在 Web 默认职责内。
+
 ## 📚 文档
 
 - **Wiki**: https://github.com/spz-ecosystem/spz2glb/wiki
+- **在线演示站点（CloudBase）**: https://openclaw-spz-3gt7x2sya7c10ef2-1355411679.tcloudbaseapp.com/
   - [安装指南](https://github.com/spz-ecosystem/spz2glb/wiki/Installation)
   - [快速开始](https://github.com/spz-ecosystem/spz2glb/wiki/Quick-Start)
   - [使用方法](https://github.com/spz-ecosystem/spz2glb/wiki/Usage)
