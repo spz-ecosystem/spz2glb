@@ -20,7 +20,7 @@
 ## 📚 Documentation
 
 - **Wiki**: https://github.com/spz-ecosystem/spz2glb/wiki
-- **Live Demo (CloudBase)**: https://openclaw-spz-3gt7x2sya7c10ef2-1355411679.tcloudbaseapp.com/
+- **Live Demo**: [GitHub Pages](https://spz-ecosystem.github.io/spz2glb/)
   - [Installation Guide](https://github.com/spz-ecosystem/spz2glb/wiki/Installation)
   - [Quick Start](https://github.com/spz-ecosystem/spz2glb/wiki/Quick-Start)
   - [Usage](https://github.com/spz-ecosystem/spz2glb/wiki/Usage)

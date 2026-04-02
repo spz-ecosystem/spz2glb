@@ -20,7 +20,7 @@
 ## 📚 文档
 
 - **Wiki**: https://github.com/spz-ecosystem/spz2glb/wiki
-- **在线演示站点（CloudBase）**: https://openclaw-spz-3gt7x2sya7c10ef2-1355411679.tcloudbaseapp.com/
+- **在线演示**: [GitHub Pages](https://spz-ecosystem.github.io/spz2glb/)
   - [安装指南](https://github.com/spz-ecosystem/spz2glb/wiki/Installation)
   - [快速开始](https://github.com/spz-ecosystem/spz2glb/wiki/Quick-Start)
   - [使用方法](https://github.com/spz-ecosystem/spz2glb/wiki/Usage)
