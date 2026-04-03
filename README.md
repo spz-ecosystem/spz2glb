@@ -465,7 +465,7 @@ This tool uses SPZ_2 specification compression stream mode:
 **Compatibility Note**:
 > Any SPZ-derived algorithm that is 100% compatible with the original SPZ format and strictly follows the SPZ_2 extension specification is perfectly supported by this converter.
 
-### GLB Structure
+### GLB Structure Example
 
 ```
 GLB Header (12 bytes)
