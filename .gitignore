@@ -23,6 +23,9 @@ Thumbs.db
 # Worktrees
 .worktrees/
 
+# Planning documents (local only)
+docs/plans/
+
 # Executables
 spz2glb
 spz2glb.exe
