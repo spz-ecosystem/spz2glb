@@ -40,12 +40,12 @@ v1.0.0 ──→ v1.0.1 ──→ v1.0.2 ──→ v1.1.0 ──→ v2.0.0 ─�
 
 | 版本 | CI 流水线 | 构建目标 | 平台 | WASM | 测试 | 发布 | 回滚 |
 |------|-----------|----------|------|------|------|------|------|
-| **v1.0.0** | `release.yml` (v1) | spz2glb + spz_verify | Win/Linux/Mac | ❌ | ❌ | Artifact 上传 | ❌ |
-| **v1.0.1** | `release.yml` (v1) | 同上 | 同上 | ❌ | ❌ | 同上 | ❌ |
-| **v1.0.2** | `release.yml` (v1) | 同上 | 同上 | ❌ | ❌ | 同上 | ❌ |
-| **v1.1.0** | `release.yml` (v2) + `test-wasm-build.yml` | +WASM 双 profile | 同上 + Browser | ✅ compat/perf-lite | Playwright smoke | GitHub Pages | ❌ |
-| **v2.0.0** | `release.yml` (v3, 6-job) + `test-wasm-build.yml` (增强) | 全量 | 同上 | ✅ | ctest + smoke + hash matrix | 自动 Release + SHA256 | ✅ |
-| **v2.0.1** | `release.yml` (v3, 修复) | 全量 | 同上 | ✅ | 同上 | 产物命名去冲突 | ✅ |
+| **v1.0.0** | `release.yml` (v1) | spz2glb + spz_verify | Win/Linux/Mac | ❌ | ❌ | ✅ 3 平台 binary Artifact | ❌ |
+| **v1.0.1** | `release.yml` (v1) | 同上 | 同上 | ❌ | ❌ | ✅ 同上 | ❌ |
+| **v1.0.2** | `release.yml` (v1) | 同上 | 同上 | ❌ | ❌ | ✅ 同上 | ❌ |
+| **v1.1.0** | `release.yml` (v2) + `test-wasm-build.yml` | 同上 + WASM 双 profile | 同上 + Browser | ✅ compat/perf-lite | Playwright smoke | ✅ 同上 + GitHub Pages + Release | ❌ |
+| **v2.0.0** | `release.yml` (v3, 6-job) + `test-wasm-build.yml` (增强) | 全量 | 同上 | ✅ | ctest + smoke + hash matrix | ✅ 同上 + SHA256 审计清单 | ✅ |
+| **v2.0.1** | `release.yml` (v3, 修复) | 全量 | 同上 | ✅ | 同上 | ✅ 同上 + 产物命名去冲突 | ✅ |
 
 ---
 
@@ -613,7 +613,7 @@ jobs:
 | ID | 债务描述 | 引入版本 | 计划修复 | 状态 |
 |----|----------|----------|----------|------|
 | TD-01 | third_party/fastgltf 为定制版，无法上游更新 | v1.0.0 | v2.5 或按需 | Open |
-| TD-02 | simdjson 内嵌而非 submodule | v1.0.0 | v2.5 | Open |
+| TD-02 | simdjson 内嵌源码 (v4.3.1) | v1.0.0 | 维持现状 | Open |
 | TD-03 | Wiki 文档曾内嵌仓库后迁移至 GitHub Wiki | v1.0.x | 已完成 | Closed |
 | TD-04 | WASM 加载方式历史遗留多种方案 | v1.1.0 | v2.0 统一为原生 API | Closed |
 | TD-05 | CI 中部分路径硬编码 | v1.1.0 | v2.0 统一产物路径规范 | Improved |
