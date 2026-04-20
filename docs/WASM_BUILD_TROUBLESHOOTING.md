@@ -139,7 +139,6 @@ target_link_options(spz2glb-wasm PRIVATE
   "-O3"
   "-fno-lto"
   "-sUSE_ZLIB=1"
-  "--use-port=zlib"
 
   # 内存配置
   "-sINITIAL_MEMORY=67108864"

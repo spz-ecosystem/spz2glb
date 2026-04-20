@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 选项
 option(SPZ2GLB_BUILD_WASM "Build WASM version" OFF)
-option(SPZ2GLB_USE_EMSCRIPTEN_ZLIB "Use Emscripten ZLIB port" OFF)
 option(ENABLE_KHR_GAUSSIAN_SPLATTING "Enable KHR_gaussian_splatting support" ON)
 
 # 添加 fastgltf (文件直接在 third_party 目录下)
@@ -43,9 +42,7 @@ add_library(spz2glb_core
 
 target_link_libraries(spz2glb_core PUBLIC fastgltf)
 
-if(SPZ2GLB_BUILD_WASM)
-  target_compile_options(spz2glb_core PRIVATE --use-port=zlib)
-else()
+if(NOT SPZ2GLB_BUILD_WASM)
   find_package(ZLIB REQUIRED)
   target_link_libraries(spz2glb_core PUBLIC ZLIB::ZLIB)
 endif()
@@ -151,8 +148,7 @@ if(SPZ2GLB_BUILD_WASM)
     target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  # Emscripten ZLIB
-  target_compile_options(spz2glb-wasm PRIVATE --use-port=zlib)
+  # Emscripten ZLIB: use -sUSE_ZLIB=1 in link options
 
   # C++ 编译优化（无 LTO 避免导入名压缩）
   target_compile_options(spz2glb-wasm PRIVATE
@@ -173,7 +169,6 @@ if(SPZ2GLB_BUILD_WASM)
     "-O3"
     "-fno-lto"
     "-sUSE_ZLIB=1"
-    "--use-port=zlib"
 
     # 内存配置（Phase 6: compat / perf-lite）
     "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
@@ -234,7 +229,7 @@ if(SPZ2GLB_BUILD_WASM)
     target_compile_definitions(spz_verify-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  target_compile_options(spz_verify-wasm PRIVATE --use-port=zlib)
+  # Emscripten ZLIB: use -sUSE_ZLIB=1 in link options
 
   target_compile_options(spz_verify-wasm PRIVATE
     "-O3"
@@ -251,7 +246,6 @@ if(SPZ2GLB_BUILD_WASM)
   target_link_options(spz_verify-wasm PRIVATE
     "-O3"
     "-sUSE_ZLIB=1"
-    "--use-port=zlib"
     "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
     "${SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION}"
     "-sALLOW_MEMORY_GROWTH=${SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH}"

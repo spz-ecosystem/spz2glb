@@ -21,6 +21,10 @@ on:
       - 'tests/**'
       - '.github/workflows/test-wasm-build.yml'
 
+env:
+  EMSCRIPTEN_VERSION: 5.0.1
+  EM_CACHE: ${{ github.workspace }}/.emscripten-cache
+
 jobs:
   test-wasm-build:
     name: Test WASM Build with Logging (${{ matrix.wasm_profile }})
@@ -35,10 +39,23 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache Emscripten ports
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.EM_CACHE }}
+          key: emscripten-cache-${{ runner.os }}-${{ env.EMSCRIPTEN_VERSION }}
+          restore-keys: |
+            emscripten-cache-${{ runner.os }}-
+
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: latest
+          version: ${{ env.EMSCRIPTEN_VERSION }}
+
+      - name: Show Emscripten toolchain info
+        run: |
+          emcc -v
+          echo "EM_CACHE=$EM_CACHE"
 
       - name: Install wabt tools
         run: |
@@ -49,7 +66,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "=== CMake Configuration ==="
-          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_WASM_PROFILE=${{ matrix.wasm_profile }} -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON 2>&1 | tee cmake.log
+          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_WASM_PROFILE=${{ matrix.wasm_profile }} 2>&1 | tee cmake.log
 
       - name: Build spz2glb WASM (verbose)
         run: |
@@ -364,10 +381,23 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache Emscripten ports
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.EM_CACHE }}
+          key: emscripten-cache-${{ runner.os }}-${{ env.EMSCRIPTEN_VERSION }}
+          restore-keys: |
+            emscripten-cache-${{ runner.os }}-
+
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: latest
+          version: ${{ env.EMSCRIPTEN_VERSION }}
+
+      - name: Show Emscripten toolchain info
+        run: |
+          emcc -v
+          echo "EM_CACHE=$EM_CACHE"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -408,7 +438,7 @@ jobs:
       - name: Build WASM
         run: |
           set -euo pipefail
-          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_WASM_PROFILE=compat -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
+          emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_WASM_PROFILE=compat
           emmake cmake --build build_wasm --config Release --target spz2glb-wasm --verbose
 
       - name: Locate WASM artifacts

@@ -347,13 +347,13 @@ verify.bat model.spz
 # 安装 Emscripten
 git clone https://github.com/emscripten-core/emsdk.git
 cd emsdk
-./emsdk install latest
-./emsdk activate latest
+./emsdk install 5.0.1
+./emsdk activate 5.0.1
 source ./emsdk_env.sh
 
 # 构建 WASM 模块
 cd tools/spz_to_glb
-emcmake cmake -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON
+emcmake cmake -B build_wasm -DSPZ2GLB_BUILD_WASM=ON
 emmake cmake --build build_wasm --config Release --target spz2glb-wasm
 emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
