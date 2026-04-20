@@ -43,6 +43,21 @@
 - **跨平台**: Windows、Linux、macOS (x64 + ARM)
 - **零依赖运行时**: C++17 + WASM，无额外运行时依赖
 
+## 扩展支持状态
+
+### `KHR_gaussian_splatting` 扩展
+- **状态**：`KHR_gaussian_splatting` 已合入 glTF 仓库，但**尚未正式定稿**。
+- **`KHR_gaussian_splatting_compression_spz_2`**：当前仍明确处于**草案阶段**。
+- **当前实现**：
+  - ✅ **导出**：会写出完整扩展链，包含外层 `KHR_gaussian_splatting` 与内层 `KHR_gaussian_splatting_compression_spz_2`。
+  - ⚠️ **解析**：对草案扩展采用**安全忽略**策略，这是当前阶段的预期回退行为。
+  - 🚫 **不硬编码 `Extensions` 枚举项**：不会把草案扩展直接写死进头文件枚举，避免过早锁定未定稿接口。
+- **后续变化**：等 Khronos 侧定义正式定稿后，再补齐完整的解析期支持。
+
+### 编译控制
+- **CMake 选项**：`ENABLE_KHR_GAUSSIAN_SPLATTING`（默认：`ON`）控制是否在导出侧写入扩展数据。
+- **关闭后的行为**：转换器仍可运行，但不会在输出 GLB 中写入 Gaussian Splatting 扩展数据。
+
 ## 与 `splat-transform` 的对比
 
 > 说明：这里强调的是**工具定位差异**，不是绝对优劣判断。
@@ -90,7 +105,7 @@ spz_verify all input.spz output.glb
 
 # 输出：
 # Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
-# Layer 2: Binary Lossless Verification - PASSED (100% MD5 match)
+# Layer 2: Binary Lossless Verification - PASSED (byte-identical)
 # Layer 3: Decoding Consistency Verification - PASSED (Size match)
 # [SUCCESS] All verifications PASSED!
 ```
@@ -184,7 +199,7 @@ done
 > - **独立工具**: spz_verify 是独立的验证工具，不是生产转换流程的一部分
 > - **开发/测试用途**: 设计用于质量保证、调试和测试工作流
 > - **日常使用不需要**: 一旦转换被验证，生产环境只需要 spz2glb
-> - **Layer 2 会解压**: Layer 2 验证会提取并解压数据来计算 MD5 哈希值（比 Layer 1/3 慢）
+> - **Layer 2 进行字节级比较**: Layer 2 验证会从 GLB 中提取 SPZ 负载，并与原始 SPZ 文件进行逐字节比较（比 Layer 1/3 慢）
 
 ```bash
 spz_verify <command> [options]
@@ -476,13 +491,14 @@ GLB Header (12 bytes)
 JSON Chunk
 ├── chunkLength
 ├── chunkType: 0x4E4F534A ("JSON")
-└── glTF JSON (padded to 4-byte boundary)
-    └── KHR_gaussian_splatting_compression_spz_2 extension
+└── glTF JSON（按 4 字节对齐）
+    └── 外层 `KHR_gaussian_splatting` 扩展
+        └── 内层 `KHR_gaussian_splatting_compression_spz_2` 扩展
 
 BIN Chunk
 ├── chunkLength
 ├── chunkType: 0x004E4942 ("BIN\0")
-└── Raw SPZ compressed data
+└── 原始 SPZ 压缩数据
 ```
 
 ## 作者与版权

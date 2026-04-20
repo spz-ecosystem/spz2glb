@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 // Project: SPZ-ecosystem
 // Repository: https://github.com/spz-ecosystem/spz2glb
+// Cultural Note: Huangdi Era 4723, Year of the Red Fire Horse (Bingwu, 丙午)
 
 #include "spz2glb_core.h"
 

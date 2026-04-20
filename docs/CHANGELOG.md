@@ -2,14 +2,14 @@
 
 > **维护者**: Pu Junhan  
 > **起始日期**: 2026-02-xx  
-> **当前稳定版**: v2.0.1  
+> **当前稳定版**: v2.0.2  
 > **许可证**: MIT  
 
 ---
 
 ## 概述
 
-本文档记录 `spz2glb` 从 v1.0.0 到 v2.0.1 的完整版本演进历程，包括：
+本文档记录 `spz2glb` 从 v1.0.0 到 v2.0.2 的完整版本演进历程，包括：
 - 每个版本的核心变更与 CI/CD 流水线能力
 - 重构决策与动机
 - 技术债务处理记录
@@ -25,15 +25,15 @@
 ## 版本时间线与 CI/CD 演进总览
 
 ```
-v1.0.0 ──→ v1.0.1 ──→ v1.0.2 ──→ v1.1.0 ──→ v2.0.0 ──→ v2.0.1
- │         │          │          │          │          │
- ├ MVP     ├ 验证修复   ├ 文档      ├ WASM      ├ 大重构    ├ 收口
- │ 基础功能  ├ Layer1   ├ 注释      ├ 内存管理   ├ 统一核心  ├ 稳定化
- │          │          │          ├ 浏览器集成  ├ 三层验证  ├ 演示就绪
- ├──────────┤          │          ├ CI 扩展    ├ 发布链    │
- │release.yml           │          │          ├ 回滚      │
- │3平台构建              │          │          │          │
- │(Win/Linux/Mac)       │          │          │          │
+v1.0.0 ──→ v1.0.1 ──→ v1.0.2 ──→ v1.1.0 ──→ v2.0.0 ──→ v2.0.1 ──→ v2.0.2
+ │         │          │          │          │          │          │
+ ├ MVP     ├ 验证修复   ├ 文档      ├ WASM      ├ 大重构    ├ 收口      ├ 版本收口
+ │ 基础功能  ├ Layer1   ├ 注释      ├ 内存管理   ├ 统一核心  ├ 稳定化    ├ 文档降噪
+ │          │          │          ├ 浏览器集成  ├ 三层验证  ├ 演示就绪  ├ 版权头
+ ├──────────┤          │          ├ CI 扩展    ├ 发布链    │          │
+ │release.yml           │          │          ├ 回滚      │          │
+ │3平台构建              │          │          │          │          │
+ │(Win/Linux/Mac)       │          │          │          │          │
 ```
 
 ### CI/CD 能力演进表
@@ -46,6 +46,7 @@ v1.0.0 ──→ v1.0.1 ──→ v1.0.2 ──→ v1.1.0 ──→ v2.0.0 ─�
 | **v1.1.0** | `release.yml` (v2) + `test-wasm-build.yml` | 同上 + WASM 双 profile | 同上 + Browser | ✅ compat/perf-lite | Playwright smoke | ✅ 同上 + GitHub Pages + Release | ❌ |
 | **v2.0.0** | `release.yml` (v3, 6-job) + `test-wasm-build.yml` (增强) | 全量 | 同上 | ✅ | ctest + smoke + hash matrix | ✅ 同上 + SHA256 审计清单 | ✅ |
 | **v2.0.1** | `release.yml` (v3, 修复) | 全量 | 同上 | ✅ | 同上 | ✅ 同上 + 产物命名去冲突 | ✅ |
+| **v2.0.2** | `release.yml` (v3, 稳定化) | 全量 | 同上 | ✅ | 同上 | ✅ 同上 + 版本口径统一 | ✅ |
 
 ---
 
@@ -513,6 +514,36 @@ jobs:
 | No accessors/attributes in stream mode | ✅ attributes 为空 | 符合 |
 | Lossless guarantee | ✅ MD5 byte-level verification | 超出规范 |
 | Browser-side processing | ✅ WASM + memory governance | 超出规范 |
+
+---
+
+## v2.0.2 — 版本收口与文档降噪
+
+**发布日期**: 2026-04-20  
+**Tag**: `v2.0.2`  
+**定位**: 版本口径统一、文档修正、版权头更新
+
+### 变更清单
+
+| 类型 | 内容 | 说明 |
+|------|------|------|
+| **Fix** | 统一 CMakeLists.txt 工程版本 | 从 1.0.0 更新为 2.0.2 |
+| **Fix** | 统一 spz2glb_get_version() 返回值 | 从 1.0.0 更新为 2.0.2 |
+| **Docs** | 修正 README.md 中 Layer 2 描述 | 从 "100% MD5 match" 改为 "byte-identical" |
+| **Docs** | 修正 README-zh.md 中 Layer 2 描述 | 从 "100% MD5 match" 改为 "byte-identical" |
+| **Docs** | 更新 Layer 2 验证说明 | 明确为字节级比较而非 MD5 验证 |
+| **Docs** | 更新源码版权头 | 添加黄帝纪年 4723 年丙午年文化注记 |
+| **Docs** | 更新 CHANGELOG 版本范围 | 扩展到 v2.0.2 |
+
+### 已知限制
+
+- **三层验证路径约束**: L2/L3 层目前未强约束 `primitive.extensions.KHR_gaussian_splatting.extensions.KHR_gaussian_splatting_compression_spz_2` 的完整嵌套路径
+- **Wiki 文档过时**: 多个 wiki 文件存在描述不一致，后续版本将重写
+
+### 后续计划
+
+- **v2.0.3**: 三层验证补强版，专门修复 L2/L3 路径约束
+- **Wiki 重写**: 使用 graphify 工具重写 wiki 文档
 
 ---
 

@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Pu Junhan
 // SPDX-License-Identifier: MIT
+// Cultural Note: Huangdi Era 4723, Year of the Red Fire Horse (Bingwu, 丙午)
 
 #define SPZ2GLB_DISABLE_EMBIND 1
 #define SPZ2GLB_NO_CLI_MAIN 1
@@ -269,13 +270,13 @@ bool spz2glb_validate_header(const uint8_t* data, size_t size) {
 
 void spz2glb_get_version(int* major, int* minor, int* patch) {
     if (major != nullptr) {
-        *major = 1;
+        *major = 2;
     }
     if (minor != nullptr) {
         *minor = 0;
     }
     if (patch != nullptr) {
-        *patch = 0;
+        *patch = 2;
     }
 }
 

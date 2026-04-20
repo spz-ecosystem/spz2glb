@@ -43,6 +43,21 @@
 - **Cross-Platform**: Windows, Linux, macOS (x64 + ARM)
 - **Zero Runtime Dependencies**: C++17 + WASM, no additional runtime dependencies
 
+## Extension Support Status
+
+### KHR_gaussian_splatting Extension
+- **Status**: `KHR_gaussian_splatting` has landed in the glTF repository but is **not yet ratified**.
+- **`KHR_gaussian_splatting_compression_spz_2`**: Still explicitly in **draft** status.
+- **Current Implementation**:
+  - ✅ **Export**: Writes the full extension chain, including outer `KHR_gaussian_splatting` and nested `KHR_gaussian_splatting_compression_spz_2` data.
+  - ⚠️ **Parse**: Draft extensions are **safely ignored** during parsing, which is the expected fallback behavior.
+  - 🚫 **No hardcoded `Extensions` enum entries**: Draft extensions are intentionally kept out of header enums to avoid locking unfinished interfaces.
+- **Future Changes**: Full parse-time support can be added once the Khronos definitions are ratified.
+
+### Compilation Control
+- **CMake option**: `ENABLE_KHR_GAUSSIAN_SPLATTING` (default: `ON`) controls whether export-side extension data is emitted.
+- **Behavior when disabled**: The converter still runs, but it does not write Gaussian-splatting extension data into the output GLB.
+
 ## Comparison with `splat-transform`
 
 > Note: this section describes **tool positioning differences**, not an absolute quality ranking.
@@ -90,7 +105,7 @@ spz_verify all input.spz output.glb
 
 # Output:
 # Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
-# Layer 2: Binary Lossless Verification - PASSED (100% MD5 match)
+# Layer 2: Binary Lossless Verification - PASSED (byte-identical)
 # Layer 3: Decoding Consistency Verification - PASSED (Size match)
 # [SUCCESS] All verifications PASSED!
 ```
@@ -184,7 +199,7 @@ done
 > - **Independent Tool**: spz_verify is a standalone verification tool, NOT part of the production conversion pipeline
 > - **Development/Testing Use**: Designed for quality assurance, debugging, and testing workflows
 > - **Not Required for Daily Use**: Once conversion is verified, you only need spz2glb for production
-> - **Layer 2 Performs Decompression**: Layer 2 verification extracts and decompresses data to compute MD5 hashes (slower than Layer 1/3)
+> - **Layer 2 Performs Byte-Level Comparison**: Layer 2 verification extracts the SPZ payload from GLB and performs byte-by-byte comparison with the original SPZ file (slower than Layer 1/3)
 
 ```bash
 spz_verify <command> [options]
@@ -477,7 +492,8 @@ JSON Chunk
 ├── chunkLength
 ├── chunkType: 0x4E4F534A ("JSON")
 └── glTF JSON (padded to 4-byte boundary)
-    └── KHR_gaussian_splatting_compression_spz_2 extension
+    └── `KHR_gaussian_splatting` extension
+        └── nested `KHR_gaussian_splatting_compression_spz_2` extension
 
 BIN Chunk
 ├── chunkLength
