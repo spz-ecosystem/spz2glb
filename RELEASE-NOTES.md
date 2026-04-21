@@ -72,9 +72,43 @@ cmake --build build --config Release
 ## What's Next
 
 ### v2.0.3 (Planned)
-- **Three-Layer Verification Enhancement**: Fix L2/L3 path constraint enforcement
-- **Documentation Alignment**: Update all documentation to match current implementation
-- **Wiki Rewrite**: Complete rewrite using graphify tool
+**Focus**: Three-Layer Verification Enhancement with Backward Compatibility
+
+#### 1. Three-Layer Verification Enhancement
+- **Goal**: Add nested path constraint detection without breaking existing validation
+- **Strategy**: "Detect but don't enforce" - report nested structure status without failing validation
+- **Implementation**:
+  - Add `has_nested_extension` field to `VerifyResult` struct
+  - Modify `parseBufferAndView` to detect nested structure: `primitive.extensions.KHR_gaussian_splatting.extensions.KHR_gaussian_splatting_compression_spz_2`
+  - Output `[INFO]` or `[WARN]` messages about nested structure status
+  - **No change to pass/fail criteria** - existing files continue to pass validation
+- **Backward Compatibility**: 100% - no breaking changes to validation logic
+- **Testing**: Add test cases for nested structure detection without changing existing tests
+
+#### 2. Documentation Alignment
+- **Update all documentation** to match current implementation:
+  - Fix wiki files (GLB-Structure.md, Extensions.md) to show correct nested extension structure
+  - Update Verification.md to reflect byte-level comparison (not MD5)
+  - Align README files with actual validation behavior
+- **Add validation mode documentation**:
+  - Document current "lenient mode" (draft extensions safely ignored)
+  - Prepare for future "strict mode" (when extensions are ratified)
+
+#### 3. Wiki Rewrite with graphify
+- **Use graphify tool** to generate knowledge graph of project
+- **Generate wiki** using `graphify . --wiki`
+- **Integrate generated wiki** into project documentation
+- **Ensure consistency** between wiki and codebase
+
+#### 4. Validation Mode Interface (Preparation)
+- **Add CLI interface** for future validation modes:
+  ```bash
+  spz_verify all --strict   # Future: strict validation (when extensions ratified)
+  spz_verify all            # Current: lenient validation (default)
+  ```
+- **No implementation yet** - just prepare the interface for v2.5+
+
+**Key Principle**: v2.0.3 enhances detection capabilities while maintaining 100% backward compatibility. No existing validation behavior changes.
 
 ### v2.1.0 (Planned)
 - **QR Code URL**: Add QR code generation for demo URLs

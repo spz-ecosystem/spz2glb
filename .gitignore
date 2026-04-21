@@ -26,6 +26,12 @@ Thumbs.db
 # Planning documents (local only)
 docs/plans/
 
+# Internal documentation (not for public distribution)
+docs/CHANGELOG.md
+docs/WASM_BUILD_TROUBLESHOOTING.md
+docs/2026-*.md
+docs/skills/
+
 # Executables
 spz2glb
 spz2glb.exe
