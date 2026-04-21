@@ -42,7 +42,9 @@ add_library(spz2glb_core
 
 target_link_libraries(spz2glb_core PUBLIC fastgltf)
 
-if(NOT SPZ2GLB_BUILD_WASM)
+if(SPZ2GLB_BUILD_WASM)
+  target_compile_options(spz2glb_core PRIVATE --use-port=zlib)
+else()
   find_package(ZLIB REQUIRED)
   target_link_libraries(spz2glb_core PUBLIC ZLIB::ZLIB)
 endif()
@@ -148,10 +150,11 @@ if(SPZ2GLB_BUILD_WASM)
     target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  # Emscripten ZLIB: use -sUSE_ZLIB=1 in link options
+  # Emscripten ZLIB: compile and link with the zlib port so headers stay visible in CI.
 
   # C++ 编译优化（无 LTO 避免导入名压缩）
   target_compile_options(spz2glb-wasm PRIVATE
+    "--use-port=zlib"
     "-O3"
     "-fno-exceptions"
     "-fno-lto"
@@ -169,6 +172,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-O3"
     "-fno-lto"
     "-sUSE_ZLIB=1"
+    "--use-port=zlib"
 
     # 内存配置（Phase 6: compat / perf-lite）
     "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
@@ -229,9 +233,10 @@ if(SPZ2GLB_BUILD_WASM)
     target_compile_definitions(spz_verify-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  # Emscripten ZLIB: use -sUSE_ZLIB=1 in link options
+  # Emscripten ZLIB: compile and link with the zlib port so verifier sources can include zlib.h.
 
   target_compile_options(spz_verify-wasm PRIVATE
+    "--use-port=zlib"
     "-O3"
     "-fno-exceptions"
     "-Wall"
@@ -246,6 +251,7 @@ if(SPZ2GLB_BUILD_WASM)
   target_link_options(spz_verify-wasm PRIVATE
     "-O3"
     "-sUSE_ZLIB=1"
+    "--use-port=zlib"
     "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
     "${SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION}"
     "-sALLOW_MEMORY_GROWTH=${SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH}"
