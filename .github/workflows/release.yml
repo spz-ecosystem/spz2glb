@@ -22,6 +22,9 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  EMSCRIPTEN_VERSION: 5.0.1
+
 jobs:
   build:
     strategy:
@@ -123,6 +126,8 @@ jobs:
   wasm-build:
     name: Build WASM (${{ matrix.wasm_profile }})
     runs-on: ubuntu-latest
+    env:
+      EM_CACHE: ${{ github.workspace }}/.emscripten-cache
     strategy:
       fail-fast: false
       matrix:
@@ -133,16 +138,28 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Cache Emscripten ports
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.EM_CACHE }}
+          key: emscripten-cache-${{ runner.os }}-${{ env.EMSCRIPTEN_VERSION }}
+          restore-keys: |
+            emscripten-cache-${{ runner.os }}-
+
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: latest
+          version: ${{ env.EMSCRIPTEN_VERSION }}
+
+      - name: Show Emscripten toolchain info
+        run: |
+          emcc -v
+          echo "EM_CACHE=$EM_CACHE"
 
       - name: Configure WASM build
         run: |
           emcmake cmake -S . -B build_wasm \
             -DSPZ2GLB_BUILD_WASM=ON \
-            -DSPZ2GLB_USE_EMSCRIPTEN_ZLIB=ON \
             -DSPZ2GLB_WASM_PROFILE=${{ matrix.wasm_profile }}
 
       - name: Build spz2glb WASM
