@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Documentation alignment**: Update README and troubleshooting docs to reflect fixed Emscripten version.
+- **License enhancement**: Add cultural note to LICENSE file for better clarity.
+- **Copyright headers**: Improve copyright headers across source files.
+
+### Added
+- **CHANGELOG.md**: Add comprehensive changelog for version tracking.
+- **Project evolution log**: Add detailed project evolution documentation for standard draft and paper reference.
 
 ## [2.0.1] - 2026-04-15
 
