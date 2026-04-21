@@ -32,6 +32,9 @@ docs/WASM_BUILD_TROUBLESHOOTING.md
 docs/2026-*.md
 docs/skills/
 
+# Temporary execution documents (local only)
+docs/BRANCH-CLEANUP-EXECUTION-PLAN.md
+
 # Executables
 spz2glb
 spz2glb.exe
