@@ -6,6 +6,7 @@ cmake-build-*/
 tests/output/
 test_output/
 tests/data/*.spz
+tests/data/*.ply
 *.glb
 *.tmp
 
@@ -34,6 +35,18 @@ docs/skills/
 
 # Temporary execution documents (local only)
 docs/BRANCH-CLEANUP-EXECUTION-PLAN.md
+docs/BRANCH-PROTECTION-*.md
+docs/GITHUB-CLI-SETUP.md
+docs/LOCAL-BRANCH-PROTECTION.md
+
+# Agent configuration (local only)
+.claude/
+AGENTS.md
+CLAUDE.md
+
+# Temporary scripts (local only)
+scripts/configure-branch-protection*.sh
+scripts/verify-branch-protection*.sh
 
 # Executables
 spz2glb

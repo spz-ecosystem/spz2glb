@@ -17,21 +17,6 @@
 - GLB compliance and correctness are judged by the **three-layer verification** system (structure / lossless / decoding consistency).
 - The Web path is for lightweight single-file demos by default; batch and heavy workloads belong to the CLI path.
 
-## 📚 Documentation
-
-- **Wiki**: https://github.com/spz-ecosystem/spz2glb/wiki
-- **Live Demo**: [GitHub Pages](https://spz-ecosystem.github.io/spz2glb/)
-  - [Installation Guide](https://github.com/spz-ecosystem/spz2glb/wiki/Installation)
-  - [Quick Start](https://github.com/spz-ecosystem/spz2glb/wiki/Quick-Start)
-  - [Usage](https://github.com/spz-ecosystem/spz2glb/wiki/Usage)
-  - [Three-Layer Verification](https://github.com/spz-ecosystem/spz2glb/wiki/Verification)
-  - [Batch Processing](https://github.com/spz-ecosystem/spz2glb/wiki/Batch-Processing)
-  - [Performance Optimization](https://github.com/spz-ecosystem/spz2glb/wiki/Performance)
-  - [Troubleshooting](https://github.com/spz-ecosystem/spz2glb/wiki/Troubleshooting)
-  - [FAQ](https://github.com/spz-ecosystem/spz2glb/wiki/FAQ)
-  - [Building Guide](https://github.com/spz-ecosystem/spz2glb/wiki/Building)
-  - [Contributing](https://github.com/spz-ecosystem/spz2glb/wiki/Contributing)
-
 ## Core Features
 
 - **Lossless Packaging**: SPZ compressed stream stored as-is in GLB, 100% byte-level fidelity
@@ -518,6 +503,12 @@ This project depends on the following public technical specifications:
 This project is not affiliated with, endorsed by, or connected to Niantic, Inc. or its affiliates.
 
 **DOI**: [10.5281/zenodo.20849112](https://doi.org/10.5281/zenodo.20849112)
+
+## Citation
+
+If you use this project in your research, please cite:
+
+> Pu Junhan. Zero-Trust HL Harness: Governing Autonomous Agents through Self-Referential Evolution. 中国科学院科技论文预发布平台, ChinaXiv:202607.00158V1.
 
 ## License
 

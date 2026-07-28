@@ -17,21 +17,6 @@
 - GLB 合规与正确性判定统一由**三层验证**负责（结构验证 / 无损验证 / 解码一致性验证）。
 - Web 侧默认面向轻量单文件演示；批量与重任务属于 CLI 路径，不在 Web 默认职责内。
 
-## 📚 文档
-
-- **Wiki**: https://github.com/spz-ecosystem/spz2glb/wiki
-- **在线演示**: [GitHub Pages](https://spz-ecosystem.github.io/spz2glb/)
-  - [安装指南](https://github.com/spz-ecosystem/spz2glb/wiki/Installation)
-  - [快速开始](https://github.com/spz-ecosystem/spz2glb/wiki/Quick-Start)
-  - [使用方法](https://github.com/spz-ecosystem/spz2glb/wiki/Usage)
-  - [三层验证](https://github.com/spz-ecosystem/spz2glb/wiki/Verification)
-  - [批量处理](https://github.com/spz-ecosystem/spz2glb/wiki/Batch-Processing)
-  - [性能优化](https://github.com/spz-ecosystem/spz2glb/wiki/Performance)
-  - [故障排除](https://github.com/spz-ecosystem/spz2glb/wiki/Troubleshooting)
-  - [常见问题](https://github.com/spz-ecosystem/spz2glb/wiki/FAQ)
-  - [构建指南](https://github.com/spz-ecosystem/spz2glb/wiki/Building)
-  - [贡献指南](https://github.com/spz-ecosystem/spz2glb/wiki/Contributing)
-
 ## 核心特性
 
 - **无损打包**: SPZ 压缩流原封不动存入 GLB，100% 字节级保真
@@ -516,6 +501,12 @@ BIN Chunk
 - KHR_gaussian_splatting_compression_spz_2 扩展草案（SPZ 生态公开规范）
 
 本项目与 Niantic, Inc. 及其关联方不存在隶属、代言或关联关系。
+
+## 引用
+
+如在研究中使用本项目，请引用：
+
+> Pu Junhan. Zero-Trust HL Harness: Governing Autonomous Agents through Self-Referential Evolution. 中国科学院科技论文预发布平台, ChinaXiv:202607.00158V1.
 
 ## 许可证
 
