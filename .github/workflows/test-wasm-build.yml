@@ -24,6 +24,7 @@ on:
       - 'docs/examples/**'
       - 'tests/**'
       - '.github/workflows/test-wasm-build.yml'
+      - '.github/workflows/release.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
