@@ -17,6 +17,7 @@ on:
     branches:
       - main
       - phase5-browser-lifecycle-20260325
+      - feature/spz2glb-v4-zstd-adaptation
     paths:
       - 'CMakeLists.txt'
       - 'src/**'

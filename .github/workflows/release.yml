@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - main
+      - feature/spz2glb-v4-zstd-adaptation
     tags:
       - 'v*'
   workflow_dispatch:
