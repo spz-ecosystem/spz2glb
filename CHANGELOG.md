@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-07-29
+
+### Added
+- **SPZ v4/ZSTD 支持**: ZSTD 检测 (`isZstdData`/`peekSpzHeaderFromZstd`)、v4 32B header 明文解析 (SpzV4Header)
+- **ILV 003 coordinateSystem 解析**: header zone ILV 扫描, coordinateSystem 提取与值域校验
+- **五层验证器扩展**: L1-L3 保留, 新增 L4 (GLB 元数据 vs SPZ header 一致性)、L5 (ILV 扩展完整性)
+- **fastgltf 扩展字段**: `GaussianSplatSpzCompression` 新增 `spzVersion`/`compression`/`coordinateSystem` + JSON 序列化
+- **CMake zstd 集成**: 原生构建通过 PkgConfig 链接 libzstd, WASM 通过 `--use-port=zstd`
+
+### Security
+- **CI 加固**: zizmor 安全审计、npm audit 供应链检查、SHA-pin 所有 actions、`persist-credentials: false`
+- **权限收紧**: workflow 级 `contents: read`, job 级最小权限 (pages/id-token 仅在 deploy-pages)
+- **Pages 部署 SHA 升级**: upload-pages-artifact v3→v5.0.0, deploy-pages v4→v5.0.0
+
 ## [2.0.2] - 2026-04-21
 
 ### Fixed
