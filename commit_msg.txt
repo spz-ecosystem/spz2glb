@@ -1,5 +1,0 @@
-﻿fix: remove --suppress flag (not a valid zizmor CLI arg)
-
-zizmor has no --suppress CLI flag; suppression is via inline comments
-or zizmor.yml config. --min-severity high handles cache-poisoning
-(medium severity) automatically.
