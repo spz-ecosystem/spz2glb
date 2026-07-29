@@ -48,6 +48,8 @@ if(SPZ2GLB_BUILD_WASM)
   # guard zstd with #ifndef __EMSCRIPTEN__, so WASM builds do not need it.
 else()
   # zlib: find_package first, fallback to FetchContent with SHA256 (modeled on gatekeeper)
+  # Uses INTERFACE library to unify system zlib and FetchContent paths.
+  add_library(spz2glb_zlib INTERFACE)
   find_package(ZLIB QUIET)
   if(NOT ZLIB_FOUND)
     message(STATUS "zlib not found, using FetchContent to download v1.3.2")
@@ -58,13 +60,16 @@ else()
       URL_HASH SHA256=bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
     )
     FetchContent_MakeAvailable(zlib_fetch)
+    # zlib's CMake creates "zlibstatic" (static) or "zlib" (shared) target
     if(TARGET zlibstatic)
-      set(ZLIB::ZLIB zlibstatic)
+      target_link_libraries(spz2glb_zlib INTERFACE zlibstatic)
     elseif(TARGET zlib)
-      set(ZLIB::ZLIB zlib)
+      target_link_libraries(spz2glb_zlib INTERFACE zlib)
     endif()
+  else()
+    target_link_libraries(spz2glb_zlib INTERFACE ZLIB::ZLIB)
   endif()
-  target_link_libraries(spz2glb_core PUBLIC ${ZLIB::ZLIB})
+  target_link_libraries(spz2glb_core PUBLIC spz2glb_zlib)
 
   # zstd: find_package first, fallback to FetchContent with SHA256 + SOURCE_SUBDIR
   find_package(zstd QUIET)
@@ -124,7 +129,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
-  target_link_libraries(spz_verify PRIVATE fastgltf ZLIB::ZLIB zstd::zstd)
+  target_link_libraries(spz_verify PRIVATE fastgltf spz2glb_zlib zstd::zstd)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
@@ -146,7 +151,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
-  target_link_libraries(spz2glb PRIVATE spz2glb_core fastgltf ZLIB::ZLIB)
+  target_link_libraries(spz2glb PRIVATE spz2glb_core fastgltf spz2glb_zlib)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
