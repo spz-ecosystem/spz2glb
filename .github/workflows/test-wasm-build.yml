@@ -53,7 +53,7 @@ jobs:
         uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.3
         with:
           path: /tmp/emsdk-cache
-          key: emsdk-${{ env.EMSCRIPTEN_VERSION }}-${{ runner.os }}-${{ github.ref }}
+          key: emsdk-${{ env.EMSCRIPTEN_VERSION }}-${{ runner.os }}-${{ github.sha }}
 
       - name: Setup Emscripten SDK
         run: |
