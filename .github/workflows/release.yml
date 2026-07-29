@@ -116,6 +116,7 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
+          retention-days: 7
 
       - name: Upload verify artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -197,6 +198,7 @@ jobs:
             dist/spz2glb.js
             dist/spz_verify.wasm
             dist/spz_verify.js
+          retention-days: 7
 
   verify-native:
     needs: [build]
@@ -417,3 +419,4 @@ jobs:
         with:
           name: rollback-manifest
           path: rollback-manifest.txt
+          retention-days: 7

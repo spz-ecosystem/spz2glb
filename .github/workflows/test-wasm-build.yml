@@ -416,6 +416,7 @@ jobs:
             browser_smoke.log
             dist/
             build_wasm/dist/
+          retention-days: 7
 
       - name: WASM post-build failure summary
         if: failure()
@@ -677,3 +678,4 @@ jobs:
             fixed_samples_wasm_hash.log
             fixed_samples_wasm_hashes.txt
             private_hash_server.log
+          retention-days: 7

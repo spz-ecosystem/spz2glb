@@ -396,6 +396,7 @@ check_workflow() {
 check_file_integrity() {
   local failures=0
 
+  # UTF-8 validity for C++ sources
   while IFS= read -r -d '' f; do
     if ! python3 -c "open('$f','rb').read().decode('utf-8')" 2>/dev/null; then
       echo "  INVALID UTF-8: $f" >&2
@@ -403,8 +404,22 @@ check_file_integrity() {
     fi
   done < <(find "${PROJECT_DIR}/src" -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | tr '\n' '\0')
 
+  # CMake syntax: detect set(VAR::NAME ...) which is invalid — :: is reserved
+  # for ALIAS/IMPORTED target namespaces and cannot appear in set() variable names.
+  local cmake_file="${PROJECT_DIR}/CMakeLists.txt"
+  if [ -f "${cmake_file}" ]; then
+    local bad_sets
+    bad_sets="$(grep -cPn 'set\([A-Za-z_][A-Za-z0-9_]*::' "${cmake_file}" 2>/dev/null || true)"
+    if [ "${bad_sets}" -gt 0 ]; then
+      echo "  ERROR: Found ${bad_sets} invalid set(XXX::YYY) pattern(s) in CMakeLists.txt" >&2
+      echo "  :: in variable name is reserved for CMake ALIAS/IMPORTED targets" >&2
+      grep -Pn 'set\([A-Za-z_][A-Za-z0-9_]*::' "${cmake_file}" >&2
+      failures=$((failures + bad_sets))
+    fi
+  fi
+
   if [ "${failures}" -gt 0 ]; then
-    fail "P6_INTEGRITY" 8 "${failures} file(s) with UTF-8 encoding errors"
+    fail "P6_INTEGRITY" 8 "${failures} file(s) with UTF-8 encoding errors or CMake syntax issues"
   fi
 }
 
