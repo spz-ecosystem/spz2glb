@@ -44,7 +44,8 @@ target_link_libraries(spz2glb_core PUBLIC fastgltf)
 
 if(SPZ2GLB_BUILD_WASM)
   target_compile_options(spz2glb_core PRIVATE --use-port=zlib)
-  target_compile_options(spz2glb_core PRIVATE --use-port=zstd)
+  # --use-port=zstd removed: Emscripten 5.0.1 does not recognize 'zstd' port name.
+  # C++ sources guard zstd with #ifndef __EMSCRIPTEN__, so WASM builds do not need it.
 else()
   find_package(ZLIB REQUIRED)
   find_package(PkgConfig REQUIRED)
@@ -166,6 +167,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wpedantic"
     "-Werror"
     "-Wno-unused-parameter"
+    "-Wno-unused-variable"
     "-Wno-old-style-cast"
     "-Wno-sign-conversion"
   )
@@ -176,7 +178,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-fno-lto"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
-    "--use-port=zstd"
+    # --use-port=zstd removed: Emscripten 5.0.1 does not recognize 'zstd' port name.
 
     # 内存配置（Phase 6: compat / perf-lite）
     "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
@@ -241,7 +243,7 @@ if(SPZ2GLB_BUILD_WASM)
 
   target_compile_options(spz_verify-wasm PRIVATE
     "--use-port=zlib"
-    "--use-port=zstd"
+    # --use-port=zstd removed: Emscripten 5.0.1 does not recognize 'zstd' port name.
     "-O3"
     "-fno-exceptions"
     "-Wall"
@@ -249,6 +251,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wpedantic"
     "-Werror"
     "-Wno-unused-parameter"
+    "-Wno-unused-variable"
     "-Wno-old-style-cast"
     "-Wno-sign-conversion"
   )
@@ -257,7 +260,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-O3"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
-    "--use-port=zstd"
+    # --use-port=zstd removed: Emscripten 5.0.1 does not recognize 'zstd' port name.
     "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
     "${SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION}"
     "-sALLOW_MEMORY_GROWTH=${SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH}"

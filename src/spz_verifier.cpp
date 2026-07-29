@@ -17,7 +17,9 @@
 #include <string_view>
 
 #include <zlib.h>
+#ifndef __EMSCRIPTEN__
 #include <zstd.h>
+#endif
 
 namespace spz {
 

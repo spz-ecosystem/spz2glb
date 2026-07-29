@@ -12,9 +12,7 @@
 
 #include <zlib.h>
 
-#ifdef __EMSCRIPTEN__
-#include <zstd.h>
-#else
+#ifndef __EMSCRIPTEN__
 #include <zstd.h>
 #endif
 

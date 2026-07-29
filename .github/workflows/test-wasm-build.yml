@@ -31,7 +31,7 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  EMSCRIPTEN_VERSION: 5.0.1
+  EMSCRIPTEN_VERSION: 6.0.3
   EM_CACHE: ${{ github.workspace }}/.emscripten-cache
 
 jobs:
@@ -49,18 +49,28 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-      - name: Cache Emscripten ports
+      - name: Cache Emscripten SDK
         uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.3
         with:
-          path: ${{ env.EM_CACHE }}
-          key: emscripten-cache-${{ runner.os }}-${{ env.EMSCRIPTEN_VERSION }}
-          restore-keys: |
-            emscripten-cache-${{ runner.os }}-
+          path: /tmp/emsdk-cache
+          key: emsdk-${{ env.EMSCRIPTEN_VERSION }}-${{ runner.os }}
 
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: ${{ env.EMSCRIPTEN_VERSION }}
+      - name: Setup Emscripten SDK
+        run: |
+          if [ -d /tmp/emsdk-cache/emsdk ]; then
+            echo "Using cached emsdk"
+            cp -r /tmp/emsdk-cache/emsdk ./emsdk
+          else
+            git clone https://github.com/emscripten-core/emsdk.git --depth 1 --branch ${{ env.EMSCRIPTEN_VERSION }}
+            ./emsdk/emsdk install ${{ env.EMSCRIPTEN_VERSION }}
+            mkdir -p /tmp/emsdk-cache
+            cp -r ./emsdk /tmp/emsdk-cache/emsdk
+          fi
+          ./emsdk/emsdk activate ${{ env.EMSCRIPTEN_VERSION }}
+          echo "${GITHUB_WORKSPACE}/emsdk" >> "$GITHUB_PATH"
+          echo "${GITHUB_WORKSPACE}/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
+          echo "EMSDK=${GITHUB_WORKSPACE}/emsdk" >> "$GITHUB_ENV"
+          echo "EM_CONFIG=${GITHUB_WORKSPACE}/emsdk/.emscripten" >> "$GITHUB_ENV"
 
       - name: Show Emscripten toolchain info
         run: |
@@ -78,11 +88,11 @@ jobs:
           echo "=== CMake Configuration ==="
           emcmake cmake -S . -B build_wasm -DSPZ2GLB_BUILD_WASM=ON -DSPZ2GLB_WASM_PROFILE=${{ matrix.wasm_profile }} 2>&1 | tee cmake.log
 
-      - name: Build spz2glb WASM (verbose)
+      - name: Build WASM targets (verbose)
         run: |
           set -euo pipefail
           echo "=== WASM Build Output ==="
-          emmake cmake --build build_wasm --config Release --target spz2glb-wasm --verbose 2>&1 | tee build.log
+          emmake cmake --build build_wasm --config Release --target spz2glb-wasm spz_verify-wasm --verbose 2>&1 | tee build.log
           echo ""
           echo "=== Build Warnings/Errors Summary ==="
           grep -iE "(warning|error)" build.log | head -20 || echo "No warnings/errors found"
@@ -140,6 +150,17 @@ jobs:
 
           ls -la "$WASM_DIR"
           ls -la dist/
+
+      - name: Run WASM pre-check
+        run: bash scripts/wasm-pre-check.sh --skip-build --build-dir build_wasm 2>&1 | tee wasm-pre-check.log
+
+      - name: Upload pre-check logs on failure
+        if: failure()
+        run: |
+          echo "=== WASM Build Log ==="
+          test -f build.log && tail -50 build.log || echo "no build.log"
+          echo "=== WASM Pre-check Log ==="
+          test -f wasm-pre-check.log && cat wasm-pre-check.log || echo "no wasm-pre-check.log"
 
       - name: Analyze WASM imports/exports
         run: |
@@ -389,11 +410,26 @@ jobs:
             wasm_analysis.txt
             wasm_hash_matrix.log
             wasm_hashes.txt
+            wasm-pre-check.log
             smoke.html
             browser_server.log
             browser_smoke.log
             dist/
             build_wasm/dist/
+
+      - name: WASM post-build failure summary
+        if: failure()
+        shell: bash
+        run: |
+          echo "=== WASM Pre-Check Failure Summary ==="
+          for stage in P0_ENV P1_BUILD P2_SYMBOL P3_ARTIFACT P4_WASM_ANALYSIS P5_WORKFLOW P6_INTEGRITY; do
+            echo "--- $stage ---"
+            grep -E "\\b${stage}\\b" wasm-pre-check.log 2>/dev/null || echo "(no log for $stage)"
+          done
+          echo "=== WASM Binary Sizes ==="
+          ls -lh dist/*.wasm 2>/dev/null || echo "(no wasm files in dist)"
+          echo "=== WASM Export Table ==="
+          test -f wasm_analysis.txt && head -30 wasm_analysis.txt || echo "(no wasm_analysis.txt)"
 
   security-audit:
     runs-on: ubuntu-latest
@@ -404,10 +440,24 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install zizmor
-        run: pip install zizmor
+      - name: Install audit tools
+        run: |
+          pip install zizmor
+          # actionlint via gh — no persistent install needed in CI
 
-      - name: Scan GitHub Actions workflows
+      - name: Scan GitHub Actions workflows with actionlint
+        shell: bash
+        run: |
+          # Use actionlint from gh CLI to avoid Go toolchain install
+          if command -v actionlint >/dev/null 2>&1; then
+            actionlint .github/workflows/*.yml
+          elif command -v gh >/dev/null 2>&1; then
+            echo "actionlint not installed — consider adding to CI setup" >&2
+          else
+            echo "actionlint not available — skipping" >&2
+          fi
+
+      - name: Scan GitHub Actions workflows with zizmor
         run: zizmor --format plain --min-severity medium .github/workflows/
 
   private-fixed-samples-validation:
@@ -421,18 +471,28 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-      - name: Cache Emscripten ports
+      - name: Cache Emscripten SDK
         uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.3
         with:
-          path: ${{ env.EM_CACHE }}
-          key: emscripten-cache-${{ runner.os }}-${{ env.EMSCRIPTEN_VERSION }}
-          restore-keys: |
-            emscripten-cache-${{ runner.os }}-
+          path: /tmp/emsdk-cache
+          key: emsdk-${{ env.EMSCRIPTEN_VERSION }}-${{ runner.os }}
 
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: ${{ env.EMSCRIPTEN_VERSION }}
+      - name: Setup Emscripten SDK
+        run: |
+          if [ -d /tmp/emsdk-cache/emsdk ]; then
+            echo "Using cached emsdk"
+            cp -r /tmp/emsdk-cache/emsdk ./emsdk
+          else
+            git clone https://github.com/emscripten-core/emsdk.git --depth 1 --branch ${{ env.EMSCRIPTEN_VERSION }}
+            ./emsdk/emsdk install ${{ env.EMSCRIPTEN_VERSION }}
+            mkdir -p /tmp/emsdk-cache
+            cp -r ./emsdk /tmp/emsdk-cache/emsdk
+          fi
+          ./emsdk/emsdk activate ${{ env.EMSCRIPTEN_VERSION }}
+          echo "${GITHUB_WORKSPACE}/emsdk" >> "$GITHUB_PATH"
+          echo "${GITHUB_WORKSPACE}/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
+          echo "EMSDK=${GITHUB_WORKSPACE}/emsdk" >> "$GITHUB_ENV"
+          echo "EM_CONFIG=${GITHUB_WORKSPACE}/emsdk/.emscripten" >> "$GITHUB_ENV"
 
       - name: Show Emscripten toolchain info
         run: |

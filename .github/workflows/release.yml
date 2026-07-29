@@ -22,7 +22,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  EMSCRIPTEN_VERSION: 5.0.1
+  EMSCRIPTEN_VERSION: 6.0.3
 
 jobs:
   build:
@@ -139,18 +139,28 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-      - name: Cache Emscripten ports
+      - name: Cache Emscripten SDK
         uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.3
         with:
-          path: ${{ env.EM_CACHE }}
-          key: emscripten-cache-${{ runner.os }}-${{ env.EMSCRIPTEN_VERSION }}
-          restore-keys: |
-            emscripten-cache-${{ runner.os }}-
+          path: /tmp/emsdk-cache
+          key: emsdk-${{ env.EMSCRIPTEN_VERSION }}-${{ runner.os }}
 
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: ${{ env.EMSCRIPTEN_VERSION }}
+      - name: Setup Emscripten SDK
+        run: |
+          if [ -d /tmp/emsdk-cache/emsdk ]; then
+            echo "Using cached emsdk"
+            cp -r /tmp/emsdk-cache/emsdk ./emsdk
+          else
+            git clone https://github.com/emscripten-core/emsdk.git --depth 1 --branch ${{ env.EMSCRIPTEN_VERSION }}
+            ./emsdk/emsdk install ${{ env.EMSCRIPTEN_VERSION }}
+            mkdir -p /tmp/emsdk-cache
+            cp -r ./emsdk /tmp/emsdk-cache/emsdk
+          fi
+          ./emsdk/emsdk activate ${{ env.EMSCRIPTEN_VERSION }}
+          echo "${GITHUB_WORKSPACE}/emsdk" >> "$GITHUB_PATH"
+          echo "${GITHUB_WORKSPACE}/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
+          echo "EMSDK=${GITHUB_WORKSPACE}/emsdk" >> "$GITHUB_ENV"
+          echo "EM_CONFIG=${GITHUB_WORKSPACE}/emsdk/.emscripten" >> "$GITHUB_ENV"
 
       - name: Show Emscripten toolchain info
         run: |
@@ -369,7 +379,7 @@ jobs:
     steps:
       - name: Find previous stable run
         id: stable
-        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962a410 # v7.0.1
+        uses: actions/github-script@v7
         with:
           script: |
             const { owner, repo } = context.repo;
