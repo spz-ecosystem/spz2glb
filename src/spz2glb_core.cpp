@@ -222,6 +222,10 @@ fastgltf::Asset createGltfAsset(fastgltf::span<const std::byte> spzData,
     primitive.type = fastgltf::PrimitiveType::Points;
 
     auto gaussianSplat = std::make_unique<fastgltf::GaussianSplatExtension>();
+    gaussianSplat->kernel = "ellipse";
+    gaussianSplat->colorSpace = "srgb_rec709_display";
+    gaussianSplat->sortingMethod = "cameraDistance";
+    gaussianSplat->projection = "perspective";
     auto spzCompression = std::make_unique<fastgltf::GaussianSplatSpzCompression>();
     spzCompression->bufferView = 0;
     spzCompression->spzVersion = header.version;
