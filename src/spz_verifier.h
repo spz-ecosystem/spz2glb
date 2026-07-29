@@ -19,12 +19,17 @@ struct VerifyResult {
     bool layer1_passed;
     bool layer2_passed;
     bool layer3_passed;
+    bool layer4_passed;  // GLB metadata ↔ SPZ header 一致性
+    bool layer5_passed;  // ILV 扩展完整性
     std::string layer1_detail;
     std::string layer2_detail;
     std::string layer3_detail;
-    
+    std::string layer4_detail;
+    std::string layer5_detail;
+
     bool all_passed() const {
-        return layer1_passed && layer2_passed && layer3_passed;
+        return layer1_passed && layer2_passed && layer3_passed &&
+               layer4_passed && layer5_passed;
     }
 };
 
@@ -52,6 +57,13 @@ public:
     bool verify_layer3(const std::vector<uint8_t>& spz_data,
                        const std::vector<uint8_t>& glb_data,
                        std::string& detail);
+    // L4：GLB extensions 元数据与 SPZ header 一致性校验。
+    bool verify_layer4(const std::vector<uint8_t>& spz_data,
+                       const std::vector<uint8_t>& glb_data,
+                       std::string& detail);
+    // L5：ILV 扩展完整性校验（可解析 + 003 值域 [0,16]）。
+    bool verify_layer5(const std::vector<uint8_t>& spz_data,
+                       std::string& detail);
 
 private:
     bool layer1_validate_glb_structure(const std::vector<uint8_t>& glb_data,
@@ -64,6 +76,14 @@ private:
     bool layer3_verify_decoding(const std::vector<uint8_t>& spz_data,
                                 const std::vector<uint8_t>& glb_data,
                                 std::string& detail);
+    // L4 实现：解析 GLB JSON 中的 KHR_gaussian_splatting_compression_spz_2 扩展字段
+    // 与 SPZ header 中的 version/compression 对比
+    bool layer4_verify_metadata(const std::vector<uint8_t>& spz_data,
+                                const std::vector<uint8_t>& glb_data,
+                                std::string& detail);
+    // L5 实现：扫描 SPZ v4 header zone ILV 记录, 验证可解析性 + 003 值域
+    bool layer5_verify_extensions(const std::vector<uint8_t>& spz_data,
+                                  std::string& detail);
 };
 
 } // namespace spz

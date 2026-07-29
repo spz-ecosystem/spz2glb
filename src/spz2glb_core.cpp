@@ -12,6 +12,12 @@
 
 #include <zlib.h>
 
+#ifdef __EMSCRIPTEN__
+#include <zstd.h>
+#else
+#include <zstd.h>
+#endif
+
 #include "memory_pool.h"
 
 #include <fastgltf/core.hpp>
@@ -29,7 +35,30 @@ struct SpzHeader {
     uint8_t reserved;
 };
 
+// SPZ v4 扩展头部: v3 的 16B + 额外 16B = 32B
+struct SpzV4Header {
+    // v3 公共部分 (16B)
+    uint32_t magic;
+    uint32_t version;
+    uint32_t numPoints;
+    uint8_t shDegree;
+    uint8_t fractionalBits;
+    uint8_t flags;
+    uint8_t reserved;
+    // v4 扩展部分 (16B)
+    uint32_t pointCount;
+    uint8_t shBandCount;
+    uint8_t chunkConfig;
+    uint16_t attributeOffsets;
+    uint32_t tocByteOffset;
+    uint32_t reserved2; // padding: 28B → 32B
+};
+
+static_assert(sizeof(SpzHeader) == 16, "SpzHeader must be 16 bytes");
+static_assert(sizeof(SpzV4Header) == 32, "SpzV4Header must be 32 bytes");
+
 constexpr uint32_t kSpzMagic = 0x5053474e;
+constexpr uint32_t kZstdMagic = 0xFD2FB528;
 constexpr size_t kConversionWorkArenaBytes = 64 * 1024;
 
 fastgltf::span<const std::byte> asByteSpan(const uint8_t* data, size_t size) {
@@ -52,6 +81,47 @@ bool parseSpzHeader(const uint8_t* data, size_t size, SpzHeader& header) {
 
 bool isGzipData(const uint8_t* data, size_t size) {
     return data != nullptr && size >= 2 && data[0] == 0x1f && data[1] == 0x8b;
+}
+
+bool isZstdData(const uint8_t* data, size_t size) {
+    if (data == nullptr || size < 4) return false;
+    uint32_t magic = 0;
+    std::memcpy(&magic, data, sizeof(magic));
+    return magic == kZstdMagic;
+}
+
+// ZSTD v4: 前 4B 是 ZSTD magic, bytes[4..35] 是 32B SPZ v4 header 明文
+bool peekSpzHeaderFromZstd(const uint8_t* data, size_t size, SpzHeader& header) {
+    if (data == nullptr || size < sizeof(SpzV4Header) + 4) {
+        std::cerr << "[ERROR] v4 ZSTD SPZ too small for header" << std::endl;
+        return false;
+    }
+
+    SpzV4Header v4Header{};
+    // v4 header 从 offset 4 开始 (ZSTD magic 之后)
+    std::memcpy(&v4Header, data + 4, sizeof(SpzV4Header));
+
+    if (v4Header.magic != kSpzMagic) {
+        std::cerr << "[ERROR] Invalid SPZ magic in v4 ZSTD header" << std::endl;
+        return false;
+    }
+
+    // 拷贝公共字段到 SpzHeader
+    header.magic = v4Header.magic;
+    header.version = v4Header.version;
+    header.numPoints = v4Header.numPoints;
+    header.shDegree = v4Header.shDegree;
+    header.fractionalBits = v4Header.fractionalBits;
+    header.flags = v4Header.flags;
+    header.reserved = v4Header.reserved;
+
+    std::cout << "[INFO] v4 ZSTD SPZ: pointCount=" << v4Header.pointCount
+              << ", shBandCount=" << static_cast<int>(v4Header.shBandCount)
+              << ", chunkConfig=0x" << std::hex << static_cast<int>(v4Header.chunkConfig) << std::dec
+              << ", attributeOffsets=0x" << std::hex << v4Header.attributeOffsets << std::dec
+              << ", tocByteOffset=" << v4Header.tocByteOffset << std::endl;
+
+    return true;
 }
 
 bool peekSpzHeaderFromGzip(const uint8_t* compressedData, size_t compressedSize, SpzHeader& header,
@@ -106,16 +176,21 @@ bool peekSpzHeader(const uint8_t* data, size_t size, SpzHeader& header,
         return false;
     }
 
-    if (!isGzipData(data, size)) {
-        return parseSpzHeader(data, size, header);
+    if (isGzipData(data, size)) {
+        return peekSpzHeaderFromGzip(data, size, header, workArena);
     }
 
-    return peekSpzHeaderFromGzip(data, size, header, workArena);
+    if (isZstdData(data, size)) {
+        return peekSpzHeaderFromZstd(data, size, header);
+    }
+
+    return parseSpzHeader(data, size, header);
 }
 
-fastgltf::Asset createGltfAsset(fastgltf::span<const std::byte> spzData, const SpzHeader& header) {
-    (void)header;
-
+fastgltf::Asset createGltfAsset(fastgltf::span<const std::byte> spzData,
+                                 const SpzHeader& header,
+                                 const std::string& compressionType = "gzip",
+                                 uint32_t coordinateSystem = 0) {
     fastgltf::Asset asset;
 
     asset.extensionsUsed.emplace_back("KHR_gaussian_splatting");
@@ -151,6 +226,9 @@ fastgltf::Asset createGltfAsset(fastgltf::span<const std::byte> spzData, const S
     auto gaussianSplat = std::make_unique<fastgltf::GaussianSplatExtension>();
     auto spzCompression = std::make_unique<fastgltf::GaussianSplatSpzCompression>();
     spzCompression->bufferView = 0;
+    spzCompression->spzVersion = header.version;
+    spzCompression->compression = compressionType;
+    spzCompression->coordinateSystem = coordinateSystem;
     gaussianSplat->spzCompression = std::move(spzCompression);
     primitive.gaussianSplat = std::move(gaussianSplat);
 
@@ -172,6 +250,46 @@ fastgltf::Asset createGltfAsset(fastgltf::span<const std::byte> spzData, const S
 
 }  // namespace
 
+// ILV 记录类型常量
+constexpr uint32_t kIlvTypeCoordSys = 0xADBE0003;
+
+// 从 v4 ZSTD 数据的 header zone 中扫描 ILV 记录, 提取 coordinateSystem
+// header zone 范围: bytes[4 + sizeof(SpzV4Header) .. 4 + sizeof(SpzV4Header) + extendedBytes)
+// 其中 extendedBytes = v4Header.tocByteOffset (从 v4 header 末尾开始的偏移)
+uint32_t readHeaderZoneCoordSys(const uint8_t* data, size_t size, const SpzV4Header& v4Header) {
+    const size_t headerZoneStart = 4 + sizeof(SpzV4Header); // after ZSTD magic + v4 header
+    if (v4Header.tocByteOffset == 0 || headerZoneStart >= size) {
+        return 0; // 无扩展区域
+    }
+
+    const size_t headerZoneEnd = headerZoneStart + v4Header.tocByteOffset;
+    if (headerZoneEnd > size) {
+        std::cerr << "[WARN] v4 header zone extends beyond file size" << std::endl;
+        return 0;
+    }
+
+    size_t pos = headerZoneStart;
+    while (pos + 8 <= headerZoneEnd) { // 每个 ILV 记录至少 8B (type + length)
+        uint32_t type = 0;
+        uint32_t length = 0;
+        std::memcpy(&type, data + pos, sizeof(type));
+        std::memcpy(&length, data + pos + 4, sizeof(length));
+
+        if (type == kIlvTypeCoordSys && length >= 4) {
+            if (pos + 8 + 4 <= headerZoneEnd) {
+                uint32_t coordSys = 0;
+                std::memcpy(&coordSys, data + pos + 8, sizeof(coordSys));
+                std::cout << "[INFO] Coordinate system extension found: " << coordSys << std::endl;
+                return coordSys;
+            }
+        }
+
+        pos += 8 + length; // 跳到下一个 ILV 记录
+    }
+
+    return 0;
+}
+
 bool validateSpzHeaderCore(const uint8_t* data, size_t size) {
     SpzHeader header{};
     return peekSpzHeader(data, size, header);
@@ -190,12 +308,34 @@ bool convertSpzToGlbCore(const uint8_t* spzData, size_t spzSize, std::vector<std
         return false;
     }
 
-    std::cout << "[INFO] SPZ version: " << static_cast<int>(header.version) << std::endl;
+    // 检测压缩类型
+    std::string compressionType = "none";
+    if (isGzipData(spzData, spzSize)) {
+        compressionType = "gzip";
+    } else if (isZstdData(spzData, spzSize)) {
+        compressionType = "zstd";
+    }
+
+    // v4 ZSTD: 解析 ILV header zone 提取 coordinateSystem
+    uint32_t coordinateSystem = 0;
+    if (compressionType == "zstd" && spzSize >= 4 + sizeof(SpzV4Header)) {
+        SpzV4Header v4Hdr{};
+        std::memcpy(&v4Hdr, spzData + 4, sizeof(SpzV4Header));
+        if (v4Hdr.magic == kSpzMagic && v4Hdr.version >= 4) {
+            coordinateSystem = readHeaderZoneCoordSys(spzData, spzSize, v4Hdr);
+        }
+    }
+
+    std::cout << "[INFO] SPZ version: " << static_cast<int>(header.version)
+              << ", compression: " << compressionType << std::endl;
     std::cout << "[INFO] Num points: " << header.numPoints << std::endl;
     std::cout << "[INFO] SH degree: " << static_cast<int>(header.shDegree) << std::endl;
+    if (coordinateSystem > 0) {
+        std::cout << "[INFO] Coordinate system extension found: " << coordinateSystem << std::endl;
+    }
     std::cout << "[INFO] Creating glTF Asset with KHR extensions" << std::endl;
 
-    auto asset = createGltfAsset(asByteSpan(spzData, spzSize), header);
+    auto asset = createGltfAsset(asByteSpan(spzData, spzSize), header, compressionType, coordinateSystem);
 
     std::cout << "[INFO] Exporting GLB..." << std::endl;
     fastgltf::Exporter exporter;

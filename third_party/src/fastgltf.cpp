@@ -6133,6 +6133,15 @@ void fg::Exporter::writeMeshes(const Asset& asset, std::string& json) {
 						json += R"("extensions":{)";
 						json += R"("KHR_gaussian_splatting_compression_spz_2":{)";
 						json += R"("bufferView":)" + std::to_string(itp->gaussianSplat->spzCompression->bufferView);
+						if (itp->gaussianSplat->spzCompression->spzVersion > 0) {
+							json += R"(,"spzVersion":)" + std::to_string(itp->gaussianSplat->spzCompression->spzVersion);
+						}
+						if (!itp->gaussianSplat->spzCompression->compression.empty()) {
+							json += R"(,"compression":")" + itp->gaussianSplat->spzCompression->compression + R"(")";
+						}
+						if (itp->gaussianSplat->spzCompression->coordinateSystem > 0) {
+							json += R"(,"coordinateSystem":)" + std::to_string(itp->gaussianSplat->spzCompression->coordinateSystem);
+						}
 						json += "}}";
 					}
 					

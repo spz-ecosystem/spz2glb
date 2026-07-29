@@ -44,9 +44,12 @@ target_link_libraries(spz2glb_core PUBLIC fastgltf)
 
 if(SPZ2GLB_BUILD_WASM)
   target_compile_options(spz2glb_core PRIVATE --use-port=zlib)
+  target_compile_options(spz2glb_core PRIVATE --use-port=zstd)
 else()
   find_package(ZLIB REQUIRED)
-  target_link_libraries(spz2glb_core PUBLIC ZLIB::ZLIB)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
+  target_link_libraries(spz2glb_core PUBLIC ZLIB::ZLIB PkgConfig::ZSTD)
 endif()
 
 if(ENABLE_KHR_GAUSSIAN_SPLATTING)
@@ -72,7 +75,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
-  target_link_libraries(spz_verify PRIVATE fastgltf ZLIB::ZLIB)
+  target_link_libraries(spz_verify PRIVATE fastgltf ZLIB::ZLIB PkgConfig::ZSTD)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)

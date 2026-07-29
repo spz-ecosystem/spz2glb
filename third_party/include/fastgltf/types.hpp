@@ -2324,6 +2324,9 @@ namespace fastgltf {
 	 */
 	struct GaussianSplatSpzCompression {
 		std::size_t bufferView;
+		std::uint32_t spzVersion = 0;       // 3 或 4
+		std::string compression;             // "gzip" 或 "zstd"
+		std::uint32_t coordinateSystem = 0;  // 0=UNSPECIFIED, 1-16 (ILV 0xADBE0003)
 	};
 
 	/**
