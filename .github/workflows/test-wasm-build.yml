@@ -477,7 +477,7 @@ jobs:
           fi
 
       - name: Scan GitHub Actions workflows with zizmor
-        run: zizmor --format plain --min-severity high --suppress cache-poisoning .github/workflows/
+        run: zizmor --format plain --min-severity high .github/workflows/
 
   fixture-and-bench-validation:
     name: Fixture + Bench CLI validation
