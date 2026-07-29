@@ -49,7 +49,41 @@
 - **实现**: spz2glb 读取并透传 003 元数据作为描述符（而非指令），坐标转换由渲染器的 `coordinateConverter()` 处理。
 - **验证**: Layer 5（ILV 扩展完整性）校验 TLV 记录结构并强制 003 值域 [0, 16]。
 
-### 基本转换
+## 与 `splat-transform` 的对比
+
+> 说明：这里强调的是**工具定位差异**，不是绝对优劣判断。
+
+| 维度 | `spz2glb` (v2.0.3) | `splat-transform` (v3.1.7) |
+|------|-------------------|-----------------------------|
+| **开发者** | 独立开发者（Pu Junhan） | PlayCanvas |
+| **核心定位** | **无损 SPZ→GLB 打包**（SPZ 压缩流原封不动存入 GLB） | **多格式 splat 转换与编辑**（解压-重建管线） |
+| **语言** | C++17 + WASM | TypeScript (ESM/CJS 双入口) |
+| **GLB 产物** | `KHR_gaussian_splatting_compression_spz_2` 扩展（原始 SPZ 流，字节级一致） | 标准 `KHR_gaussian_splatting` 扩展（解压后的 float32 属性） |
+| **`spz_2` 扩展** | ✅ 支持（嵌套在 KHR_gaussian_splatting 内） | ❌ 不支持 |
+| **SPZ 处理** | 不解压，直接二进制流存入 GLB | 纯 JS 读取器（v2-v4, gzip/zstd）+ @adobe/spz WASM 写入器 |
+| **数据保真** | 100% 无损（SPZ 字节级原样保留在 GLB） | 解压-重建循环，浮点精度因属性编码而异 |
+| **功能范围** | 专注 SPZ↔GLB 转换 + 五层验证 | 9 种输入格式、12 种输出格式、变换/过滤/合并/简化/生成 |
+| **流式处理** | 基于文件（加载完整 SPZ，输出完整 GLB） | ChunkSource 流式管线（处理 1 亿+ 点无需完整加载） |
+| **GPU 加速** | N/A（C++ CPU，无 GPU 依赖） | WebGPU 用于 SOG 压缩、体素化、渲染 |
+| **运行时依赖** | 无（独立二进制 + WASM） | Node.js ≥22、@adobe/spz WASM、webgpu |
+| **WASM 能力** | 预分配输入、显式释放、内存统计、双档配置 | 仅通过 @adobe/spz 写入 SPZ（读取为纯 JS） |
+| **验证闭环** | 内置五层验证（结构/无损/解码/元数据/ILV）+ CI browser smoke | 45+ 测试文件（格式往返、GLB 合规、CLI） |
+| **跨平台** | Windows/Linux/macOS (x64 + ARM) 原生二进制 | 跨平台（Node.js） |
+| **许可证** | MIT | MIT |
+
+### 适用场景建议
+
+| 场景 | 推荐工具 |
+|------|----------|
+| 需要**无损嵌入** SPZ 到 GLB，保持原始压缩流按字节不变 | `spz2glb` |
+| 需要 GLB 中直接存储可渲染的 float32 高斯属性（无需 SPZ 解码器） | `splat-transform` |
+| 需要多格式批量处理（PLY/SOG/SPLAT/KSPLAT/SPZ/CSV/HTML/Voxel） | `splat-transform` |
+| 需要流式/超大场景处理（1 亿+ 点） | `splat-transform` |
+| 需要 splat 变换、过滤、合并、简化、生成 | `splat-transform` |
+| 需要 GPU 加速操作（SOG 压缩、体素化） | `splat-transform` |
+| 需要专注、轻量的转换器与发布级验证闭环 | `spz2glb` |
+
+## 基本转换
 
 ```bash
 # 转换 SPZ 到 GLB

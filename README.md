@@ -49,7 +49,41 @@
 - **Implementation**: spz2glb reads and forwards 003 metadata as descriptor (not instruction), leaving coordinate conversion to the renderer's `coordinateConverter()`.
 - **Validation**: Layer 5 (ILV extension integrity) verifies TLV record structure and enforces 003 value range [0, 16].
 
-### Basic Conversion
+## Comparison with `splat-transform`
+
+> Note: this section describes **tool positioning differences**, not an absolute quality ranking.
+
+| Dimension | `spz2glb` (v2.0.3) | `splat-transform` (v3.1.7) |
+|-----------|-------------------|-----------------------------|
+| **Developer** | Independent (Pu Junhan) | PlayCanvas |
+| **Core positioning** | **Lossless SPZ→GLB packaging** (SPZ compressed stream preserved as-is) | **Multi-format splat conversion & editing** (decompress-rebuild pipeline) |
+| **Language** | C++17 + WASM | TypeScript (ESM/CJS dual) |
+| **GLB output** | `KHR_gaussian_splatting_compression_spz_2` extension (original SPZ stream, byte-identical) | Standard `KHR_gaussian_splatting` extension (decompressed float32 attributes) |
+| **`spz_2` extension** | ✅ Supported (nested inside KHR_gaussian_splatting) | ❌ Not supported |
+| **SPZ handling** | No decompression; SPZ stored as binary stream inside GLB | Pure JS reader (v2-v4, gzip/zstd) + @adobe/spz WASM writer |
+| **Data fidelity** | 100% lossless (byte-level SPZ preservation in GLB) | Decompress-rebuild cycle; floating-point precision varies by attribute encoding |
+| **Feature scope** | Focused on SPZ↔GLB conversion + 5-layer verification | 9 input formats, 12 output formats, transform/filter/merge/decimate/generate |
+| **Streaming** | File-based (load full SPZ, output full GLB) | ChunkSource streaming pipeline (process 100M+ points without full load) |
+| **GPU acceleration** | N/A (C++ CPU, no GPU dependency) | WebGPU for SOG compression, voxelization, rendering |
+| **Runtime deps** | None (standalone binary + WASM) | Node.js ≥22, @adobe/spz WASM, webgpu |
+| **WASM capabilities** | Reserved input, explicit release, memory stats, dual profile | SPZ write-only via @adobe/spz (read is pure JS) |
+| **Validation** | Built-in 5-layer verification (structure/lossless/decode/metadata/ILV) + CI browser smoke | 45+ test files (format roundtrip, GLB conformance, CLI) |
+| **Cross-platform** | Windows/Linux/macOS (x64 + ARM) native binaries | Cross-platform via Node.js |
+| **License** | MIT | MIT |
+
+### Usage Recommendations
+
+| Scenario | Recommended Tool |
+|----------|------------------|
+| Need to **losslessly embed** SPZ in GLB, preserving original compressed stream byte-for-byte | `spz2glb` |
+| Need GLB with directly renderable float32 Gaussian attributes (no SPZ decoder required) | `splat-transform` |
+| Need multi-format batch processing (PLY/SOG/SPLAT/KSPLAT/SPZ/CSV/HTML/Voxel) | `splat-transform` |
+| Need streaming/huge-scene processing (100M+ points) | `splat-transform` |
+| Need splat transformation, filtering, merging, decimation, generation | `splat-transform` |
+| Need GPU-accelerated operations (SOG compression, voxelization) | `splat-transform` |
+| Need a focused, lightweight converter with release-grade verification | `spz2glb` |
+
+## Basic Conversion
 
 ```bash
 # Convert SPZ to GLB
