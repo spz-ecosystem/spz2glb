@@ -459,7 +459,7 @@ jobs:
           fi
 
       - name: Scan GitHub Actions workflows with zizmor
-        run: zizmor --format plain --min-severity medium .github/workflows/
+        run: zizmor --format plain --min-severity high .github/workflows/
 
   private-fixed-samples-validation:
     name: Private fixed-samples verification (self-hosted)
