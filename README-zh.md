@@ -8,23 +8,23 @@
 - 核心定位：**无损打包**（SPZ 压缩流原封不动存入 GLB）
 - 重点增强：WASM 内存与 API 能力（预分配、显式释放、统计与双档配置）
 - 双端协同：按场景分工 —— 浏览器侧负责轻量预览/快速校验，本地 CLI 负责重任务转换/批处理/深度验证
-- 验证闭环：内置三层验证（结构/无损/解码一致性）+ 云端 browser smoke
+- 验证闭环：内置五层验证（结构/无损/解码一致性/元数据一致性/ILV 扩展完整性）+ 云端 browser smoke
 
 ## 职责边界（固定）
 
 - `spz2glb` 只负责两件事：**SPZ→GLB 格式封装**与 **GLB 分发交付链路**。
 - `spz2glb` 不承担压缩算法研发、渲染引擎能力扩展、通用 3D 编辑流水线等超出边界的职责。
-- GLB 合规与正确性判定统一由**三层验证**负责（结构验证 / 无损验证 / 解码一致性验证）。
+- GLB 合规与正确性判定统一由**五层验证**负责（结构验证 / 无损验证 / 解码一致性验证 / 元数据一致性验证 / ILV 扩展完整性验证）。
 - Web 侧默认面向轻量单文件演示；批量与重任务属于 CLI 路径，不在 Web 默认职责内。
 
 ## 核心特性
 
 - **无损打包**: SPZ 压缩流原封不动存入 GLB，100% 字节级保真
 - **SPZ_2 扩展**: 使用 `KHR_gaussian_splatting_compression_spz_2` 标准扩展
-- **大规模重构（v2.0）**: 统一 CLI/WASM 核心链路，减少双端分叉
+- **大规模重构（v2.0.3）**: 统一 CLI/WASM 核心链路，减少双端分叉
 - **WASM 增强**: 预分配输入、显式输出释放、内存统计、compat/perf-lite 双档
 - **双端协同（双场景分工）**: 网页侧轻量交互与快速反馈；本地 CLI 侧重批处理、大文件与重验证
-- **三层验证**: 结构验证 / 无损验证 / 解码一致性验证
+- **五层验证**: 结构验证 / 无损验证 / 解码一致性验证 / 元数据一致性验证 / ILV 扩展完整性验证
 - **跨平台**: Windows、Linux、macOS (x64 + ARM)
 - **零依赖运行时**: C++17 + WASM，无额外运行时依赖
 
@@ -43,38 +43,6 @@
 - **CMake 选项**：`ENABLE_KHR_GAUSSIAN_SPLATTING`（默认：`ON`）控制是否在导出侧写入扩展数据。
 - **关闭后的行为**：转换器仍可运行，但不会在输出 GLB 中写入 Gaussian Splatting 扩展数据。
 
-## 与 `splat-transform` 的对比
-
-> 说明：这里强调的是**工具定位差异**，不是绝对优劣判断。
-
-### 核心差异一句话
-
-- **`spz2glb`**：把 SPZ **无损打包**为 GLB（SPZ 压缩流原封不动存入 GLB）
-- **`splat-transform`**：读取 SPZ 后**解压并重建**为完整高斯数据，再写入 GLB（非无损打包）
-
-### 详细对比
-
-| 维度 | `spz2glb` (v2.0) | `splat-transform` (v1.10.1) |
-|------|------------------|-----------------------------|
-| **核心定位** | **无损打包 SPZ→GLB**（保持 SPZ 压缩流完整） | **数据变换/重建工具**（支持多种格式互转与编辑） |
-| **SPZ 处理方式** | 不解压 SPZ，直接作为二进制流打包进 GLB | 读取 SPZ → 解压为完整高斯数据 → 重建 GLB |
-| **GLB 产物** | 使用 `KHR_gaussian_splatting_compression_spz_2` 扩展，内含原始 SPZ 压缩流 | 使用标准 `KHR_gaussian_splatting` 扩展，内含解压后的高斯属性数据 |
-| **数据保真** | 100% 无损（SPZ 字节级原样保留） | 解压后重建，经历编解码转换 |
-| **功能范围** | 专注 SPZ↔GLB 转换与验证 | 支持 PLY/SOG/SPZ/KSPLAT/SPLAT 等格式的读取、变换、过滤、合并、生成 |
-| **运行环境** | C++17 + WASM，无运行时依赖 | TypeScript/Node.js，依赖 WebGPU 进行 SOG 压缩 |
-| **WASM 能力** | 预分配输入、显式释放、内存统计、双档配置 | 浏览器/Node 双端，但非以发布级内存治理为核心 |
-| **验证闭环** | 内置三层验证（结构/无损/解码一致性）+ 云端 browser smoke | 单元测试 + fixture 验证 |
-
-### 适用场景建议
-
-| 场景 | 推荐工具 |
-|------|----------|
-| 需要把 SPZ **无损嵌入** GLB，保持原始压缩率 | `spz2glb` |
-| 需要在 GLB 中直接存储可渲染的高斯数据（非压缩流） | `splat-transform` |
-| 需要做 splat 变换、过滤、合并、生成等编辑操作 | `splat-transform` |
-| 需要跨多格式（SOG/KSPLAT/SPLAT 等）批量处理 | `splat-transform` |
-| 需要“网页轻量 + 本地重任务”的双场景协同与发布级验证闭环 | `spz2glb` |
-
 ### 基本转换
 
 ```bash
@@ -82,7 +50,7 @@
 spz2glb model.spz model.glb
 ```
 
-### 三层验证
+### 五层验证
 
 ```bash
 # 运行所有验证（提供你自己的 SPZ 和 GLB 文件）
@@ -92,7 +60,9 @@ spz_verify all input.spz output.glb
 # Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
 # Layer 2: Binary Lossless Verification - PASSED (byte-identical)
 # Layer 3: Decoding Consistency Verification - PASSED (Size match)
-# [SUCCESS] All verifications PASSED!
+# Layer 4: Metadata Consistency Verification - PASSED (SPZ↔GLB metadata)
+# Layer 5: ILV Extension Integrity Verification - PASSED (TLV structure)
+# [SUCCESS] All 5 verifications PASSED!
 ```
 
 > **注意**: 请使用你实际构建产物中的可执行文件路径（例如 `build/spz2glb` / `build/spz_verify`），或先加入 `PATH`。
@@ -149,14 +119,23 @@ brew install zlib
 ### 转换器 (spz2glb)
 
 ```bash
-spz2glb <input.spz> <output.glb>
+spz2glb <input.spz> <output.glb> [--verify]
 ```
+
+**标志**：
+
+| 标志 | 说明 |
+|------|------|
+| `--verify` | 转换完成后立即运行五层验证（内部调用 spz_verify） |
 
 **完整示例**：
 
 ```bash
 # 转换单个文件
 spz2glb model.spz model.glb
+
+# 转换并验证
+spz2glb model.spz model.glb --verify
 
 # 批量转换
 for file in *.spz; do
@@ -178,13 +157,13 @@ done
 [INFO] GLB size: 16 MB
 ```
 
-### 三层验证工具 (spz_verify)
+### 五层验证工具 (spz_verify)
 
 > **重要说明**:
 > - **独立工具**: spz_verify 是独立的验证工具，不是生产转换流程的一部分
 > - **开发/测试用途**: 设计用于质量保证、调试和测试工作流
 > - **日常使用不需要**: 一旦转换被验证，生产环境只需要 spz2glb
-> - **Layer 2 进行字节级比较**: Layer 2 验证会从 GLB 中提取 SPZ 负载，并与原始 SPZ 文件进行逐字节比较（比 Layer 1/3 慢）
+> - **Layer 2 进行字节级比较**: Layer 2 验证会从 GLB 中提取 SPZ 负载，并与原始 SPZ 文件进行逐字节比较（比 Layer 1/3/4/5 慢）
 
 ```bash
 spz_verify <command> [options]
@@ -193,13 +172,15 @@ spz_verify <command> [options]
 **命令**：
 
 ```bash
-# 运行全部三层验证
+# 运行全部五层验证
 spz_verify all <input.spz> <output.glb>
 
 # 单独运行某层验证
 spz_verify layer1 <output.glb>              # GLB 结构验证 (快速)
 spz_verify layer2 <input.spz> <output.glb>  # 二进制无损验证 (MD5, 较慢)
 spz_verify layer3 <input.spz> <output.glb>  # 解码一致性验证 (快速)
+spz_verify layer4 <input.spz> <output.glb>  # 元数据一致性验证 (快速)
+spz_verify layer5 <output.glb>              # ILV 扩展完整性验证 (快速)
 ```
 
 **完整示例**：
@@ -215,6 +196,8 @@ spz_verify all model.spz model.glb
 spz_verify layer1 model.glb
 spz_verify layer2 model.spz model.glb
 spz_verify layer3 model.spz model.glb
+spz_verify layer4 model.spz model.glb
+spz_verify layer5 model.glb
 ```
 
 **验证输出**：
@@ -240,7 +223,20 @@ Layer 3: Decode Consistency Validation
   ✓ Extension integrity check passed
   [PASS] Layer 3 validation passed
 
-[SUCCESS] All 3 layers validation passed!
+Layer 4: Metadata Consistency Validation
+  ✓ SPZ header fields consistent with GLB metadata
+  ✓ Point count matches between SPZ and GLB
+  ✓ SH degree consistent
+  ✓ SPZ version consistent
+  [PASS] Layer 4 validation passed
+
+Layer 5: ILV Extension Integrity Validation
+  ✓ Extension presence and format
+  ✓ TLV structure valid
+  ✓ Extension data integrity
+  [PASS] Layer 5 validation passed
+
+[SUCCESS] All 5 layers validation passed!
 ```
 
 ## 自动化验证脚本（推荐）
@@ -274,7 +270,7 @@ $SPZ2GLB "$INPUT" "$OUTPUT"
 echo ""
 
 # Step 2: Verify
-echo "[2/2] Running 3-layer verification..."
+echo "[2/2] Running 5-layer verification..."
 $VERIFY all "$INPUT" "$OUTPUT"
 echo ""
 
@@ -306,7 +302,7 @@ echo [1/2] Converting SPZ to GLB...
 %SPZ2GLB% "%INPUT%" "%OUTPUT%"
 echo.
 
-echo [2/2] Running 3-layer verification...
+echo [2/2] Running 5-layer verification...
 %VERIFY% all "%INPUT%" "%OUTPUT%"
 echo.
 
@@ -332,8 +328,8 @@ verify.bat model.spz
 # 安装 Emscripten
 git clone https://github.com/emscripten-core/emsdk.git
 cd emsdk
-./emsdk install 5.0.1
-./emsdk activate 5.0.1
+./emsdk install 6.0.3
+./emsdk activate 6.0.3
 source ./emsdk_env.sh
 
 # 构建 WASM 模块
@@ -403,6 +399,7 @@ result.release(); // 必须释放 WASM 输出缓冲
 
 WASM 构建包含以下优化：
 - **-O3 + 严格告警门禁**：优化构建并保持 warning clean
+- **-Oz**：WASM 特定尺寸优化（减小 .wasm 二进制体积）
 - **-fno-exceptions**：无异常开销
 - **compat/perf-lite 双档**：按运行目标配置内存行为
 - **内存池**：bump allocator 快速分配
@@ -417,13 +414,14 @@ WASM 构建包含以下优化：
 - CMake 3.15+
 - C++17 编译器
 - ZLIB (系统包管理器自动安装)
+- ZSTD（v4 SPZ 格式支持）
 
 **依赖说明**：
 
 | 工具 | 依赖 | 用途 |
 |------|------|------|
-| spz2glb | ZLIB, fastgltf, simdjson | SPZ 转 GLB |
-| spz_verify | ZLIB only | 三层验证 |
+| spz2glb | ZLIB, ZSTD, fastgltf, simdjson | SPZ 转 GLB |
+| spz_verify | ZLIB, ZSTD | 五层验证 |
 
 ## 项目结构
 
@@ -433,20 +431,36 @@ spz2glb/
 ├── LICENSE                     # MIT 许可证
 ├── README.md / README-zh.md    # 文档
 ├── src/
-│   ├── spz2glb_core.cpp/.h     # 核心转换逻辑（v2.0 统一入口）
+│   ├── spz2glb_core.cpp/.h     # 核心转换逻辑（v2.0.3 统一入口）
 │   ├── spz2glb_wasm_c_api.cpp/.h  # WASM C API（预分配/释放/统计）
 │   ├── memory_pool.cpp/.h      # 内存池与热点对象池
 │   ├── spz_to_glb.cpp          # CLI 主入口
 │   ├── spz_verify.cpp          # 验证工具主入口
-│   ├── spz_verifier.cpp/.h     # 三层验证实现
+│   ├── spz_verifier.cpp/.h     # 五层验证实现
 │   └── base64.{h,cpp}          # Base64 编解码
 ├── third_party/                # 定制版 fastgltf + simdjson
 │   ├── include/fastgltf/
 │   ├── src/
 │   └── deps/simdjson/         # simdjson v4.3.1 (内置)
-├── tests/                      # 测试脚本与用例
-└── .github/workflows/          # CI/CD 工作流
+├── tests/
+│   ├── gen_fixture.mjs           # 合成夹具生成器
+│   ├── data/
+│   │   └── bench/                # 基准测试数据集
+│   └── ...                       # 测试脚本与用例
+├── scripts/
+│   ├── wasm-pre-check.sh         # WASM 预构建环境检查
+│   └── ...                       # 实用脚本
+└── .github/workflows/            # CI/CD 工作流
 ```
+
+## 测试数据
+
+`tests/` 目录包含：
+
+- **合成夹具**（`tests/gen_fixture.mjs`）：生成最小有效 SPZ 文件用于单元测试，覆盖 v2/v3/v4 SPZ 变体及边界情况（空文件、截断头部、畸形扩展）。
+- **基准数据集**（`tests/data/bench/`）：一组不同大小和压缩配置的代表性 SPZ 文件，用于性能基准测试和回归测试。
+
+两者均可重新生成，不捆绑真实用户数据。
 
 ## 技术细节
 
@@ -524,6 +538,7 @@ MIT License - 详见 [LICENSE](LICENSE)
 相关项目：
 
 - [spz_gatekeeper](https://github.com/spz-ecosystem/spz_gatekeeper) - SPZ 门卫：格式合法性校验与生态治理
+- [spz-anime-text2scene-bench](https://github.com/spz-ecosystem/spz-anime-text2scene-bench) - 动漫风格文生场景基准数据集（SPZ 格式）
 - [fastgltf](https://github.com/spnda/fastgltf) - 高性能 glTF 库（作者：Sean Apeler，MIT 许可证）
 - [simdjson](https://github.com/simdjson/simdjson) - 极速 JSON 解析库 v4.3.1
 - [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting 扩展

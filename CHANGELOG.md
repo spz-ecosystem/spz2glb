@@ -1,56 +1,101 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## v2.0.3 (2026-07-29)
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+### CI/CD Security Hardening
 
-## [2.0.3] - 2026-07-29
+- **Template injection fix**: Replace `actions/download-artifact` with `gh run download` via env vars to eliminate `${{ github.event.inputs.* }}` interpolation in action `with:` parameters
+- **Cache poisoning fix**: Remove `actions/cache` from release workflow entirely; replace `${{ github.ref }}` with `${{ github.sha }}` in test workflow cache keys
+- **zizmor upgrade**: `1.5.0` → `1.26.0` for improved audit coverage
+- **Accessibility audit**: Add `actionlint` to CI security-audit job alongside zizmor
+- **actions/github-script**: Upgrade from v7.0.1 to v9.0.0 to resolve `known-vulnerable-actions` finding
+- **Workflow pinning**: Pin all third-party actions to full commit SHAs with version comments
+- **Artifact retention**: Set `retention-days: 7` on `upload-artifact` steps
 
-### Added
-- **SPZ v4/ZSTD 支持**: ZSTD 检测 (`isZstdData`/`peekSpzHeaderFromZstd`)、v4 32B header 明文解析 (SpzV4Header)
-- **ILV 003 coordinateSystem 解析**: header zone ILV 扫描, coordinateSystem 提取与值域校验
-- **五层验证器扩展**: L1-L3 保留, 新增 L4 (GLB 元数据 vs SPZ header 一致性)、L5 (ILV 扩展完整性)
-- **fastgltf 扩展字段**: `GaussianSplatSpzCompression` 新增 `spzVersion`/`compression`/`coordinateSystem` + JSON 序列化
-- **CMake zstd 集成**: 原生构建通过 PkgConfig 链接 libzstd, WASM 通过 `--use-port=zstd`
+### Test Infrastructure
 
-### Security
-- **CI 加固**: zizmor 安全审计、npm audit 供应链检查、SHA-pin 所有 actions、`persist-credentials: false`
-- **权限收紧**: workflow 级 `contents: read`, job 级最小权限 (pages/id-token 仅在 deploy-pages)
-- **Pages 部署 SHA 升级**: upload-pages-artifact v3→v5.0.0, deploy-pages v4→v5.0.0
+- **Synthetic SPZ fixtures**: Add `tests/gen_fixture.mjs` — deterministic Node.js script generating 4 types of minimal SPZ files (v3 0-point, 1-point, 10-point, and v4 header-only) for CI testing
+- **SPZ benchmark dataset**: Include `tests/data/bench/classroom_anime_v3.spz` and `classroom_anime_v4.spz` from the [spz-anime-text2scene-bench](https://github.com/spz-ecosystem/spz-anime-text2scene-bench) dataset as in-repo reference samples
+- **Dynamic hash matrix**: Replace hardcoded 4-sample hashes with dynamic fixture file enumeration via `fixtures.json` / `hash_fixtures.json`, eliminating external file dependencies
+- **Self-hosted runner removal**: Migrate `private-fixed-samples-validation` from `[self-hosted, linux, x64]` to `ubuntu-latest` with synthetic + benchmark data
+- **CI paths trigger**: Add `.github/workflows/release.yml` to Test WASM Build paths filter to trigger security audit on release workflow changes
 
-## [2.0.2] - 2026-04-21
+### WASM Build
 
-### Fixed
-- **WASM CI reproducibility**: Pin Emscripten to version 5.0.1 and add EM_CACHE to prevent build drift.
-- **Remove dead configuration**: Clean up unused `SPZ2GLB_USE_EMSCRIPTEN_ZLIB` CMake option.
-- **Restore zlib port flags**: Ensure zlib.h is available during WASM compilation by restoring `--use-port=zlib` flags.
+- **Emscripten 6.0.3**: Upgrade Emscripten SDK from `5.0.1` to `6.0.3` across all workflows and documentation
+- **WASM pre-check**: Add `scripts/wasm-pre-check.sh` — pre-push safety net checking environment, build, symbol exports, artifacts, WASM analysis, and workflow lint
+- **Memory constraint**: MAXIMUM_MEMORY set to 512MB (compat profile), consistent with project design limits
+- **`-Oz` optimization**: Add WASM-specific size optimization for smaller binary output
 
-### Changed
-- **Documentation alignment**: Update README and troubleshooting docs to reflect fixed Emscripten version.
-- **License enhancement**: Add cultural note to LICENSE file for better clarity.
-- **Copyright headers**: Improve copyright headers across source files.
+### Verification (spz_verify)
 
-### Added
-- **CHANGELOG.md**: Add comprehensive changelog for version tracking.
-- **Project evolution log**: Add detailed project evolution documentation for standard draft and paper reference.
+- **Five-layer verification**: Extend from 3 layers to 5:
+  - L4: GLB metadata vs SPZ header consistency (coordinate system, version alignment)
+  - L5: ILV extension integrity (TLV record validation)
+- Update all documentation, CLI help, and CI references from "3-layer" to "5-layer"
 
-## [2.0.1] - 2026-04-15
+### CMake & Build System
 
-### Added
-- **Cultural note**: Add cultural note to LICENSE file.
+- **Windows CI compatibility**: Add FetchContent fallback for zlib and zstd to replace `pkg_check_modules` (unavailable on Windows)
+- **INTERFACE library**: Add `spz2glb_zlib` INTERFACE library target to fix `set(ZLIB::ZLIB ...)` CMake syntax error
+- **CMake syntax validation**: Add regex check in pre-commit to detect `set(XXX::YYY)` patterns (reserved for CMake ALIAS/IMPORTED targets)
 
-## [2.0.0] - 2026-04-10
+### Documentation
 
-### Added
-- **Large-scale refactor**: Unified CLI/WASM core path, reduced dual-end divergence.
-- **WASM enhancements**: Reserved input, explicit output release, memory stats, compat/perf-lite dual profile.
-- **Three-layer verification**: Structure validation / lossless validation / decoding consistency.
+- **Five-layer verification**: Update READMEs (EN/ZH) from "3-layer" to "5-layer" across all sections
+- **Emscripten version**: Update WASM build instructions from 5.0.1 to 6.0.3
+- **Memory config**: Update MAXIMUM_MEMORY from 1GB to 512MB in documentation tables
+- **spz_verify CLI**: Add L4 and L5 command documentation with output examples
+- **spz2glb CLI**: Document `--verify` flag for one-step convert + verify
+- **Dependencies**: Add ZSTD to dependency tables
+- **Project structure**: Add `tests/gen_fixture.mjs`, `tests/data/bench/`, `scripts/` to directory tree
+- **Test Data section**: New section covering synthetic fixtures and benchmark dataset
+- **Ecosystem**: Add spz-anime-text2scene-bench to related projects
+- **SPZ v4 support**: Document v4 header-only synthetic fixture and ZSTD-based SPZ v4 format support
+- **Zenodo DOI**: Add DOI: 10.5281/zenodo.20849112
 
-### Changed
-- **Dual-end collaboration**: Scenario split — browser side for lightweight preview/quick checks, local CLI for heavy conversion.
+### Fixes
 
-## [1.0.0] - 2026-03-01
+- **zizmor `--suppress`**: Remove invalid `--suppress` CLI argument (not supported by zizmor; suppression is via inline comments or config file)
+- **YAML indentation**: Fix `run: |` block indentation in fixture list preparation step
+- **commit_msg.txt**: Remove accidentally tracked file from repository
 
-### Added
-- **Initial release**: SPZ to GLB lossless packaging with KHR_gaussian_splatting_compression_spz_2 extension.
+---
+
+## v2.0.2 (2026-05-11)
+
+- CI reproducibility: pin emsdk version, remove WASM zlib port drift
+- WASM build: restore zlib port compile flags
+- Version consistency cleanup across build system
+- License: add cultural note
+- Documentation: GLB structure examples, CHANGELOG
+- Add `docs/plans/` to .gitignore (local planning docs only)
+- Release artifacts verified for all platforms (Windows/Linux/macOS x64)
+
+## v2.0.1
+
+- Minor documentation fixes
+- Release artifact packaging improvements
+
+## v2.0.0
+
+- **Major refactor (v2.0)**: Unified CLI/WASM core path, reducing dual-end divergence
+- **WASM enhancements**: Reserved input buffer, explicit output release, memory stats, dual profile (compat/perf-lite)
+- **Three-layer verification**: GLB structure / lossless binary / decoding consistency
+- **KHR_gaussian_splatting_compression_spz_2**: Standard extension export
+- **Smart memory allocation**: Device tiering + file budgeting + WASM-side reservation
+- **Cross-platform**: Windows, Linux, macOS (x64 + ARM) builds
+- **Zero runtime dependencies**: C++17 + WASM
+- **Custom fastgltf**: simdjson v4.3.1 built-in, no network downloads
+
+## v1.1.0
+
+- Initial WASM build support
+- Basic SPZ→GLB conversion pipeline
+- CLI tool with file I/O
+
+## v1.0.2 – v1.0.0
+
+- Initial releases with core conversion functionality
+- GLB output with KHR_gaussian_splatting extension
+- Cross-platform CMake build system
