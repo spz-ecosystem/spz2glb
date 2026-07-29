@@ -44,13 +44,61 @@ target_link_libraries(spz2glb_core PUBLIC fastgltf)
 
 if(SPZ2GLB_BUILD_WASM)
   target_compile_options(spz2glb_core PRIVATE --use-port=zlib)
-  # --use-port=zstd removed: Emscripten 5.0.1 does not recognize 'zstd' port name.
-  # C++ sources guard zstd with #ifndef __EMSCRIPTEN__, so WASM builds do not need it.
+  # --use-port=zstd removed: Emscripten 6.0.3 recognizes the port but C++ sources
+  # guard zstd with #ifndef __EMSCRIPTEN__, so WASM builds do not need it.
 else()
-  find_package(ZLIB REQUIRED)
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
-  target_link_libraries(spz2glb_core PUBLIC ZLIB::ZLIB PkgConfig::ZSTD)
+  # zlib: find_package first, fallback to FetchContent with SHA256 (modeled on gatekeeper)
+  find_package(ZLIB QUIET)
+  if(NOT ZLIB_FOUND)
+    message(STATUS "zlib not found, using FetchContent to download v1.3.2")
+    include(FetchContent)
+    FetchContent_Declare(
+      zlib_fetch
+      URL "https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz"
+      URL_HASH SHA256=bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
+    )
+    FetchContent_MakeAvailable(zlib_fetch)
+    if(TARGET zlibstatic)
+      set(ZLIB::ZLIB zlibstatic)
+    elseif(TARGET zlib)
+      set(ZLIB::ZLIB zlib)
+    endif()
+  endif()
+  target_link_libraries(spz2glb_core PUBLIC ${ZLIB::ZLIB})
+
+  # zstd: find_package first, fallback to FetchContent with SHA256 + SOURCE_SUBDIR
+  find_package(zstd QUIET)
+  if(NOT zstd_FOUND)
+    message(STATUS "zstd not found, using FetchContent to download v1.5.6")
+    include(FetchContent)
+    FetchContent_Declare(
+      zstd_fetch
+      URL "https://github.com/facebook/zstd/releases/download/v1.5.6/zstd-1.5.6.tar.gz"
+      URL_HASH SHA256=8c29e06cf42aacc1eafc4077ae2ec6c6fcb96a626157e0593d5e82a34fd403c1
+      SOURCE_SUBDIR build/cmake
+    )
+    set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+    set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+    set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(zstd_fetch)
+    if(NOT TARGET zstd::zstd)
+      if(TARGET libzstd_static)
+        add_library(zstd::zstd ALIAS libzstd_static)
+      endif()
+    endif()
+    target_link_libraries(spz2glb_core PUBLIC zstd::zstd)
+  else()
+    if(TARGET zstd::libzstd_static)
+      if(NOT TARGET zstd::zstd)
+        add_library(zstd::zstd ALIAS zstd::libzstd_static)
+      endif()
+    elseif(TARGET zstd::libzstd_shared)
+      if(NOT TARGET zstd::zstd)
+        add_library(zstd::zstd ALIAS zstd::libzstd_shared)
+      endif()
+    endif()
+    target_link_libraries(spz2glb_core PUBLIC zstd::zstd)
+  endif()
 endif()
 
 if(ENABLE_KHR_GAUSSIAN_SPLATTING)
@@ -76,7 +124,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
-  target_link_libraries(spz_verify PRIVATE fastgltf ZLIB::ZLIB PkgConfig::ZSTD)
+  target_link_libraries(spz_verify PRIVATE fastgltf ZLIB::ZLIB zstd::zstd)
 
   if(ENABLE_KHR_GAUSSIAN_SPLATTING)
     target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
