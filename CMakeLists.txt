@@ -176,6 +176,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-fno-lto"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
+    "--use-port=zstd"
 
     # 内存配置（Phase 6: compat / perf-lite）
     "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
@@ -236,10 +237,11 @@ if(SPZ2GLB_BUILD_WASM)
     target_compile_definitions(spz_verify-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
   endif()
 
-  # Emscripten ZLIB: compile and link with the zlib port so verifier sources can include zlib.h.
+  # Emscripten ZLIB + ZSTD: compile and link with the port so verifier sources can include zlib.h + zstd.h.
 
   target_compile_options(spz_verify-wasm PRIVATE
     "--use-port=zlib"
+    "--use-port=zstd"
     "-O3"
     "-fno-exceptions"
     "-Wall"
@@ -255,6 +257,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-O3"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
+    "--use-port=zstd"
     "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
     "${SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION}"
     "-sALLOW_MEMORY_GROWTH=${SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH}"
