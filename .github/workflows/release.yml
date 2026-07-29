@@ -140,23 +140,10 @@ jobs:
           persist-credentials: false
           submodules: recursive
 
-      - name: Cache Emscripten SDK
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.3
-        with:
-          path: /tmp/emsdk-cache
-          key: emsdk-${{ env.EMSCRIPTEN_VERSION }}-${{ runner.os }}-${{ github.sha }}
-
       - name: Setup Emscripten SDK
         run: |
-          if [ -d /tmp/emsdk-cache/emsdk ]; then
-            echo "Using cached emsdk"
-            cp -r /tmp/emsdk-cache/emsdk ./emsdk
-          else
-            git clone https://github.com/emscripten-core/emsdk.git --depth 1 --branch ${{ env.EMSCRIPTEN_VERSION }}
-            ./emsdk/emsdk install ${{ env.EMSCRIPTEN_VERSION }}
-            mkdir -p /tmp/emsdk-cache
-            cp -r ./emsdk /tmp/emsdk-cache/emsdk
-          fi
+          git clone https://github.com/emscripten-core/emsdk.git --depth 1 --branch ${{ env.EMSCRIPTEN_VERSION }}
+          ./emsdk/emsdk install ${{ env.EMSCRIPTEN_VERSION }}
           ./emsdk/emsdk activate ${{ env.EMSCRIPTEN_VERSION }}
           echo "${GITHUB_WORKSPACE}/emsdk" >> "$GITHUB_PATH"
           echo "${GITHUB_WORKSPACE}/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
