@@ -43,6 +43,12 @@
 - **CMake option**: `ENABLE_KHR_GAUSSIAN_SPLATTING` (default: `ON`) controls whether export-side extension data is emitted.
 - **Behavior when disabled**: The converter still runs, but it does not write Gaussian-splatting extension data into the output GLB.
 
+### ILV 003 Coordinate System Extension
+- **Extension ID**: `0xADBE0003`
+- **Purpose**: Maps coordinateSystem (uint32) metadata within SPZ ILV (Information-Label-Value) records.
+- **Implementation**: spz2glb reads and forwards 003 metadata as descriptor (not instruction), leaving coordinate conversion to the renderer's `coordinateConverter()`.
+- **Validation**: Layer 5 (ILV extension integrity) verifies TLV record structure and enforces 003 value range [0, 16].
+
 ### Basic Conversion
 
 ```bash
@@ -177,10 +183,10 @@ spz_verify all <input.spz> <output.glb>
 
 # Run individual layer verification
 spz_verify layer1 <output.glb>              # GLB structure validation (fast)
-spz_verify layer2 <input.spz> <output.glb>  # Lossless binary validation (MD5, slower)
+spz_verify layer2 <input.spz> <output.glb>  # Lossless binary validation (byte-by-byte comparison, slower)
 spz_verify layer3 <input.spz> <output.glb>  # Decode consistency validation (fast)
 spz_verify layer4 <input.spz> <output.glb>  # Metadata consistency validation (fast)
-spz_verify layer5 <output.glb>              # ILV extension integrity validation (fast)
+spz_verify layer5 <input.spz>              # ILV extension integrity validation (fast)
 ```
 
 **Complete Examples**:
@@ -197,7 +203,7 @@ spz_verify layer1 model.glb
 spz_verify layer2 model.spz model.glb
 spz_verify layer3 model.spz model.glb
 spz_verify layer4 model.spz model.glb
-spz_verify layer5 model.glb
+spz_verify layer5 model.spz
 ```
 
 **Verification Output**:
@@ -212,10 +218,10 @@ Layer 1: GLB Structure Validation
   ✓ Compression stream mode (attributes empty)
   [PASS] Layer 1 validation passed
 
-Layer 2: Lossless Binary Validation
-  ✓ Original SPZ MD5: abc123...
-  ✓ Extracted data MD5: abc123...
-  ✓ MD5 match confirmed
+Layer 2: Payload Extraction & Byte Equality
+  ✓ SPZ input bytes: 15728640
+  ✓ Extracted bytes: 15728640
+  ✓ Extracted payload is byte-identical to input SPZ
   [PASS] Layer 2 validation passed
 
 Layer 3: Decode Consistency Validation
@@ -223,17 +229,14 @@ Layer 3: Decode Consistency Validation
   ✓ Extension integrity check passed
   [PASS] Layer 3 validation passed
 
-Layer 4: Metadata Consistency Validation
-  ✓ SPZ header fields consistent with GLB metadata
-  ✓ Point count matches between SPZ and GLB
-  ✓ SH degree consistent
-  ✓ SPZ version consistent
+Layer 4: GLB Extension Metadata vs SPZ Header Consistency
+  ✓ SPZ version consistent: 2
+  ✓ GLB coordinateSystem recorded in metadata
   [PASS] Layer 4 validation passed
 
-Layer 5: ILV Extension Integrity Validation
-  ✓ Extension presence and format
-  ✓ TLV structure valid
-  ✓ Extension data integrity
+Layer 5: ILV Extension Completeness
+  ✓ ILV 0xADBE0003 coordinateSystem=1 (valid, range [0,16])
+  ✓ All ILV records pass integrity checks
   [PASS] Layer 5 validation passed
 
 [SUCCESS] All 5 layers validation passed!
@@ -457,7 +460,7 @@ spz2glb/
 
 The `tests/` directory includes:
 
-- **Synthetic fixtures** (`tests/gen_fixture.mjs`): Generates minimal valid SPZ files for unit tests, covering v2/v3/v4 SPZ variants and edge cases (empty files, truncated headers, malformed extensions).
+- **Synthetic fixtures** (`tests/gen_fixture.mjs`): Generates minimal valid SPZ files for unit tests, covering v3/v4 SPZ variants and edge cases (empty files, truncated headers, malformed extensions). v2 support requires extending the generator (currently not implemented).
 - **Benchmark dataset** (`tests/data/bench/`): A set of representative SPZ files of varying sizes and compression profiles used for performance benchmarking and regression testing.
 
 Both are regenerable and do not bundle real user data.

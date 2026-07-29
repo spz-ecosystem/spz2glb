@@ -43,6 +43,12 @@
 - **CMake 选项**：`ENABLE_KHR_GAUSSIAN_SPLATTING`（默认：`ON`）控制是否在导出侧写入扩展数据。
 - **关闭后的行为**：转换器仍可运行，但不会在输出 GLB 中写入 Gaussian Splatting 扩展数据。
 
+### ILV 003 坐标系扩展
+- **扩展 ID**: `0xADBE0003`
+- **用途**: 在 SPZ ILV（Information-Label-Value）记录中映射 coordinateSystem（uint32）元数据。
+- **实现**: spz2glb 读取并透传 003 元数据作为描述符（而非指令），坐标转换由渲染器的 `coordinateConverter()` 处理。
+- **验证**: Layer 5（ILV 扩展完整性）校验 TLV 记录结构并强制 003 值域 [0, 16]。
+
 ### 基本转换
 
 ```bash
@@ -177,10 +183,10 @@ spz_verify all <input.spz> <output.glb>
 
 # 单独运行某层验证
 spz_verify layer1 <output.glb>              # GLB 结构验证 (快速)
-spz_verify layer2 <input.spz> <output.glb>  # 二进制无损验证 (MD5, 较慢)
+spz_verify layer2 <input.spz> <output.glb>  # 二进制无损验证 (逐字节对比, 较慢)
 spz_verify layer3 <input.spz> <output.glb>  # 解码一致性验证 (快速)
 spz_verify layer4 <input.spz> <output.glb>  # 元数据一致性验证 (快速)
-spz_verify layer5 <output.glb>              # ILV 扩展完整性验证 (快速)
+spz_verify layer5 <input.spz>              # ILV 扩展完整性验证 (快速)
 ```
 
 **完整示例**：
@@ -197,7 +203,7 @@ spz_verify layer1 model.glb
 spz_verify layer2 model.spz model.glb
 spz_verify layer3 model.spz model.glb
 spz_verify layer4 model.spz model.glb
-spz_verify layer5 model.glb
+spz_verify layer5 model.spz
 ```
 
 **验证输出**：
@@ -212,10 +218,10 @@ Layer 1: GLB Structure Validation
   ✓ Compression stream mode (attributes empty)
   [PASS] Layer 1 validation passed
 
-Layer 2: Lossless Binary Validation
-  ✓ Original SPZ MD5: abc123...
-  ✓ Extracted data MD5: abc123...
-  ✓ MD5 match confirmed
+Layer 2: Payload Extraction & Byte Equality
+  ✓ SPZ input bytes: 15728640
+  ✓ Extracted bytes: 15728640
+  ✓ Extracted payload is byte-identical to input SPZ
   [PASS] Layer 2 validation passed
 
 Layer 3: Decode Consistency Validation
@@ -223,17 +229,14 @@ Layer 3: Decode Consistency Validation
   ✓ Extension integrity check passed
   [PASS] Layer 3 validation passed
 
-Layer 4: Metadata Consistency Validation
-  ✓ SPZ header fields consistent with GLB metadata
-  ✓ Point count matches between SPZ and GLB
-  ✓ SH degree consistent
-  ✓ SPZ version consistent
+Layer 4: GLB Extension Metadata vs SPZ Header Consistency
+  ✓ SPZ version consistent: 2
+  ✓ GLB coordinateSystem recorded in metadata
   [PASS] Layer 4 validation passed
 
-Layer 5: ILV Extension Integrity Validation
-  ✓ Extension presence and format
-  ✓ TLV structure valid
-  ✓ Extension data integrity
+Layer 5: ILV Extension Completeness
+  ✓ ILV 0xADBE0003 coordinateSystem=1 (valid, range [0,16])
+  ✓ All ILV records pass integrity checks
   [PASS] Layer 5 validation passed
 
 [SUCCESS] All 5 layers validation passed!
@@ -457,7 +460,7 @@ spz2glb/
 
 `tests/` 目录包含：
 
-- **合成夹具**（`tests/gen_fixture.mjs`）：生成最小有效 SPZ 文件用于单元测试，覆盖 v2/v3/v4 SPZ 变体及边界情况（空文件、截断头部、畸形扩展）。
+- **合成夹具**（`tests/gen_fixture.mjs`）：生成最小有效 SPZ 文件用于单元测试，覆盖 v3/v4 SPZ 变体及边界情况（空文件、截断头部、畸形扩展）。v2 格式支持需要扩展生成器（当前未实现）。
 - **基准数据集**（`tests/data/bench/`）：一组不同大小和压缩配置的代表性 SPZ 文件，用于性能基准测试和回归测试。
 
 两者均可重新生成，不捆绑真实用户数据。
