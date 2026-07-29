@@ -16,7 +16,7 @@ void printUsage(const char* progName) {
     std::cout << "SPZ to GLB Verification Tool\n";
     std::cout << "Usage: " << progName << " <command> [options]\n\n";
     std::cout << "  Commands:\n";
-    std::cout << "    layer1 <glb>           - Validate GLB contract structure (Layer 1)\n";
+    std::cout << "    layer1 <glb>           - Validate GLB structure & KHR extension fields (Layer 1)\n";
     std::cout << "    layer2 <spz> <glb>     - Payload extraction & byte equality (Layer 2)\n";
     std::cout << "    layer3 <spz> <glb>     - Decoding consistency & v4 checks (Layer 3)\n";
     std::cout << "    layer4 <spz> <glb>     - GLB metadata vs SPZ header consistency (Layer 4)\n";
@@ -28,7 +28,7 @@ void printUsage(const char* progName) {
 void printSummary(const spz::VerifyResult& result) {
     std::cout << "============================================================\n";
     std::cout << "Summary:\n";
-    std::cout << "  Layer 1 (GLB Structure): " << (result.layer1_passed ? "PASSED" : "FAILED") << "\n";
+    std::cout << "  Layer 1 (GLB Structure & KHR Extension): " << (result.layer1_passed ? "PASSED" : "FAILED") << "\n";
     std::cout << "  Layer 2 (Binary Lossless): " << (result.layer2_passed ? "PASSED" : "FAILED") << "\n";
     std::cout << "  Layer 3 (Decoding): " << (result.layer3_passed ? "PASSED" : "FAILED") << "\n";
     std::cout << "  Layer 4 (Metadata): " << (result.layer4_passed ? "PASSED" : "FAILED") << "\n";

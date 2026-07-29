@@ -51,10 +51,6 @@
 #define FASTGLTF_DISABLE_CUSTOM_MEMORY_POOL 0
 #endif
 
-#ifndef FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING
-#define FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING 1
-#endif
-
 #if __has_include(<memory_resource>)
 #define FASTGLTF_MISSING_MEMORY_RESOURCE 0
 #else
@@ -2317,7 +2313,6 @@ namespace fastgltf {
 		}
 	};
 
-#if FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING
 	/**
 	 * Represents the SPZ compression extension for KHR_gaussian_splatting.
 	 * This struct stores the bufferView index pointing to the compressed SPZ data.
@@ -2340,7 +2335,6 @@ namespace fastgltf {
 		 */
 		std::unique_ptr<GaussianSplatSpzCompression> spzCompression;
 	};
-#endif
 
     FASTGLTF_EXPORT struct Primitive {
 		// Instead of a map, we have a list of attributes here. Each pair contains
@@ -2362,13 +2356,11 @@ namespace fastgltf {
 
 		std::unique_ptr<DracoCompressedPrimitive> dracoCompression;
 
-#if FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING
 		/**
 		 * Represents the KHR_gaussian_splatting extension for this primitive.
 		 * When present, this primitive contains 3D Gaussian splat data.
 		 */
 		std::unique_ptr<GaussianSplatExtension> gaussianSplat;
-#endif
 
 		[[nodiscard]] auto findAttribute(std::string_view name) noexcept {
 			for (auto* it = attributes.begin(); it != attributes.end(); ++it) {

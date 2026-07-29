@@ -123,14 +123,21 @@ echo "=== All Tests Passed ==="
 [INFO] GLB size: 0.6 MB
 ✓ Conversion successful
 
-[Test 2] Three-layer verification...
-Layer 1: GLB Structure Validation
+[Test 2] Five-layer verification...
+Layer 1: GLB Structure & KHR Extension Validation
   ✓ Magic number: 0x46546C67 ("glTF")
   ✓ Version: 2
   ✓ extensionsUsed contains KHR_gaussian_splatting
   ✓ extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
-  ✓ buffers configuration correct
-  ✓ Compression stream mode (attributes empty)
+  ✓ extensionsRequired contains KHR_gaussian_splatting
+  ✓ extensionsRequired contains KHR_gaussian_splatting_compression_spz_2
+  ✓ KHR_gaussian_splatting has 'kernel' field
+  ✓ KHR_gaussian_splatting has 'colorSpace' field
+  ✓ compression.bufferView = 0
+  ✓ bufferView.byteLength matches buffers[0].byteLength
+  ✓ bufferView.byteOffset is 4-byte aligned
+  ✓ bufferView inside buffers[0] range
+  ✓ BIN chunk padding valid
   [PASS] Layer 1 validation passed
 
 Layer 2: Lossless Binary Validation
@@ -144,7 +151,17 @@ Layer 3: Decode Consistency Validation
   ✓ Extension integrity check passed
   [PASS] Layer 3 validation passed
 
-[SUCCESS] All 3 layers validation passed!
+Layer 4: Metadata Consistency Validation
+  ✓ SPZ version consistent: 4
+  ✓ GLB coordinateSystem recorded in metadata
+  [PASS] Layer 4 validation passed
+
+Layer 5: ILV Extension Integrity Validation
+  ✓ ILV 0xADBE0003 coordinateSystem=1 (valid, range [0,16])
+  ✓ All ILV records pass integrity checks
+  [PASS] Layer 5 validation passed
+
+[SUCCESS] All 5 layers validation passed!
 ✓ All layers passed
 
 [Test 3] Batch conversion...

@@ -34,14 +34,14 @@
 - **状态**：`KHR_gaussian_splatting` 已合入 glTF 仓库，但**尚未正式定稿**。
 - **`KHR_gaussian_splatting_compression_spz_2`**：当前仍明确处于**草案阶段**。
 - **当前实现**：
-  - ✅ **导出**：会写出完整扩展链，包含外层 `KHR_gaussian_splatting` 与内层 `KHR_gaussian_splatting_compression_spz_2`。
+  - ✅ **导出**：会写出完整扩展链，包含外层 `KHR_gaussian_splatting` 的必填字段（`kernel`、`colorSpace`）、可选属性（`sortingMethod`、`projection`）以及内层 `KHR_gaussian_splatting_compression_spz_2` 数据。
+  - ✅ **Layer 1 验证**：字段级检查确保 GLB JSON 中 KHR_gaussian_splatting 包含 `kernel` 和 `colorSpace`。
   - ⚠️ **解析**：对草案扩展采用**安全忽略**策略，这是当前阶段的预期回退行为。
   - 🚫 **不硬编码 `Extensions` 枚举项**：不会把草案扩展直接写死进头文件枚举，避免过早锁定未定稿接口。
 - **后续变化**：等 Khronos 侧定义正式定稿后，再补齐完整的解析期支持。
 
 ### 编译控制
-- **CMake 选项**：`ENABLE_KHR_GAUSSIAN_SPLATTING`（默认：`ON`）控制是否在导出侧写入扩展数据。
-- **关闭后的行为**：转换器仍可运行，但不会在输出 GLB 中写入 Gaussian Splatting 扩展数据。
+- KHR_gaussian_splatting 支持始终启用。该扩展已是 glTF 正式规范的一部分。
 
 ### ILV 003 坐标系扩展
 - **扩展 ID**: `0xADBE0003`
@@ -97,7 +97,7 @@ spz2glb model.spz model.glb
 spz_verify all input.spz output.glb
 
 # 输出：
-# Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
+# Layer 1: GLB Structure & KHR Extension Validation - PASSED
 # Layer 2: Binary Lossless Verification - PASSED (byte-identical)
 # Layer 3: Decoding Consistency Verification - PASSED (Size match)
 # Layer 4: Metadata Consistency Verification - PASSED (SPZ↔GLB metadata)
@@ -243,13 +243,20 @@ spz_verify layer5 model.spz
 **验证输出**：
 
 ```
-Layer 1: GLB Structure Validation
+Layer 1: GLB Structure & KHR Extension Validation
   ✓ Magic number: 0x46546C67 ("glTF")
   ✓ Version: 2
   ✓ extensionsUsed contains KHR_gaussian_splatting
   ✓ extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
-  ✓ buffers configuration correct
-  ✓ Compression stream mode (attributes empty)
+  ✓ extensionsRequired contains KHR_gaussian_splatting
+  ✓ extensionsRequired contains KHR_gaussian_splatting_compression_spz_2
+  ✓ KHR_gaussian_splatting has 'kernel' field
+  ✓ KHR_gaussian_splatting has 'colorSpace' field
+  ✓ compression.bufferView = 0
+  ✓ bufferView.byteLength matches buffers[0].byteLength
+  ✓ bufferView.byteOffset is 4-byte aligned
+  ✓ bufferView inside buffers[0] range
+  ✓ BIN chunk padding valid
   [PASS] Layer 1 validation passed
 
 Layer 2: Payload Extraction & Byte Equality

@@ -34,14 +34,14 @@
 - **Status**: `KHR_gaussian_splatting` has landed in the glTF repository but is **not yet ratified**.
 - **`KHR_gaussian_splatting_compression_spz_2`**: Still explicitly in **draft** status.
 - **Current Implementation**:
-  - ✅ **Export**: Writes the full extension chain, including outer `KHR_gaussian_splatting` and nested `KHR_gaussian_splatting_compression_spz_2` data.
+  - ✅ **Export**: Writes the full extension chain with required fields (`kernel`, `colorSpace`), optional properties (`sortingMethod`, `projection`), and nested `KHR_gaussian_splatting_compression_spz_2` data.
+  - ✅ **Layer 1 Validation**: Field-level checks ensure KHR_gaussian_splatting contains `kernel` and `colorSpace` in the GLB JSON.
   - ⚠️ **Parse**: Draft extensions are **safely ignored** during parsing, which is the expected fallback behavior.
   - 🚫 **No hardcoded `Extensions` enum entries**: Draft extensions are intentionally kept out of header enums to avoid locking unfinished interfaces.
 - **Future Changes**: Full parse-time support can be added once the Khronos definitions are ratified.
 
 ### Compilation Control
-- **CMake option**: `ENABLE_KHR_GAUSSIAN_SPLATTING` (default: `ON`) controls whether export-side extension data is emitted.
-- **Behavior when disabled**: The converter still runs, but it does not write Gaussian-splatting extension data into the output GLB.
+- KHR_gaussian_splatting support is always enabled. The extension is now part of the ratified glTF specification.
 
 ### ILV 003 Coordinate System Extension
 - **Extension ID**: `0xADBE0003`
@@ -97,7 +97,7 @@ spz2glb model.spz model.glb
 spz_verify all input.spz output.glb
 
 # Output:
-# Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
+# Layer 1: GLB Structure & KHR Extension Validation - PASSED
 # Layer 2: Binary Lossless Verification - PASSED (byte-identical)
 # Layer 3: Decoding Consistency Verification - PASSED (Size match)
 # Layer 4: Metadata Consistency Verification - PASSED (SPZ↔GLB metadata)
@@ -243,13 +243,20 @@ spz_verify layer5 model.spz
 **Verification Output**:
 
 ```
-Layer 1: GLB Structure Validation
+Layer 1: GLB Structure & KHR Extension Validation
   ✓ Magic number: 0x46546C67 ("glTF")
   ✓ Version: 2
   ✓ extensionsUsed contains KHR_gaussian_splatting
   ✓ extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
-  ✓ buffers configuration correct
-  ✓ Compression stream mode (attributes empty)
+  ✓ extensionsRequired contains KHR_gaussian_splatting
+  ✓ extensionsRequired contains KHR_gaussian_splatting_compression_spz_2
+  ✓ KHR_gaussian_splatting has 'kernel' field
+  ✓ KHR_gaussian_splatting has 'colorSpace' field
+  ✓ compression.bufferView = 0
+  ✓ bufferView.byteLength matches buffers[0].byteLength
+  ✓ bufferView.byteOffset is 4-byte aligned
+  ✓ bufferView inside buffers[0] range
+  ✓ BIN chunk padding valid
   [PASS] Layer 1 validation passed
 
 Layer 2: Payload Extraction & Byte Equality

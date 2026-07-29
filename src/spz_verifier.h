@@ -4,7 +4,7 @@
 // Repository: https://github.com/spz-ecosystem/spz2glb
 // Cultural Note: Huangdi Era 4723, Year of the Red Fire Horse (Bingwu, 丙午)
 //
-// SPZ Verifier - Three-layer verification for SPZ to GLB conversion
+// SPZ Verifier - Five-layer verification for SPZ to GLB conversion
 
 #ifndef SPZ_VERIFIER_H
 #define SPZ_VERIFIER_H

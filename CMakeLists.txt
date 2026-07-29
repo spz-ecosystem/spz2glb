@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 选项
 option(SPZ2GLB_BUILD_WASM "Build WASM version" OFF)
-option(ENABLE_KHR_GAUSSIAN_SPLATTING "Enable KHR_gaussian_splatting support" ON)
 
 # 添加 fastgltf (文件直接在 third_party 目录下)
 add_subdirectory(third_party)
@@ -106,10 +105,6 @@ else()
   endif()
 endif()
 
-if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-  target_compile_definitions(spz2glb_core PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-endif()
-
 target_compile_options(spz2glb_core PRIVATE ${STRICT_WARNINGS})
 
 # ============================================================
@@ -131,10 +126,6 @@ if(NOT SPZ2GLB_BUILD_WASM)
 
   target_link_libraries(spz_verify PRIVATE fastgltf spz2glb_zlib zstd::zstd)
 
-  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-  endif()
-
   # 严格警告
   target_compile_options(spz_verify PRIVATE ${STRICT_WARNINGS})
 
@@ -152,10 +143,6 @@ if(NOT SPZ2GLB_BUILD_WASM)
   )
 
   target_link_libraries(spz2glb PRIVATE spz2glb_core fastgltf spz2glb_zlib)
-
-  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-  endif()
 
   # 严格警告
   target_compile_options(spz2glb PRIVATE ${STRICT_WARNINGS})
@@ -202,10 +189,6 @@ if(SPZ2GLB_BUILD_WASM)
   )
 
   target_link_libraries(spz2glb-wasm PRIVATE spz2glb_core fastgltf)
-
-  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-  endif()
 
   # Emscripten ZLIB: compile and link with the zlib port so headers stay visible in CI.
 
@@ -287,10 +270,6 @@ if(SPZ2GLB_BUILD_WASM)
   )
 
   target_link_libraries(spz_verify-wasm PRIVATE fastgltf)
-
-  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(spz_verify-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-  endif()
 
   # Emscripten ZLIB + ZSTD: compile and link with the port so verifier sources can include zlib.h + zstd.h.
 

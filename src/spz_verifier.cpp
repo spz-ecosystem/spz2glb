@@ -515,7 +515,7 @@ bool Verifier::verify_layer3(const std::vector<uint8_t>& spz_data,
 bool Verifier::layer1_validate_glb_structure(const std::vector<uint8_t>& glb_data,
                                              std::string& detail) {
     std::ostringstream oss;
-    oss << "=== Layer 1: GLB Structure & Contract Validation ===\n";
+    oss << "=== Layer 1: GLB Structure & KHR Extension Validation ===\n";
 
     ParsedGlb parsed;
     std::string parseErr;
@@ -539,6 +539,35 @@ bool Verifier::layer1_validate_glb_structure(const std::vector<uint8_t>& glb_dat
     oss << (usedSpz2 ? "[PASS]" : "[FAIL]") << " extensionsUsed contains " << kExtSpz2 << "\n";
     oss << (requiredGaussian ? "[PASS]" : "[FAIL]") << " extensionsRequired contains " << kExtGaussian << "\n";
     oss << (requiredSpz2 ? "[PASS]" : "[FAIL]") << " extensionsRequired contains " << kExtSpz2 << "\n";
+
+    // 上级扩展 KHR_gaussian_splatting 字段级完整性检查
+    // 搜索 "KHR_gaussian_splatting":"（key 形式，跳过 extensionsUsed/Required 中的 value 形式）
+    bool hasKernel = false;
+    bool hasColorSpace = false;
+    {
+        // 在 primitive.extensions 中找 KHR_gaussian_splatting 对象
+        const std::string keyPattern = std::string("\"") + kExtGaussian + "\":";
+        const size_t keyObjPos = parsed.json.find(keyPattern);
+        if (keyObjPos != std::string::npos) {
+            const size_t colonPos = parsed.json.find(':', keyObjPos + keyPattern.size() - 1);
+            if (colonPos != std::string::npos) {
+                size_t objStart = colonPos + 1;
+                while (objStart < parsed.json.size() && std::isspace(static_cast<unsigned char>(parsed.json[objStart])) != 0) {
+                    ++objStart;
+                }
+                if (objStart < parsed.json.size() && parsed.json[objStart] == '{') {
+                    const size_t objEnd = findMatchingBracket(parsed.json, objStart, '{', '}');
+                    if (objEnd != std::string::npos) {
+                        const std::string gaussianObj = parsed.json.substr(objStart, objEnd - objStart + 1);
+                        hasKernel = gaussianObj.find("\"kernel\"") != std::string::npos;
+                        hasColorSpace = gaussianObj.find("\"colorSpace\"") != std::string::npos;
+                    }
+                }
+            }
+        }
+    }
+    oss << (hasKernel ? "[PASS]" : "[FAIL]") << " KHR_gaussian_splatting has 'kernel' field\n";
+    oss << (hasColorSpace ? "[PASS]" : "[FAIL]") << " KHR_gaussian_splatting has 'colorSpace' field\n";
 
     uint32_t bufferByteLength = 0;
     uint32_t bufferViewByteOffset = 0;
@@ -572,6 +601,7 @@ bool Verifier::layer1_validate_glb_structure(const std::vector<uint8_t>& glb_dat
         << binPaddingBytes << ")\n";
 
     const bool passed = usedGaussian && usedSpz2 && requiredGaussian && requiredSpz2 &&
+                        hasKernel && hasColorSpace &&
                         compressionOnView0 && viewMatchesBuffer && offsetAligned && inRange && binPaddingValid;
 
     if (!passed) {
