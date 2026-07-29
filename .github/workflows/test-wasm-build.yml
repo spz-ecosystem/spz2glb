@@ -461,7 +461,7 @@ jobs:
 
       - name: Install audit tools
         run: |
-          pip install zizmor==1.5.0
+          pip install zizmor==1.26.0
           # actionlint via gh — no persistent install needed in CI
 
       - name: Scan GitHub Actions workflows with actionlint
