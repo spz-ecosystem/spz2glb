@@ -144,7 +144,7 @@ jobs:
         uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.3
         with:
           path: /tmp/emsdk-cache
-          key: emsdk-${{ env.EMSCRIPTEN_VERSION }}-${{ runner.os }}
+          key: emsdk-${{ env.EMSCRIPTEN_VERSION }}-${{ runner.os }}-${{ github.ref }}
 
       - name: Setup Emscripten SDK
         run: |
@@ -357,12 +357,16 @@ jobs:
           merge-multiple: false
 
       - name: Generate rollback execution manifest
+        env:
+          ROLLBACK_RUN_ID: ${{ github.event.inputs.rollback_run_id }}
+          TRIGGER_ACTOR: ${{ github.actor }}
+          TRIGGER_REF: ${{ github.ref }}
         run: |
           {
             echo "current_run_id=${{ github.run_id }}"
-            echo "rollback_source_run_id=${{ github.event.inputs.rollback_run_id }}"
-            echo "trigger_actor=${{ github.actor }}"
-            echo "trigger_ref=${{ github.ref }}"
+            echo "rollback_source_run_id=${ROLLBACK_RUN_ID}"
+            echo "trigger_actor=${TRIGGER_ACTOR}"
+            echo "trigger_ref=${TRIGGER_REF}"
             echo "artifact_count=$(find rollback_artifacts -type f | wc -l)"
           } > rollback-manual-manifest.txt
 
