@@ -190,31 +190,24 @@ jobs:
 
       - name: Prepare fixture list for hash matrix
         run: |
-          # Build fixtures.json for JS fetch (all fixtures)
-          python3 -c "
-import json, os, glob
-
-fixtures = []
-bench_dir = 'tests/data/bench'
-fixture_dir = 'tests/data/fixtures'
-
-for d in (fixture_dir, bench_dir):
-    if not os.path.isdir(d):
-        continue
-    for f in sorted(glob.glob(os.path.join(d, '*.spz'))):
-        name = os.path.splitext(os.path.basename(f))[0]
-        fixtures.append({'name': name, 'path': './' + f.replace(os.sep, '/')})
-
-with open('fixtures.json', 'w') as fp:
-    json.dump(fixtures, fp)
-print(f'Wrote {len(fixtures)} fixtures to fixtures.json')
-
-# Also write hash_fixtures.json (exclude v4_header_only from conversion test)
-hash_fixtures = [f for f in fixtures if 'v4_header_only' not in f['name']]
-with open('hash_fixtures.json', 'w') as fp:
-    json.dump(hash_fixtures, fp)
-print(f'Wrote {len(hash_fixtures)} fixtures to hash_fixtures.json (excluded v4_header_only)')
-"
+          # Build fixtures.json + hash_fixtures.json for JS fetch
+          node -e "
+          const fs = require('fs');
+          const path = require('path');
+          const dirs = ['tests/data/fixtures', 'tests/data/bench'];
+          const fixtures = [];
+          for (const dir of dirs) {
+            if (!fs.existsSync(dir)) continue;
+            for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.spz')).sort()) {
+              fixtures.push({name: path.basename(f, '.spz'), path: './' + dir + '/' + f});
+            }
+          }
+          fs.writeFileSync('fixtures.json', JSON.stringify(fixtures));
+          const hf = fixtures.filter(f => !f.name.includes('v4_header_only'));
+          fs.writeFileSync('hash_fixtures.json', JSON.stringify(hf));
+          console.log('fixtures.json: ' + fixtures.length + ' entries');
+          console.log('hash_fixtures.json: ' + hf.length + ' entries (excl v4_header_only)');
+          "
 
       - name: Validate WASM hash matrix
         run: |
