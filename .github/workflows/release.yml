@@ -17,12 +17,10 @@ on:
         default: ''
 
 permissions:
-  actions: read
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   EMSCRIPTEN_VERSION: 5.0.1
 
 jobs:
@@ -42,8 +40,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           submodules: recursive
 
       - name: Install dependencies (Ubuntu)
@@ -112,13 +111,13 @@ jobs:
           find . -name "spz_verify" -type f -exec cp {} spz_verify-macos-x64 \;
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
 
       - name: Upload verify artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.os }}-verify
           path: spz_verify*
@@ -134,12 +133,13 @@ jobs:
         wasm_profile: [compat, perf-lite]
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           submodules: recursive
 
       - name: Cache Emscripten ports
-        uses: actions/cache@v5
+        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.3
         with:
           path: ${{ env.EM_CACHE }}
           key: emscripten-cache-${{ runner.os }}-${{ env.EMSCRIPTEN_VERSION }}
@@ -178,7 +178,7 @@ jobs:
           test -f dist/spz_verify.js
 
       - name: Upload WASM artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: wasm-modules-${{ matrix.wasm_profile }}
           path: |
@@ -192,8 +192,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           submodules: recursive
 
       - name: Install dependencies
@@ -221,13 +222,18 @@ jobs:
     needs: [wasm-build, verify-native]
     runs-on: ubuntu-latest
     if: (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') && github.event.inputs.rollback_run_id == ''
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Prepare Pages root from repository
         run: |
@@ -237,7 +243,7 @@ jobs:
           cp docs/examples/smart_memory.js site/smart_memory.js
 
       - name: Download WASM artifacts (compat)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: wasm-modules-compat
           path: site/dist
@@ -254,42 +260,44 @@ jobs:
           (cd site && sha256sum index.html spz2glb_bindings.js smart_memory.js spz2glb.wasm spz2glb.js > pages-artifact-sha256.txt)
 
       - name: Upload Pages audit artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pages-audit
           path: site/pages-artifact-sha256.txt
 
       - name: Upload to GitHub Pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
 
   release:
     needs: [build, wasm-build, verify-native]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # release job needs contents: write for tag operations
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
       - name: Download release artifacts (CLI)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: 'spz2glb-*'
           path: artifacts
           merge-multiple: true
 
       - name: Download release artifacts (verify)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: '*-verify'
           path: artifacts
           merge-multiple: true
 
       - name: Download release artifacts (WASM profiles)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: 'wasm-modules-*'
           path: artifacts/wasm
@@ -315,7 +323,7 @@ jobs:
           (cd artifacts && find . -type f -print0 | sort -z | xargs -0 sha256sum > release-sha256.txt)
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: artifacts/*
           generate_release_notes: true
@@ -327,7 +335,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts from stable run
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
@@ -346,7 +354,7 @@ jobs:
           } > rollback-manual-manifest.txt
 
       - name: Upload rollback restored artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: rollback-restored-${{ github.event.inputs.rollback_run_id }}
           path: |
@@ -360,7 +368,7 @@ jobs:
     steps:
       - name: Find previous stable run
         id: stable
-        uses: actions/github-script@v7
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962a410 # v7.0.1
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -394,7 +402,7 @@ jobs:
           } > rollback-manifest.txt
 
       - name: Upload rollback manifest
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: rollback-manifest
           path: rollback-manifest.txt

@@ -2,6 +2,9 @@
 
 name: Test WASM Build
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch:
     inputs:
@@ -21,7 +24,12 @@ on:
       - 'tests/**'
       - '.github/workflows/test-wasm-build.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   EMSCRIPTEN_VERSION: 5.0.1
   EM_CACHE: ${{ github.workspace }}/.emscripten-cache
 
@@ -35,12 +43,13 @@ jobs:
         wasm_profile: [compat, perf-lite]
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           submodules: recursive
 
       - name: Cache Emscripten ports
-        uses: actions/cache@v5
+        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.3
         with:
           path: ${{ env.EM_CACHE }}
           key: emscripten-cache-${{ runner.os }}-${{ env.EMSCRIPTEN_VERSION }}
@@ -235,6 +244,13 @@ jobs:
           trap 'kill "$SERVER_PID"' EXIT
 
           npm install --no-save playwright@1.53.0
+
+      - name: npm audit (supply chain)
+        shell: bash
+        continue-on-error: true
+        run: |
+          npm audit --audit-level=high
+
           npx playwright install --with-deps chromium
           node << 'EOF' | tee wasm_hash_matrix.log
           const { writeFileSync } = require('node:fs');
@@ -324,6 +340,13 @@ jobs:
           trap 'kill "$SERVER_PID"' EXIT
 
           npm install --no-save playwright@1.53.0
+
+      - name: npm audit (supply chain)
+        shell: bash
+        continue-on-error: true
+        run: |
+          npm audit --audit-level=high
+
           npx playwright install --with-deps chromium
           node << 'EOF' | tee browser_smoke.log
           const { chromium } = require('playwright');
@@ -356,7 +379,7 @@ jobs:
           EOF
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: wasm-build-logs-${{ matrix.wasm_profile }}
           path: |
@@ -371,18 +394,34 @@ jobs:
             dist/
             build_wasm/dist/
 
+  security-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install zizmor
+        run: pip install zizmor
+
+      - name: Scan GitHub Actions workflows
+        run: zizmor --format plain --min-severity medium .github/workflows/
+
   private-fixed-samples-validation:
     name: Private fixed-samples verification (self-hosted)
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_private_fixed_samples == true }}
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           submodules: recursive
 
       - name: Cache Emscripten ports
-        uses: actions/cache@v5
+        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.3
         with:
           path: ${{ env.EM_CACHE }}
           key: emscripten-cache-${{ runner.os }}-${{ env.EMSCRIPTEN_VERSION }}
@@ -400,7 +439,7 @@ jobs:
           echo "EM_CACHE=$EM_CACHE"
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '20'
 
@@ -526,6 +565,13 @@ jobs:
           trap 'kill "$SERVER_PID"' EXIT
 
           npm install --no-save playwright@1.53.0
+
+      - name: npm audit (supply chain)
+        shell: bash
+        continue-on-error: true
+        run: |
+          npm audit --audit-level=high
+
           npx playwright install --with-deps chromium
           node << 'EOF' | tee fixed_samples_wasm_hash.log
           const { writeFileSync } = require('node:fs');
@@ -561,7 +607,7 @@ jobs:
           EOF
 
       - name: Upload private verification logs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: private-fixed-samples-logs
           path: |
