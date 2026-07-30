@@ -12,6 +12,7 @@
 #   6  P4 WASM analysis
 #   7  P5 workflow lint
 #   8  P6 file integrity
+#   9  P7 dead code (unused variables, etc.)
 
 set -euo pipefail
 
@@ -452,6 +453,70 @@ check_file_integrity() {
 }
 
 # ---------------------------------------------------------------------------
+# P7: Dead code detection — unused variables, string-plus-int, etc.
+# Uses host g++ with -fsyntax-only to catch issues before WASM build.
+# ---------------------------------------------------------------------------
+check_deadcode() {
+  local failures=0
+  local src_dir="${PROJECT_DIR}/src"
+  local inc_dir="${PROJECT_DIR}/third_party/include"
+  local simd_dir="${PROJECT_DIR}/third_party/deps/simdjson"
+  local cmake_file="${PROJECT_DIR}/CMakeLists.txt"
+
+  if ! command -v g++ >/dev/null 2>&1; then
+    echo "  SKIP: g++ not available for dead code detection" >&2
+    return 0
+  fi
+
+  local std_flag="gnu++20"
+  if grep -qE 'set\s*\(\s*CMAKE_CXX_STANDARD\s+' "${cmake_file}" 2>/dev/null; then
+    local detected
+    detected="$(grep -oP 'CMAKE_CXX_STANDARD\s+\K[0-9]+' "${cmake_file}" 2>/dev/null || true)"
+    if [ "${detected}" = "17" ]; then std_flag="gnu++17"; fi
+    if [ "${detected}" = "23" ]; then std_flag="gnu++23"; fi
+  fi
+
+  local warn_flags=(
+    "-Wall" "-Wextra" "-Wpedantic" "-Werror"
+    "-Wunused-variable" "-Wunused-but-set-variable" "-Wunused-function"
+    "-Wstring-plus-int"
+    "-Wno-unused-parameter"
+    "-Wno-old-style-cast"
+    "-Wno-sign-conversion"
+    "-fsyntax-only"
+  )
+
+  echo "  C++ standard: ${std_flag}" >&2
+
+  while IFS= read -r -d '' src; do
+    local basename=""
+    basename="$(basename "${src}")"
+    case "${basename}" in
+      spz2glb_wasm_c_api.cpp|spz2glb_wasm_bindings.cpp) continue ;;
+    esac
+
+    set +e
+    local output
+    output="$(g++ "${warn_flags[@]}" -std="${std_flag}" \
+      -I"${src_dir}" -I"${inc_dir}" -I"${simd_dir}" \
+      -c "${src}" -o /dev/null 2>&1)"
+    local rc=$?
+    set -e
+
+    if [ "${rc}" -ne 0 ]; then
+      echo "  DEADCODE in ${basename}:" >&2
+      echo "${output}" | sed 's/^/    /' >&2
+      failures=$((failures + 1))
+    fi
+  done < <(find "${src_dir}" -maxdepth 1 \( -name '*.cpp' -o -name '*.c' \) ! -name '*.bak' -print0 2>/dev/null)
+
+  if [ "${failures}" -gt 0 ]; then
+    fail "P7_DEADCODE" 9 "${failures} dead code / unused variable issue(s) detected"
+  fi
+  echo "  No dead code issues found in ${src_dir}/*.cpp" >&2
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 main() {
@@ -465,6 +530,7 @@ main() {
   check_wasm_analysis
   check_workflow
   check_file_integrity
+  check_deadcode
   pass
 }
 

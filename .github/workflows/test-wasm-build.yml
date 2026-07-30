@@ -469,7 +469,7 @@ jobs:
         shell: bash
         run: |
           echo "=== WASM Pre-Check Failure Summary ==="
-          for stage in P0_ENV P1_BUILD P2_SYMBOL P3_ARTIFACT P4_WASM_ANALYSIS P5_WORKFLOW P6_INTEGRITY; do
+          for stage in P0_ENV P1_BUILD P2_SYMBOL P3_ARTIFACT P4_WASM_ANALYSIS P5_WORKFLOW P6_INTEGRITY P7_DEADCODE; do
             echo "--- $stage ---"
             grep -E "\\b${stage}\\b" wasm-pre-check.log 2>/dev/null || echo "(no log for $stage)"
           done
