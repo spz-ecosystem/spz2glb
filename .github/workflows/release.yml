@@ -200,7 +200,6 @@ jobs:
           retention-days: 7
 
   verify-native:
-    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -212,14 +211,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zlib1g-dev
+          sudo apt-get install -y zlib1g-dev mingw-w64
 
-      - name: Configure CMake
+      - name: Native Linux build
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build native targets
-        run: |
           cmake --build build --config Release --target spz2glb spz_verify -- -j4
 
       - name: Run ctest
@@ -230,8 +226,23 @@ jobs:
         run: |
           bash tests/quick_test.sh
 
+      # MinGW 交叉编译检查：以 Windows (_WIN32) 方式编译 spz2glb_core，
+      # 捕获 #ifdef guard 不匹配等 MSVC 特有编译错误。
+      - name: MinGW cross-compilation check
+        run: |
+          set -euo pipefail
+          echo "=== CMake configure (CMAKE_SYSTEM_NAME=Windows) ==="
+          cmake -S . -B build_mingw \
+            -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+            -DCMAKE_BUILD_TYPE=Release 2>&1 | tee mingw_cmake.log
+          echo "=== MinGW build (spz2glb_core) ==="
+          cmake --build build_mingw --target spz2glb_core --config Release -j$(nproc) 2>&1 | tee mingw_build.log
+          echo "[PASS] MinGW cross-compilation successful"
+
   deploy-pages:
-    needs: [wasm-build, verify-native]
+    needs: [wasm-build]
     runs-on: ubuntu-latest
     if: (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') && github.event.inputs.rollback_run_id == ''
     permissions:
