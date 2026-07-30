@@ -21,15 +21,17 @@ struct VerifyResult {
     bool layer3_passed;
     bool layer4_passed;  // GLB metadata ↔ SPZ header 一致性
     bool layer5_passed;  // ILV 扩展完整性
+    bool report_passed;  // JSON 报告完整性（可选，无报告则 true）
     std::string layer1_detail;
     std::string layer2_detail;
     std::string layer3_detail;
     std::string layer4_detail;
     std::string layer5_detail;
+    std::string report_detail;
 
     bool all_passed() const {
         return layer1_passed && layer2_passed && layer3_passed &&
-               layer4_passed && layer5_passed;
+               layer4_passed && layer5_passed && report_passed;
     }
 };
 
@@ -68,6 +70,11 @@ public:
     // L5：ILV 扩展完整性校验（可解析 + 003 值域 [0,16]）。
     bool verify_layer5(const std::vector<uint8_t>& spz_data,
                        std::string& detail);
+
+    // JSON 报告验证（可选）：校验报告扩展字段与转换结果一致性。
+    // 无报告文件时静默通过。
+    bool verify_report_file(const std::string& report_path,
+                            std::string& detail);
 
 private:
     bool layer1_validate_glb_structure(const std::vector<uint8_t>& glb_data,

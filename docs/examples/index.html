@@ -159,6 +159,40 @@
         @keyframes spin { to { transform: rotate(360deg); } }
 
         button:disabled { background: #d1d5db; cursor: not-allowed; }
+
+        /* 性能面板 */
+        .perf-panel {
+            margin-top: 16px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            font-size: 12px;
+        }
+        .perf-panel summary {
+            padding: 10px 14px;
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--text-secondary);
+            user-select: none;
+        }
+        .perf-panel summary:hover { background: #f1f5f9; }
+        .perf-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1px;
+            background: #e2e8f0;
+        }
+        .perf-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 14px;
+            background: #fff;
+        }
+        .perf-item .label { color: var(--text-secondary); }
+        .perf-item .value { font-weight: 600; color: var(--text-primary); font-family: monospace; }
+        .perf-item.warn .value { color: var(--warning); }
+        .perf-item.error .value { color: var(--error); }
     </style>
 </head>
 <body>
@@ -188,6 +222,12 @@
             <div class="file-list" id="fileList"></div>
 
             <div class="status" id="statusBox"></div>
+
+            <!-- 性能面板 -->
+            <details class="perf-panel" id="perfPanel" style="display:none">
+                <summary>📊 运行时状态</summary>
+                <div class="perf-grid" id="perfGrid"></div>
+            </details>
         </div>
     </div>
 
@@ -411,6 +451,35 @@
             processQueue();
         }
 
+        function renderPerfPanel() {
+            if (!spz2glb) return;
+            const panel = document.getElementById('perfPanel');
+            const grid = document.getElementById('perfGrid');
+            panel.style.display = '';
+
+            const stats = spz2glb.getMemoryStats();
+            const info = memManager.getInfo();
+            const version = spz2glb.getVersion();
+
+            const rows = [
+                { label: 'WASM 版本', value: version },
+                { label: '设备类型', value: `${info.device.type} (${info.device.tier})` },
+                { label: '内存峰值', value: formatSize(stats.peakUsageBytes) },
+                { label: '当前内存', value: formatSize(stats.currentUsageBytes) },
+                { label: '分配次数', value: stats.totalAllocations.toLocaleString() },
+                { label: '释放次数', value: stats.totalFrees.toLocaleString() },
+                { label: '分配失败', value: stats.failedAllocations.toLocaleString(), cls: stats.failedAllocations > 0 ? 'error' : '' },
+                { label: '热池可用', value: stats.hotAvailable.toLocaleString() },
+                { label: '工作区已用', value: `${stats.workUsed}/${stats.workCapacity}`, cls: stats.workUsed > stats.workCapacity * 0.9 ? 'warn' : '' },
+                { label: '工作区峰值', value: stats.workPeak.toLocaleString() },
+                { label: '推荐上限', value: `${info.recommendedMaxFileSize}MB` },
+            ];
+
+            grid.innerHTML = rows.map(r =>
+                `<div class="perf-item${r.cls ? ' ' + r.cls : ''}"><span class="label">${r.label}</span><span class="value">${r.value}</span></div>`
+            ).join('');
+        }
+
         async function init() {
             memManager = new SmartMemoryManager();
             const info = memManager.getInfo();
@@ -424,6 +493,7 @@
             try {
                 const memConfig = memManager.getWasmMemoryConfig();
                 spz2glb = await loadSpz2Glb('./spz2glb.wasm', { memory: memConfig.memory });
+                renderPerfPanel();
                 showStatus(`✅ WASM 加载成功！版本: ${spz2glb.getVersion()}<br>
                     <small style="opacity:0.7">最大并行: ${MAX_PARALLEL} | 建议文件 ≤ ${info.recommendedMaxFileSize}MB</small>`, 'success');
                 setTimeout(() => {

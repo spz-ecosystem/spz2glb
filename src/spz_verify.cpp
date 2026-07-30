@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -22,7 +23,9 @@ void printUsage(const char* progName) {
     std::cout << "    layer4 <spz> <glb>     - GLB metadata vs SPZ header consistency (Layer 4)\n";
     std::cout << "    layer5 <spz>           - ILV extension completeness (Layer 5)\n";
     std::cout << "    all <spz> <glb>        - Run all five layers\n";
-    std::cout << "    verify <spz> <glb>     - Alias for 'all'\n";
+    std::cout << "    verify <spz> <glb>     - Alias for 'all'\n\n";
+    std::cout << "  Options:\n";
+    std::cout << "    --report <file.json>   - Validate conversion report (optional)\n";
 }
 
 void printSummary(const spz::VerifyResult& result) {
@@ -33,6 +36,7 @@ void printSummary(const spz::VerifyResult& result) {
     std::cout << "  Layer 3 (Decoding): " << (result.layer3_passed ? "PASSED" : "FAILED") << "\n";
     std::cout << "  Layer 4 (Metadata): " << (result.layer4_passed ? "PASSED" : "FAILED") << "\n";
     std::cout << "  Layer 5 (ILV Extensions): " << (result.layer5_passed ? "PASSED" : "FAILED") << "\n";
+    std::cout << "  Report Validation: " << (result.report_passed ? "PASSED" : "FAILED") << "\n";
     std::cout << "============================================================\n";
 }
 
@@ -44,47 +48,71 @@ bool runLayer1(spz::Verifier& verifier, const std::string& glbPath) {
     return ok;
 }
 
+// 从 argv 中提取 --report <path> 的值，返回空串表示无 --report
+std::string extractReportPath(int argc, char** argv, int skipBefore) {
+    for (int i = skipBefore + 1; i < argc - 1; ++i) {
+        if (argv[i] == std::string("--report")) {
+            return argv[i + 1];
+        }
+    }
+    return {};
+}
+
+// 返回 argc 中位置参数（非 --option）的数量
+int countPositionalArgs(int argc, char** argv) {
+    int count = 0;
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg.find("--") == 0) {
+            ++i; // skip value
+            continue;
+        }
+        ++count;
+    }
+    return count;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
-    // CLI 只负责参数分发与输出；三层规则全部下沉到 Verifier，避免再次分叉。
     if (argc < 2) {
         printUsage(argv[0]);
         return 1;
     }
 
-    std::string command = argv[1];
+    const std::string command = argv[1];
     spz::Verifier verifier;
 
-    if (command == "layer1" && argc >= 3) {
+    if (command == "layer1" && countPositionalArgs(argc, argv) >= 2) {
         return runLayer1(verifier, argv[2]) ? 0 : 1;
     }
 
-    if (command == "layer2" && argc >= 4) {
-        const auto result = verifier.verify_files(argv[2], argv[3]);
-        std::cout << result.layer2_detail;
-        std::cout << (result.layer2_passed ? "[PASS] Layer 2 validation passed\n" : "[FAIL] Layer 2 validation failed\n");
-        return result.layer2_passed ? 0 : 1;
+    if ((command == "layer2" || command == "layer3" || command == "layer4") && countPositionalArgs(argc, argv) >= 3) {
+        int pos = 0;
+        for (int i = 2; i < argc; ++i) {
+            if (std::string(argv[i]).find("--") == 0) { ++i; continue; }
+            if (pos == 0) { /* spz, skip */ pos++; continue; }
+            const auto result = verifier.verify_files(argv[2], argv[i]);
+            std::string layerKey = "layer" + command.back();
+            auto getDetail = [&]() -> std::string {
+                if (command == "layer2") return result.layer2_detail;
+                if (command == "layer3") return result.layer3_detail;
+                return result.layer4_detail;
+            };
+            auto getPassed = [&]() -> bool {
+                if (command == "layer2") return result.layer2_passed;
+                if (command == "layer3") return result.layer3_passed;
+                return result.layer4_passed;
+            };
+            std::cout << getDetail();
+            std::cout << (getPassed() ? "[PASS] " : "[FAIL] ") << "Layer " << command.back() << " validation " << (getPassed() ? "passed\n" : "failed\n");
+            return getPassed() ? 0 : 1;
+        }
     }
 
-    if (command == "layer3" && argc >= 4) {
-        const auto result = verifier.verify_files(argv[2], argv[3]);
-        std::cout << result.layer3_detail;
-        std::cout << (result.layer3_passed ? "[PASS] Layer 3 validation passed\n" : "[FAIL] Layer 3 validation failed\n");
-        return result.layer3_passed ? 0 : 1;
-    }
-
-    if (command == "layer4" && argc >= 4) {
-        const auto result = verifier.verify_files(argv[2], argv[3]);
-        std::cout << result.layer4_detail;
-        std::cout << (result.layer4_passed ? "[PASS] Layer 4 validation passed\n" : "[FAIL] Layer 4 validation failed\n");
-        return result.layer4_passed ? 0 : 1;
-    }
-
-    if (command == "layer5" && argc >= 3) {
+    if (command == "layer5" && countPositionalArgs(argc, argv) >= 2) {
         spz::VerifyResult result;
         std::vector<uint8_t> spzData;
-        // L5 only needs SPZ data
         auto readBytes = [](const std::string& path, std::vector<uint8_t>& out) {
             std::ifstream file(path, std::ios::binary | std::ios::ate);
             if (!file) return false;
@@ -103,13 +131,30 @@ int main(int argc, char** argv) {
         return result.layer5_passed ? 0 : 1;
     }
 
-    if ((command == "all" || command == "verify") && argc >= 4) {
-        const auto result = verifier.verify_files(argv[2], argv[3]);
+    if ((command == "all" || command == "verify") && countPositionalArgs(argc, argv) >= 3) {
+        // 提取 --report <path>（可选）
+        const std::string reportPath = extractReportPath(argc, argv, 1);
+
+        // 找到第2个位置参数（glb 路径）
+        int posCount = 0;
+        std::string spzPath, glbPath;
+        for (int i = 2; i < argc; ++i) {
+            if (std::string(argv[i]).find("--") == 0) { ++i; continue; }
+            if (posCount == 0) { spzPath = argv[i]; posCount++; continue; }
+            if (posCount == 1) { glbPath = argv[i]; break; }
+        }
+
+        auto result = verifier.verify_files(spzPath, glbPath);
+
+        // 可选报告验证
+        result.report_passed = verifier.verify_report_file(reportPath, result.report_detail);
+
         std::cout << result.layer1_detail << "\n";
         std::cout << result.layer2_detail << "\n";
         std::cout << result.layer3_detail << "\n";
         std::cout << result.layer4_detail << "\n";
         std::cout << result.layer5_detail << "\n";
+        std::cout << result.report_detail << "\n";
         printSummary(result);
         if (result.all_passed()) {
             std::cout << "[SUCCESS] All 5 layers validation passed\n";
