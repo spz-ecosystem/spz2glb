@@ -98,6 +98,14 @@ jobs:
           echo "=== Build Warnings/Errors Summary ==="
           grep -iE "(warning|error)" build.log | head -20 || echo "No warnings/errors found"
 
+      - name: Dump build.log on failure
+        if: failure()
+        run: |
+          echo "=== Full Build Log (last 200 lines) ==="
+          test -f build.log && tail -200 build.log || echo "no build.log"
+          echo "=== CMake Log (last 50 lines) ==="
+          test -f cmake.log && tail -50 cmake.log || echo "no cmake.log"
+
       - name: Locate WASM artifacts
         run: |
           echo "=== Locate WASM Artifacts ==="
