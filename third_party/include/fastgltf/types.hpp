@@ -2329,6 +2329,14 @@ namespace fastgltf {
 	 * This extension allows storing 3D Gaussian splat data in glTF.
 	 */
 	struct GaussianSplatExtension {
+		/** Required: the kernel used to generate the Gaussians ("ellipse"). */
+		std::string kernel = "ellipse";
+		/** Required: the color space of reconstructed color values ("srgb_rec709_display"). */
+		std::string colorSpace = "srgb_rec709_display";
+		/** Optional: sorting method for rendering ("cameraDistance"). */
+		std::string sortingMethod = "cameraDistance";
+		/** Optional: projection method ("perspective"). */
+		std::string projection = "perspective";
 		/**
 		 * Optional SPZ compression extension.
 		 * When present, the Gaussian splat data is stored compressed in SPZ format.
