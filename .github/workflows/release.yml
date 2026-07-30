@@ -213,6 +213,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y zlib1g-dev mingw-w64
 
+      # P6 文件完整性检查（从 wasm-pre-check.sh 复制）：UTF-8 编码 + CMake 语法
+      - name: File integrity check (UTF-8 + CMake syntax)
+        run: |
+          set -euo pipefail
+          failures=0
+          echo "=== UTF-8 encoding check ==="
+          while IFS= read -r -d '' f; do
+            if ! python3 -c "open('$f','rb').read().decode('utf-8')" 2>/dev/null; then
+              echo "  INVALID UTF-8: $f" >&2
+              failures=$((failures + 1))
+            fi
+          done < <(find src -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | tr '\n' '\0')
+          echo "=== CMake syntax check ==="
+          bad_sets="$(grep -cPn 'set\([A-Za-z_][A-Za-z0-9_]*::' CMakeLists.txt 2>/dev/null || true)"
+          if [ "${bad_sets}" -gt 0 ]; then
+            echo "  ERROR: ${bad_sets} invalid set(XXX::YYY) pattern(s)" >&2
+            grep -Pn 'set\([A-Za-z_][A-Za-z0-9_]*::' CMakeLists.txt >&2
+            failures=$((failures + bad_sets))
+          fi
+          if [ "${failures}" -gt 0 ]; then
+            echo "FAIL: ${failures} integrity issue(s) found"
+            exit 1
+          fi
+          echo "[PASS] All files pass UTF-8 and CMake syntax checks"
+
       - name: Native Linux build
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
