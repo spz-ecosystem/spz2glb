@@ -26,7 +26,9 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include <filesystem>
 #include "spz2glb_core.h"
+#include "mapped_file.h"
 
 #ifdef __EMSCRIPTEN__
 #ifndef SPZ2GLB_DISABLE_EMBIND
@@ -34,75 +36,6 @@
 #include "emscripten_utils.h"
 #endif
 #endif
-
-enum class SpzErrorCode {
-    Success = 0,
-    CannotOpenSpzFile = 1,
-    FailedToReadSpzFile = 2,
-    FailedToInitZlib = 3,
-    FailedToDecompress = 4,
-    ConversionFailed = 5,
-    CannotOpenOutputFile = 6
-};
-
-struct SpzResult {
-    bool success;
-    std::string errorMessage;
-    std::vector<uint8_t> data;
-
-    static SpzResult ok(std::vector<uint8_t> data) {
-        return {true, "", std::move(data)};
-    }
-    static SpzResult error(SpzErrorCode code, const std::string& msg) {
-        (void)code;
-        return {false, msg, {}};
-    }
-};
-
-/**
- * 加载 SPZ 文件（二进制读取）
- * 
- * @param spzPath SPZ 文件路径
- * @return 包含完整 SPZ 二进制数据的 vector
- * 
- * 关键点：
- * - 以二进制模式读取，保持原始字节不变
- * - 使用 ios::ate 先定位到文件末尾获取大小
- * - 返回的是 gzip 压缩的原始数据，不解压
- * 
- * 为什么保持压缩状态？
- * - SPZ 压缩率约 10 倍，解压后会变大
- * - GLB 存储压缩数据，加载时由 SPZ 解码器解压
- * - 符合 SPZ_2 规范的压缩流模式
- */
-SpzResult loadSpzFile(const std::string& spzPath) {
-    // 以二进制模式打开文件，ios::ate 将读取位置定位到文件末尾
-    std::ifstream file(spzPath, std::ios::binary | std::ios::ate);
-    if (!file) {
-        return SpzResult::error(SpzErrorCode::CannotOpenSpzFile,
-            "Cannot open SPZ file: " + spzPath);
-    }
-
-    // 获取文件大小（tellg 返回当前位置，即文件末尾）
-    auto size = file.tellg();
-    // 重置读取位置到文件开头
-    file.seekg(0, std::ios::beg);
-
-    // 分配缓冲区并调整大小
-    std::vector<uint8_t> rawBuffer;
-    rawBuffer.resize(static_cast<size_t>(size));
-
-    // 一次性读取整个文件到缓冲区
-    if (!file.read(reinterpret_cast<char*>(rawBuffer.data()), static_cast<std::streamsize>(size))) {
-        return SpzResult::error(SpzErrorCode::FailedToReadSpzFile,
-            "Failed to read SPZ file");
-    }
-
-    // 返回原始 SPZ 数据（保持 gzip 压缩状态）
-    // 重要：不要解压！GLB 必须存储原始压缩数据
-    // SPZ 解码器在加载时会自动解压
-    return SpzResult::ok(std::move(rawBuffer));
-}
 
 #ifdef __EMSCRIPTEN__
 
@@ -140,23 +73,108 @@ EMSCRIPTEN_BINDINGS(spz2glb_module) {
 #include "spz_verifier.h"
 
 #ifndef SPZ2GLB_NO_CLI_MAIN
+bool convertSingleFile(const std::string& inputPath, const std::string& outputPath, bool doVerify) {
+    spz2glb::MappedFile mappedFile;
+    if (!mappedFile.open(inputPath)) {
+        std::cerr << "[ERROR] Cannot open SPZ file: " << inputPath << std::endl;
+        return false;
+    }
+
+    const uint8_t* spzData = mappedFile.data();
+    size_t spzSize = mappedFile.size();
+
+    if (spzData == nullptr || spzSize == 0) {
+        std::cerr << "[ERROR] Empty SPZ file: " << inputPath << std::endl;
+        return false;
+    }
+
+    std::cout << "[INFO] Converting to GLB..." << std::endl;
+    std::vector<std::byte> glbData;
+    if (!convertSpzToGlbCore(spzData, spzSize, glbData)) {
+        std::cerr << "[ERROR] Conversion failed" << std::endl;
+        return false;
+    }
+
+    std::cout << "[INFO] Writing GLB: " << outputPath << std::endl;
+    std::ofstream file(outputPath, std::ios::binary);
+    if (!file) {
+        std::cerr << "[ERROR] Cannot open output file: " << outputPath << std::endl;
+        return false;
+    }
+
+    file.write(reinterpret_cast<const char*>(glbData.data()),
+               static_cast<std::streamsize>(glbData.size()));
+
+    std::cout << "[SUCCESS] GLB exported: " << outputPath << std::endl;
+    std::cout << "[INFO] GLB size: " << (glbData.size() / 1024.0 / 1024.0) << " MB" << std::endl;
+
+    if (doVerify) {
+        std::cout << "\n============================================================\n";
+        std::cout << "Running Five-Layer Verification...\n";
+        std::cout << "============================================================\n\n";
+
+        spz::Verifier verifier;
+        auto result = verifier.verify(
+            spzData, spzSize,
+            reinterpret_cast<const uint8_t*>(glbData.data()), glbData.size());
+
+        std::cout << result.layer1_detail << "\n";
+        std::cout << result.layer2_detail << "\n";
+        std::cout << result.layer3_detail << "\n";
+        std::cout << result.layer4_detail << "\n";
+        std::cout << result.layer5_detail << "\n";
+
+        std::cout << "============================================================\n";
+        std::cout << "Summary:\n";
+        std::cout << "  Layer 1 (GLB Structure): " << (result.layer1_passed ? "PASSED" : "FAILED") << "\n";
+        std::cout << "  Layer 2 (Binary Lossless): " << (result.layer2_passed ? "PASSED" : "FAILED") << "\n";
+        std::cout << "  Layer 3 (Decoding): " << (result.layer3_passed ? "PASSED" : "FAILED") << "\n";
+        std::cout << "  Layer 4 (Metadata): " << (result.layer4_passed ? "PASSED" : "FAILED") << "\n";
+        std::cout << "  Layer 5 (ILV Extension): " << (result.layer5_passed ? "PASSED" : "FAILED") << "\n";
+        std::cout << "============================================================\n";
+
+        if (!result.all_passed()) {
+            std::cerr << "[WARNING] Verification failed for: " << inputPath << std::endl;
+            return false;
+        }
+        std::cout << "[SUCCESS] All verifications PASSED!\n";
+    }
+
+    return true;
+}
+
 void printUsage(const char* progName) {
-    std::cout << "SPZ to GLB Converter\n";
-    std::cout << "Usage: " << progName << " <input.spz> <output.glb> [options]\n\n";
+    std::cout << "SPZ to GLB Converter v2.0.3\n";
+    std::cout << "Usage:\n";
+    std::cout << "  " << progName << " <input.spz> <output.glb> [--verify]\n";
+    std::cout << "  " << progName << " --batch .spz [--verify]\n\n";
     std::cout << "Options:\n";
-    std::cout << "  --verify    Run three-layer verification after conversion\n";
-    std::cout << "  --help      Show this help message\n";
+    std::cout << "  --verify     Run 5-layer verification after conversion\n";
+    std::cout << "  --batch EXT  Batch convert all files with given extension (e.g. .spz)\n";
+    std::cout << "  --help, -h   Show this help message\n";
 }
 
 int main(int argc, char** argv) {
     bool doVerify = false;
+    bool batchMode = false;
+    std::string batchExt;
     std::string inputPath;
     std::string outputPath;
-    
+
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--verify") {
             doVerify = true;
+        } else if (arg == "--batch") {
+            if (i + 1 >= argc) {
+                std::cerr << "[ERROR] --batch requires an extension argument (e.g. .spz)" << std::endl;
+                return 1;
+            }
+            batchMode = true;
+            batchExt = argv[++i];
+            if (batchExt.front() != '.') {
+                batchExt = "." + batchExt;
+            }
         } else if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
             return 0;
@@ -172,72 +190,52 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
-    
+
+    if (batchMode) {
+        // 批量模式：遍历当前目录，匹配扩展名
+        namespace fs = std::filesystem;
+        std::vector<fs::path> targets;
+        for (const auto& entry : fs::directory_iterator(fs::current_path())) {
+            if (entry.is_regular_file() && entry.path().extension() == batchExt) {
+                targets.push_back(entry.path());
+            }
+        }
+
+        if (targets.empty()) {
+            std::cout << "[INFO] No files matching *" << batchExt << " found in current directory" << std::endl;
+            return 0;
+        }
+
+        std::cout << "[INFO] Batch mode: " << targets.size() << " files to convert" << std::endl;
+        int successCount = 0;
+        int failCount = 0;
+        for (const auto& target : targets) {
+            auto outPath = target;
+            outPath.replace_extension(".glb");
+            std::cout << "\n--- [" << (successCount + failCount + 1) << "/" << targets.size()
+                      << "] " << target.filename().string() << " ---\n";
+            if (convertSingleFile(target.string(), outPath.string(), doVerify)) {
+                ++successCount;
+            } else {
+                std::cerr << "[FAIL] " << target.filename().string() << std::endl;
+                ++failCount;
+            }
+        }
+
+        std::cout << "\n============================================================\n";
+        std::cout << "Batch complete: " << successCount << " succeeded, "
+                  << failCount << " failed out of " << targets.size() << std::endl;
+        return failCount > 0 ? 1 : 0;
+    }
+
+    // 单文件模式
     if (inputPath.empty() || outputPath.empty()) {
-        std::cerr << "[ERROR] Missing input or output file\n";
+        std::cerr << "[ERROR] Missing input or output file" << std::endl;
         printUsage(argv[0]);
         return 1;
     }
 
-    std::cout << "[INFO] Loading SPZ: " << inputPath << std::endl;
-    auto spzResult = loadSpzFile(inputPath);
-    if (!spzResult.success) {
-        std::cerr << "[ERROR] " << spzResult.errorMessage << std::endl;
-        return 1;
-    }
-
-    std::cout << "[INFO] Converting to GLB..." << std::endl;
-    std::vector<std::byte> glbData;
-    if (!convertSpzToGlbCore(spzResult.data.data(), spzResult.data.size(), glbData)) {
-        std::cerr << "[ERROR] Conversion failed" << std::endl;
-        return 1;
-    }
-
-    std::cout << "[INFO] Writing GLB: " << outputPath << std::endl;
-    std::ofstream file(outputPath, std::ios::binary);
-    if (!file) {
-        std::cerr << "[ERROR] Cannot open output file: " << outputPath << std::endl;
-        return 1;
-    }
-
-    file.write(reinterpret_cast<const char*>(glbData.data()), static_cast<std::streamsize>(glbData.size()));
-
-    std::cout << "[SUCCESS] GLB exported: " << outputPath << std::endl;
-    std::cout << "[INFO] GLB size: " << (glbData.size() / 1024.0 / 1024.0) << " MB" << std::endl;
-
-    if (doVerify) {
-
-        std::cout << "\n============================================================\n";
-        std::cout << "Running Three-Layer Verification...\n";
-        std::cout << "============================================================\n\n";
-        
-        std::vector<uint8_t> glbBytes(glbData.size());
-        std::memcpy(glbBytes.data(), glbData.data(), glbData.size());
-
-        spz::Verifier verifier;
-        auto result = verifier.verify(spzResult.data, glbBytes);
-
-        
-        std::cout << result.layer1_detail << "\n";
-        std::cout << result.layer2_detail << "\n";
-        std::cout << result.layer3_detail << "\n";
-        
-        std::cout << "============================================================\n";
-        std::cout << "Summary:\n";
-        std::cout << "  Layer 1 (GLB Structure): " << (result.layer1_passed ? "PASSED" : "FAILED") << "\n";
-        std::cout << "  Layer 2 (Binary Lossless): " << (result.layer2_passed ? "PASSED" : "FAILED") << "\n";
-        std::cout << "  Layer 3 (Decoding): " << (result.layer3_passed ? "PASSED" : "FAILED") << "\n";
-        std::cout << "============================================================\n";
-        
-        if (result.all_passed()) {
-            std::cout << "\n[SUCCESS] All verifications PASSED!\n";
-        } else {
-            std::cout << "\n[WARNING] Some verifications FAILED!\n";
-            return 2;
-        }
-    }
-
-    return 0;
+    return convertSingleFile(inputPath, outputPath, doVerify) ? 0 : 1;
 }
 #endif
 

@@ -115,6 +115,15 @@ if(NOT SPZ2GLB_BUILD_WASM)
   # 查找 ZLIB
   find_package(ZLIB REQUIRED)
 
+  # CLI 优化标志：Release 级优化，用户即使忘记 -DCMAKE_BUILD_TYPE=Release 也能获得优化构建。
+  if(MSVC)
+    set(CLI_OPT_FLAGS "/O2")
+  else()
+    set(CLI_OPT_FLAGS "-O3")
+  endif()
+
+  target_compile_options(spz2glb_core PRIVATE ${CLI_OPT_FLAGS})
+
   # ============================================================
   # spz_verify 构建（命令行验证工具）
   # ============================================================
@@ -126,8 +135,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
 
   target_link_libraries(spz_verify PRIVATE fastgltf spz2glb_zlib zstd::zstd)
 
-  # 严格警告
-  target_compile_options(spz_verify PRIVATE ${STRICT_WARNINGS})
+  target_compile_options(spz_verify PRIVATE ${STRICT_WARNINGS} ${CLI_OPT_FLAGS})
 
   set_target_properties(spz_verify PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
@@ -144,8 +152,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
 
   target_link_libraries(spz2glb PRIVATE spz2glb_core fastgltf spz2glb_zlib)
 
-  # 严格警告
-  target_compile_options(spz2glb PRIVATE ${STRICT_WARNINGS})
+  target_compile_options(spz2glb PRIVATE ${STRICT_WARNINGS} ${CLI_OPT_FLAGS})
 
   set_target_properties(spz2glb PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"

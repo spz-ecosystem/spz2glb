@@ -455,6 +455,13 @@ VerifyResult Verifier::verify(const std::vector<uint8_t>& spz_data,
     return result;
 }
 
+VerifyResult Verifier::verify(const uint8_t* spz_data, size_t spz_size,
+                              const uint8_t* glb_data, size_t glb_size) {
+    std::vector<uint8_t> spzVec(spz_data, spz_data + spz_size);
+    std::vector<uint8_t> glbVec(glb_data, glb_data + glb_size);
+    return verify(spzVec, glbVec);
+}
+
 VerifyResult Verifier::verify_files(const std::string& spz_path,
                                     const std::string& glb_path) {
     VerifyResult result = {};

@@ -41,6 +41,10 @@ public:
     VerifyResult verify(const std::vector<uint8_t>& spz_data,
                         const std::vector<uint8_t>& glb_data);
 
+    // 指针式入口：避免从 std::vector<std::byte>（转换器输出）拷贝。
+    VerifyResult verify(const uint8_t* spz_data, size_t spz_size,
+                        const uint8_t* glb_data, size_t glb_size);
+
     // 文件入口：负责读盘后转到内存入口，避免重复实现读取逻辑。
     VerifyResult verify_files(const std::string& spz_path,
                               const std::string& glb_path);

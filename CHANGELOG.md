@@ -62,7 +62,7 @@
 
 ### KHR Extension (v2.0.3 continuation — 2026-07-30)
 
-- **Compile flag removal**: Remove `FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING` from fastgltf fork per upstream feedback (spnda/fastgltf#137). The extension is ratified, no compile-time gate needed. Impacts:
+- **Compile flag removal**: Remove `FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING` from fastgltf fork per upstream feedback (spnda/fastgltf#137). The extension is Release Candidate (pending Khronos Board vote), no compile-time gate needed. Impacts:
   - `third_party/CMakeLists.txt`: Remove `option()` for the flag
   - `types.hpp`: Remove `#ifndef` guard around `GaussianSplatExtension`/`GaussianSplatSpzCompression` — structs always visible
   - `fastgltf.cpp`: Remove `#if FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING` guards — serialization always compiled
@@ -75,9 +75,19 @@
 
 ### Documentation (v2.0.3 continuation)
 
-- **Extension status**: Update READMEs (EN/ZH) — KHR_gaussian_splatting marked as **ratified**, compile flag removed, spz_2 still draft
+- **Extension status**: Update READMEs (EN/ZH) — KHR_gaussian_splatting marked as **Release Candidate**, compile flag removed, spz_2 still draft
 - **Layer 1 output**: Update CLI help and verification output examples to reflect 12-check L1 validation with kernel/colorSpace field checks
 - **Compilation Control**: Replace old `ENABLE_KHR_GAUSSIAN_SPLATTING` option docs with "always enabled" statement
+- **Customization Notes**: Expand fastgltf customization section with struct fields, JSON serialization, compile flag removal details, simdjson source embedding approach
+
+### CLI Performance Optimizations (v2.0.3 continuation — 2026-07-30)
+
+- **simdjson upgrade**: Update embedded simdjson from v4.3.1 to v4.6.4 (2026-05-06 release), syncing with fastgltf upstream compatibility
+- **Compiler optimization flags**: Add explicit `-O3` (GCC/Clang) / `/O2` (MSVC) to all CLI targets, ensuring optimized builds even without `-DCMAKE_BUILD_TYPE=Release`
+- **Zero-copy verify**: Add pointer-based `Verifier::verify(const uint8_t*, size_t, const uint8_t*, size_t)` overload, eliminating the `std::vector<uint8_t>` memcpy in `--verify` mode. Update CLI output from 3-layer to 5-layer display.
+- **Native batch mode**: Add `--batch EXT` option for single-process batch conversion of all files matching a given extension (e.g. `.spz`), avoiding shell loop + process startup overhead
+- **Memory-mapped file I/O**: Add `src/mapped_file.h` — cross-platform RAII `MappedFile` class using `CreateFileMapping` (Windows) / `mmap` (POSIX), reducing kernel→userspace copy for large file reads
+- **Code cleanup**: Remove unused `loadSpzFile()`, `SpzResult`, `SpzErrorCode` from `spz_to_glb.cpp` (replaced by `MappedFile`)
 
 ---
 
