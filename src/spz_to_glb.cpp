@@ -99,20 +99,13 @@ bool generateReport(const std::string& spzPath, const std::string& glbPath) {
     // 解析 GLB 扩展信息
     std::vector<uint8_t> glbVec(glbFile.data(), glbFile.data() + glbFile.size());
 
-    // 使用队列内置的 GLB 解析
-    spz2glb::Queue q(".spzqueue_report_tmp");
-    // 直接调用 queue 内的解析（通过临时对象访问私有方法不可行，重新实现简单逻辑）
-    // 这里我们走简化路径：直接 parse
-    {
-        std::string json;
-        uint32_t jsonChunkLen = 0, binChunkLen = 0;
-        constexpr uint32_t kGlbMagic = 0x46546C67;
-        if (glbVec.size() >= 12) {
-            uint32_t magic = 0;
-            std::memcpy(&magic, glbVec.data(), 4);
-            if (magic == kGlbMagic) {
-                std::memcpy(&result.glbTotalSize, glbVec.data() + 8, 4);
-            }
+    // 解析 GLB 基本信息
+    constexpr uint32_t kGlbMagic = 0x46546C67;
+    if (glbVec.size() >= 12) {
+        uint32_t magic = 0;
+        std::memcpy(&magic, glbVec.data(), 4);
+        if (magic == kGlbMagic) {
+            std::memcpy(&result.glbTotalSize, glbVec.data() + 8, 4);
         }
     }
 
