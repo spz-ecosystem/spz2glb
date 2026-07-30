@@ -21,7 +21,8 @@
 
 - **Lossless Packaging**: SPZ compressed stream stored as-is in GLB, 100% byte-level fidelity
 - **SPZ_2 Extension**: Uses `KHR_gaussian_splatting_compression_spz_2` standard extension
-- **Large-Scale Refactor (v2.0.3)**: Unified CLI/WASM core path, reduced dual-end divergence
+- **Large-Scale Refactor (v2.0.3)**: Unified CLI/WASM core path, removed compile-time flag for KHR_gaussian_splatting (now always enabled per ratified glTF spec)
+- **KHR Extension Compliance**: Full `KHR_gaussian_splatting` field serialization (`kernel`, `colorSpace`, `sortingMethod`, `projection`); nested `KHR_gaussian_splatting_compression_spz_2` with complete metadata (`spzVersion`, `compression`, `coordinateSystem`)
 - **WASM Enhancements**: Reserved input, explicit output release, memory stats, compat/perf-lite dual profile
 - **Dual-End Collaboration (scenario split)**: lightweight web interaction and fast feedback on browser side; batch, large-file, and heavy verification workflows on local CLI side
 - **Five-Layer Verification**: Structure validation / lossless validation / decoding consistency / metadata consistency / ILV extension integrity
@@ -31,14 +32,13 @@
 ## Extension Support Status
 
 ### KHR_gaussian_splatting Extension
-- **Status**: `KHR_gaussian_splatting` has landed in the glTF repository but is **not yet ratified**.
-- **`KHR_gaussian_splatting_compression_spz_2`**: Still explicitly in **draft** status.
+- **Status**: `KHR_gaussian_splatting` has been merged into the glTF specification (**ratified**). The extension is always enabled — no compile-time flag required.
+- **`KHR_gaussian_splatting_compression_spz_2`**: Still in **draft** status.
 - **Current Implementation**:
-  - ✅ **Export**: Writes the full extension chain with required fields (`kernel`, `colorSpace`), optional properties (`sortingMethod`, `projection`), and nested `KHR_gaussian_splatting_compression_spz_2` data.
+  - ✅ **Export**: Writes the full extension chain with required fields (`kernel`, `colorSpace`), optional properties (`sortingMethod`, `projection`), and nested `KHR_gaussian_splatting_compression_spz_2` with complete metadata (`bufferView`, `spzVersion`, `compression`, `coordinateSystem`).
   - ✅ **Layer 1 Validation**: Field-level checks ensure KHR_gaussian_splatting contains `kernel` and `colorSpace` in the GLB JSON.
   - ⚠️ **Parse**: Draft extensions are **safely ignored** during parsing, which is the expected fallback behavior.
-  - 🚫 **No hardcoded `Extensions` enum entries**: Draft extensions are intentionally kept out of header enums to avoid locking unfinished interfaces.
-- **Future Changes**: Full parse-time support can be added once the Khronos definitions are ratified.
+- **Future Changes**: Full parse-time support can be added once the spz_2 extension is ratified.
 
 ### Compilation Control
 - KHR_gaussian_splatting support is always enabled. The extension is now part of the ratified glTF specification.

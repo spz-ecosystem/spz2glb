@@ -60,6 +60,25 @@
 - **YAML indentation**: Fix `run: |` block indentation in fixture list preparation step
 - **commit_msg.txt**: Remove accidentally tracked file from repository
 
+### KHR Extension (v2.0.3 continuation — 2026-07-30)
+
+- **Compile flag removal**: Remove `FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING` from fastgltf fork per upstream feedback (spnda/fastgltf#137). The extension is ratified, no compile-time gate needed. Impacts:
+  - `third_party/CMakeLists.txt`: Remove `option()` for the flag
+  - `types.hpp`: Remove `#ifndef` guard around `GaussianSplatExtension`/`GaussianSplatSpzCompression` — structs always visible
+  - `fastgltf.cpp`: Remove `#if FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING` guards — serialization always compiled
+  - `CMakeLists.txt`: Remove all `ENABLE_KHR_GAUSSIAN_SPLATTING` → `target_compile_definitions(...)` blocks (5 targets)
+  - `tests/CMakeLists.txt`: Remove stale compile definition
+- **KHR spec compliance**: Add missing `kernel`/`colorSpace`/`sortingMethod`/`projection` fields to `GaussianSplatExtension` struct in feature branch
+- **KHR serialization completeness**: Write `spzVersion`/`compression`/`coordinateSystem` fields to GLB JSON for the nested `KHR_gaussian_splatting_compression_spz_2` extension
+- **Layer 1 enhancement**: Add field-level checks for `kernel` and `colorSpace` presence in the parent KHR_gaussian_splatting extension JSON
+- **CI debug logging**: Add `Dump build log on failure` steps to both `test-wasm-build.yml` and `release.yml` workflows, capturing build errors directly in CI console output
+
+### Documentation (v2.0.3 continuation)
+
+- **Extension status**: Update READMEs (EN/ZH) — KHR_gaussian_splatting marked as **ratified**, compile flag removed, spz_2 still draft
+- **Layer 1 output**: Update CLI help and verification output examples to reflect 12-check L1 validation with kernel/colorSpace field checks
+- **Compilation Control**: Replace old `ENABLE_KHR_GAUSSIAN_SPLATTING` option docs with "always enabled" statement
+
 ---
 
 ## v2.0.2 (2026-05-11)

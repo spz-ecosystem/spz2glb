@@ -21,7 +21,8 @@
 
 - **无损打包**: SPZ 压缩流原封不动存入 GLB，100% 字节级保真
 - **SPZ_2 扩展**: 使用 `KHR_gaussian_splatting_compression_spz_2` 标准扩展
-- **大规模重构（v2.0.3）**: 统一 CLI/WASM 核心链路，减少双端分叉
+- **大规模重构（v2.0.3）**: 统一 CLI/WASM 核心链路，移除 KHR_gaussian_splatting 编译开关（已正式合入 glTF 规范，始终启用）
+- **KHR 扩展合规**: 完整 `KHR_gaussian_splatting` 字段序列化（`kernel`、`colorSpace`、`sortingMethod`、`projection`）；嵌套 `KHR_gaussian_splatting_compression_spz_2` 携带完整元数据（`spzVersion`、`compression`、`coordinateSystem`）
 - **WASM 增强**: 预分配输入、显式输出释放、内存统计、compat/perf-lite 双档
 - **双端协同（双场景分工）**: 网页侧轻量交互与快速反馈；本地 CLI 侧重批处理、大文件与重验证
 - **五层验证**: 结构验证 / 无损验证 / 解码一致性验证 / 元数据一致性验证 / ILV 扩展完整性验证
@@ -31,14 +32,13 @@
 ## 扩展支持状态
 
 ### `KHR_gaussian_splatting` 扩展
-- **状态**：`KHR_gaussian_splatting` 已合入 glTF 仓库，但**尚未正式定稿**。
-- **`KHR_gaussian_splatting_compression_spz_2`**：当前仍明确处于**草案阶段**。
+- **状态**：`KHR_gaussian_splatting` 已正式合入 glTF 规范（**已定稿**）。扩展始终启用——无需编译开关。
+- **`KHR_gaussian_splatting_compression_spz_2`**：当前仍处于**草案阶段**。
 - **当前实现**：
-  - ✅ **导出**：会写出完整扩展链，包含外层 `KHR_gaussian_splatting` 的必填字段（`kernel`、`colorSpace`）、可选属性（`sortingMethod`、`projection`）以及内层 `KHR_gaussian_splatting_compression_spz_2` 数据。
+  - ✅ **导出**：完整扩展链，包含必填字段（`kernel`、`colorSpace`）、可选属性（`sortingMethod`、`projection`），以及嵌套 `KHR_gaussian_splatting_compression_spz_2` 的元数据（`bufferView`、`spzVersion`、`compression`、`coordinateSystem`）。
   - ✅ **Layer 1 验证**：字段级检查确保 GLB JSON 中 KHR_gaussian_splatting 包含 `kernel` 和 `colorSpace`。
   - ⚠️ **解析**：对草案扩展采用**安全忽略**策略，这是当前阶段的预期回退行为。
-  - 🚫 **不硬编码 `Extensions` 枚举项**：不会把草案扩展直接写死进头文件枚举，避免过早锁定未定稿接口。
-- **后续变化**：等 Khronos 侧定义正式定稿后，再补齐完整的解析期支持。
+- **后续变化**：等 spz_2 扩展定稿后补齐完整解析期支持。
 
 ### 编译控制
 - KHR_gaussian_splatting 支持始终启用。该扩展已是 glTF 正式规范的一部分。
