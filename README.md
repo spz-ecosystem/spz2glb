@@ -21,7 +21,7 @@
 
 - **Lossless Packaging**: SPZ compressed stream stored as-is in GLB, 100% byte-level fidelity
 - **SPZ_2 Extension**: Uses `KHR_gaussian_splatting_compression_spz_2` standard extension
-- **Large-Scale Refactor (v2.0.3)**: Unified CLI/WASM core path, removed compile-time flag for KHR_gaussian_splatting (now always enabled per ratified glTF spec)
+- **Large-Scale Refactor (v2.0.3)**: Unified CLI/WASM core path, removed compile-time flag for KHR_gaussian_splatting (now always enabled per Khronos official extensions directory)
 - **KHR Extension Compliance**: Full `KHR_gaussian_splatting` field serialization (`kernel`, `colorSpace`, `sortingMethod`, `projection`); nested `KHR_gaussian_splatting_compression_spz_2` with complete metadata (`spzVersion`, `compression`, `coordinateSystem`)
 - **WASM Enhancements**: Reserved input, explicit output release, memory stats, compat/perf-lite dual profile
 - **Dual-End Collaboration (scenario split)**: lightweight web interaction and fast feedback on browser side; batch, large-file, and heavy verification workflows on local CLI side
@@ -32,7 +32,7 @@
 ## Extension Support Status
 
 ### KHR_gaussian_splatting Extension
-- **Status**: `KHR_gaussian_splatting` has been merged into the glTF specification (**ratified**). The extension is always enabled — no compile-time flag required.
+- **Status**: `KHR_gaussian_splatting` is currently **Release Candidate** — it has been merged into the Khronos official extensions directory (the `KHR_` prefix indicates intent to become a standard), pending ratification vote by the Khronos Board of Promoters. The extension is always enabled — no compile-time flag required.
 - **`KHR_gaussian_splatting_compression_spz_2`**: Still in **draft** status.
 - **Current Implementation**:
   - ✅ **Export**: Writes the full extension chain with required fields (`kernel`, `colorSpace`), optional properties (`sortingMethod`, `projection`), and nested `KHR_gaussian_splatting_compression_spz_2` with complete metadata (`bufferView`, `spzVersion`, `compression`, `coordinateSystem`).
@@ -41,7 +41,7 @@
 - **Future Changes**: Full parse-time support can be added once the spz_2 extension is ratified.
 
 ### Compilation Control
-- KHR_gaussian_splatting support is always enabled. The extension is now part of the ratified glTF specification.
+- KHR_gaussian_splatting support is always enabled. The extension is part of the Khronos official extensions directory (Release Candidate), no compile-time flag required.
 
 ### ILV 003 Coordinate System Extension
 - **Extension ID**: `0xADBE0003`
@@ -478,14 +478,15 @@ spz2glb/
 │   ├── spz2glb_core.cpp/.h     # Core conversion logic (v2.0.3 unified entry)
 │   ├── spz2glb_wasm_c_api.cpp/.h  # WASM C API (reserve/release/stats)
 │   ├── memory_pool.cpp/.h      # Memory pool and hot object pool
-│   ├── spz_to_glb.cpp          # CLI main entry
+│   ├── mapped_file.h           # Cross-platform memory-mapped file reader (RAII)
+│   ├── spz_to_glb.cpp          # CLI main entry (with --batch mode)
 │   ├── spz_verify.cpp          # Verification tool main entry
-│   ├── spz_verifier.cpp/.h     # Three-layer verification implementation
+│   ├── spz_verifier.cpp/.h     # Five-layer verification implementation
 │   └── base64.{h,cpp}          # Base64 codec
 ├── third_party/                # Customized fastgltf + simdjson
 │   ├── include/fastgltf/
 │   ├── src/
-│   └── deps/simdjson/         # simdjson v4.3.1 (built-in)
+│   └── deps/simdjson/         # simdjson v4.6.4 (built-in)
 ├── tests/
 │   ├── gen_fixture.mjs           # Synthetic fixture generator
 │   ├── data/
@@ -586,13 +587,15 @@ Related projects:
 - [spz_gatekeeper](https://github.com/spz-ecosystem/spz_gatekeeper) - SPZ Gatekeeper: format legality validation and ecosystem governance
 - [spz-anime-text2scene-bench](https://github.com/spz-ecosystem/spz-anime-text2scene-bench) - Anime-style text-to-scene benchmark dataset in SPZ format
 - [fastgltf](https://github.com/spnda/fastgltf) - High-performance glTF library (by Sean Apeler, MIT License)
-- [simdjson](https://github.com/simdjson/simdjson) - Ultra-fast JSON parsing library v4.3.1
+- [simdjson](https://github.com/simdjson/simdjson) - Ultra-fast JSON parsing library v4.6.4
 - [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting Extension
 
 ## Customization Notes
 
-This project uses a **customized version of fastgltf** with the following modifications:
+This project uses a **customized version of fastgltf** (based on upstream [spnda/fastgltf](https://github.com/spnda/fastgltf)) with the following modifications:
 
-1. **simdjson v4.3.1 Built-in**: Does not search for system libraries, does not download from network, uses built-in source code
-2. **KHR_gaussian_splatting_compression_spz_2 Extension**: Supports SPZ_2 compression format
-3. **One-Click Build**: Just `cmake && cmake --build`, no manual dependency configuration required
+1. **simdjson v4.6.4 Built-in**: Downloaded simdjson v4.6.4 single-header release from upstream and embedded as source code in `third_party/deps/simdjson/`. Does not search system libraries, does not download from network, does not rely on package managers — ensuring fully offline reproducible builds.
+2. **KHR_gaussian_splatting struct fields**: Added `kernel` (default `"ellipse"`), `colorSpace` (default `"srgb_rec709_display"`), `sortingMethod` (optional, default `"cameraDistance"`), `projection` (optional, default `"perspective"`) to `GaussianSplatExtension`
+3. **KHR_gaussian_splatting JSON serialization**: Writes full extension chain on export — outer `KHR_gaussian_splatting` with required/optional properties, nested `KHR_gaussian_splatting_compression_spz_2` with complete metadata (`bufferView`, `spzVersion`, `compression`, `coordinateSystem`)
+4. **Compile flag removed**: Removed `FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING` conditional compilation — the extension is in the Khronos official extensions directory (Release Candidate), always enabled
+5. **One-Click Build**: Just `cmake && cmake --build`, no manual dependency configuration required

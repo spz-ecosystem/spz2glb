@@ -21,7 +21,7 @@
 
 - **无损打包**: SPZ 压缩流原封不动存入 GLB，100% 字节级保真
 - **SPZ_2 扩展**: 使用 `KHR_gaussian_splatting_compression_spz_2` 标准扩展
-- **大规模重构（v2.0.3）**: 统一 CLI/WASM 核心链路，移除 KHR_gaussian_splatting 编译开关（已正式合入 glTF 规范，始终启用）
+- **大规模重构（v2.0.3）**: 统一 CLI/WASM 核心链路，移除 KHR_gaussian_splatting 编译开关（扩展已进入 Khronos 官方目录，Release Candidate，始终启用）
 - **KHR 扩展合规**: 完整 `KHR_gaussian_splatting` 字段序列化（`kernel`、`colorSpace`、`sortingMethod`、`projection`）；嵌套 `KHR_gaussian_splatting_compression_spz_2` 携带完整元数据（`spzVersion`、`compression`、`coordinateSystem`）
 - **WASM 增强**: 预分配输入、显式输出释放、内存统计、compat/perf-lite 双档
 - **双端协同（双场景分工）**: 网页侧轻量交互与快速反馈；本地 CLI 侧重批处理、大文件与重验证
@@ -32,7 +32,7 @@
 ## 扩展支持状态
 
 ### `KHR_gaussian_splatting` 扩展
-- **状态**：`KHR_gaussian_splatting` 已正式合入 glTF 规范（**已定稿**）。扩展始终启用——无需编译开关。
+- **状态**：`KHR_gaussian_splatting` 当前为 **Release Candidate（发布候选版）**，已进入 Khronos 官方扩展目录（`KHR_` 前缀表明意图成为正式标准），等待 Khronos Board of Promoters 批准投票。扩展始终启用——无需编译开关。
 - **`KHR_gaussian_splatting_compression_spz_2`**：当前仍处于**草案阶段**。
 - **当前实现**：
   - ✅ **导出**：完整扩展链，包含必填字段（`kernel`、`colorSpace`）、可选属性（`sortingMethod`、`projection`），以及嵌套 `KHR_gaussian_splatting_compression_spz_2` 的元数据（`bufferView`、`spzVersion`、`compression`、`coordinateSystem`）。
@@ -41,7 +41,7 @@
 - **后续变化**：等 spz_2 扩展定稿后补齐完整解析期支持。
 
 ### 编译控制
-- KHR_gaussian_splatting 支持始终启用。该扩展已是 glTF 正式规范的一部分。
+- KHR_gaussian_splatting 支持始终启用。该扩展已进入 Khronos 官方扩展目录（Release Candidate），不再需要编译开关。
 
 ### ILV 003 坐标系扩展
 - **扩展 ID**: `0xADBE0003`
@@ -478,14 +478,15 @@ spz2glb/
 │   ├── spz2glb_core.cpp/.h     # 核心转换逻辑（v2.0.3 统一入口）
 │   ├── spz2glb_wasm_c_api.cpp/.h  # WASM C API（预分配/释放/统计）
 │   ├── memory_pool.cpp/.h      # 内存池与热点对象池
-│   ├── spz_to_glb.cpp          # CLI 主入口
+│   ├── mapped_file.h           # 跨平台内存映射文件读取器 (RAII)
+│   ├── spz_to_glb.cpp          # CLI 主入口（含 --batch 批量模式）
 │   ├── spz_verify.cpp          # 验证工具主入口
 │   ├── spz_verifier.cpp/.h     # 五层验证实现
 │   └── base64.{h,cpp}          # Base64 编解码
 ├── third_party/                # 定制版 fastgltf + simdjson
 │   ├── include/fastgltf/
 │   ├── src/
-│   └── deps/simdjson/         # simdjson v4.3.1 (内置)
+│   └── deps/simdjson/         # simdjson v4.6.4 (内置)
 ├── tests/
 │   ├── gen_fixture.mjs           # 合成夹具生成器
 │   ├── data/
@@ -584,13 +585,15 @@ MIT License - 详见 [LICENSE](LICENSE)
 - [spz_gatekeeper](https://github.com/spz-ecosystem/spz_gatekeeper) - SPZ 门卫：格式合法性校验与生态治理
 - [spz-anime-text2scene-bench](https://github.com/spz-ecosystem/spz-anime-text2scene-bench) - 动漫风格文生场景基准数据集（SPZ 格式）
 - [fastgltf](https://github.com/spnda/fastgltf) - 高性能 glTF 库（作者：Sean Apeler，MIT 许可证）
-- [simdjson](https://github.com/simdjson/simdjson) - 极速 JSON 解析库 v4.3.1
+- [simdjson](https://github.com/simdjson/simdjson) - 极速 JSON 解析库 v4.6.4
 - [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting 扩展
 
 ## 定制说明
 
-本项目使用 **定制版 fastgltf**，包含以下修改：
+本项目使用 **定制版 fastgltf**（基于上游 [spnda/fastgltf](https://github.com/spnda/fastgltf)），包含以下修改：
 
-1. **simdjson v4.3.1 内置**: 不查找系统库，不从网络下载，使用内置源码
-2. **KHR_gaussian_splatting_compression_spz_2 扩展**: 支持 SPZ_2 压缩格式
-3. **一键编译**: 只需 `cmake && cmake --build`，无需手动配置依赖
+1. **simdjson v4.6.4 内置**: 从 upstream 下载 simdjson v4.6.4 单头文件发行版后，以源码形式直接内嵌在 `third_party/deps/simdjson/` 下。不查找系统库、不从网络下载、不依赖包管理器，确保完全离线的可复现构建。
+2. **KHR_gaussian_splatting 结构体字段补齐**: 在 `GaussianSplatExtension` 中添加 `kernel`（默认 `"ellipse"`）、`colorSpace`（默认 `"srgb_rec709_display"`）、`sortingMethod`（可选，默认 `"cameraDistance"`）、`projection`（可选，默认 `"perspective"`）四个字段
+3. **KHR_gaussian_splatting JSON 序列化补全**: 导出时写入完整扩展链——外层 `KHR_gaussian_splatting` 携带必填/可选属性，内层 `KHR_gaussian_splatting_compression_spz_2` 携带完整元数据（`bufferView`、`spzVersion`、`compression`、`coordinateSystem`）
+4. **移除编译开关**: 移除了 `FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING` 条件编译——该扩展已进入 Khronos 官方扩展目录（Release Candidate），始终启用
+5. **一键编译**: 只需 `cmake && cmake --build`，无需手动配置依赖

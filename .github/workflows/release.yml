@@ -200,7 +200,6 @@ jobs:
           retention-days: 7
 
   verify-native:
-    needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -212,14 +211,36 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zlib1g-dev
+          sudo apt-get install -y zlib1g-dev mingw-w64
 
-      - name: Configure CMake
+      # P6 文件完整性检查（从 wasm-pre-check.sh 复制）：UTF-8 编码 + CMake 语法
+      - name: File integrity check (UTF-8 + CMake syntax)
+        run: |
+          set -euo pipefail
+          failures=0
+          echo "=== UTF-8 encoding check ==="
+          while IFS= read -r -d '' f; do
+            if ! python3 -c "open('$f','rb').read().decode('utf-8')" 2>/dev/null; then
+              echo "  INVALID UTF-8: $f" >&2
+              failures=$((failures + 1))
+            fi
+          done < <(find src -name '*.cpp' -o -name '*.h' -o -name '*.hpp' 2>/dev/null | tr '\n' '\0')
+          echo "=== CMake syntax check ==="
+          bad_sets="$(grep -cPn 'set\([A-Za-z_][A-Za-z0-9_]*::' CMakeLists.txt 2>/dev/null || true)"
+          if [ "${bad_sets}" -gt 0 ]; then
+            echo "  ERROR: ${bad_sets} invalid set(XXX::YYY) pattern(s)" >&2
+            grep -Pn 'set\([A-Za-z_][A-Za-z0-9_]*::' CMakeLists.txt >&2
+            failures=$((failures + bad_sets))
+          fi
+          if [ "${failures}" -gt 0 ]; then
+            echo "FAIL: ${failures} integrity issue(s) found"
+            exit 1
+          fi
+          echo "[PASS] All files pass UTF-8 and CMake syntax checks"
+
+      - name: Native Linux build
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build native targets
-        run: |
           cmake --build build --config Release --target spz2glb spz_verify -- -j4
 
       - name: Run ctest
@@ -230,8 +251,31 @@ jobs:
         run: |
           bash tests/quick_test.sh
 
+      # MinGW 交叉编译语法检查：仅检查 header 在 _WIN32 下能否通过语法编译，
+      # 不涉及链接，因此无需处理 ZLIB/ZSTD 等依赖。捕获 #ifdef guard 不匹配。
+      - name: MinGW cross-compilation check
+        run: |
+          set -euo pipefail
+          failures=0
+          for hdr in src/mapped_file.h; do
+            if [ -f "$hdr" ]; then
+              echo "  Checking: $hdr"
+              if ! x86_64-w64-mingw32-g++ -std=c++20 -fsyntax-only -I third_party/include -I third_party/deps/simdjson -c -x c++ "$hdr" 2>&1; then
+                echo "  [FAIL] $hdr failed under MinGW (_WIN32)"
+                failures=$((failures + 1))
+              else
+                echo "  [PASS] $hdr"
+              fi
+            fi
+          done
+          if [ "$failures" -gt 0 ]; then
+            echo "ERROR: $failures header(s) have Windows compilation issues"
+            exit 1
+          fi
+          echo "[PASS] MinGW cross-compilation syntax check passed"
+
   deploy-pages:
-    needs: [wasm-build, verify-native]
+    needs: [wasm-build]
     runs-on: ubuntu-latest
     if: (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') && github.event.inputs.rollback_run_id == ''
     permissions:
@@ -346,12 +390,42 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_run_id != ''
     runs-on: ubuntu-latest
     steps:
+      - name: Verify rollback source run
+        env:
+          ROLLBACK_RUN_ID: ${{ inputs.rollback_run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "=== Verifying rollback source run #${ROLLBACK_RUN_ID} ==="
+          # Fetch run metadata
+          RUN_JSON="$(gh run view "${ROLLBACK_RUN_ID}" \
+            --repo ${{ github.repository }} \
+            --json headBranch,workflowName,conclusion,headSha,databaseId 2>&1)"
+          echo "Run metadata: ${RUN_JSON}"
+          # Parse and validate
+          HEAD_BRANCH="$(echo "${RUN_JSON}" | jq -r '.headBranch // empty')"
+          WORKFLOW_NAME="$(echo "${RUN_JSON}" | jq -r '.workflowName // empty')"
+          CONCLUSION="$(echo "${RUN_JSON}" | jq -r '.conclusion // empty')"
+          echo "  Branch: ${HEAD_BRANCH}"
+          echo "  Workflow: ${WORKFLOW_NAME}"
+          echo "  Conclusion: ${CONCLUSION}"
+          # Only allow main branch, release workflow, successful runs
+          if [ "${HEAD_BRANCH}" != "main" ]; then
+            echo "[SECURITY] Rejected: rollback source must be on 'main' branch, got '${HEAD_BRANCH}'"
+            exit 1
+          fi
+          if [ "${CONCLUSION}" != "success" ]; then
+            echo "[SECURITY] Rejected: rollback source run did not complete successfully"
+            exit 1
+          fi
+          echo "[PASS] Rollback source verified — main branch, successful run"
+
       - name: Download artifacts from stable run
         env:
           ROLLBACK_RUN_ID: ${{ inputs.rollback_run_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download "$ROLLBACK_RUN_ID" \
+          gh run download "${ROLLBACK_RUN_ID}" \
             --repo ${{ github.repository }} \
             --dir rollback_artifacts
 
@@ -361,12 +435,21 @@ jobs:
           TRIGGER_ACTOR: ${{ github.actor }}
           TRIGGER_REF: ${{ github.ref }}
         run: |
+          # Re-fetch verified metadata for manifest
+          RUN_JSON="$(gh run view "${ROLLBACK_RUN_ID}" \
+            --repo ${{ github.repository }} \
+            --json headBranch,headSha,conclusion,databaseId 2>&1)"
+          VERIFIED_BRANCH="$(echo "${RUN_JSON}" | jq -r '.headBranch // empty')"
+          VERIFIED_SHA="$(echo "${RUN_JSON}" | jq -r '.headSha // empty')"
           {
             echo "current_run_id=${{ github.run_id }}"
             echo "rollback_source_run_id=${ROLLBACK_RUN_ID}"
+            echo "verified_branch=${VERIFIED_BRANCH}"
+            echo "verified_commit=${VERIFIED_SHA}"
             echo "trigger_actor=${TRIGGER_ACTOR}"
             echo "trigger_ref=${TRIGGER_REF}"
             echo "artifact_count=$(find rollback_artifacts -type f | wc -l)"
+            echo "sha256_artifacts=$(find rollback_artifacts -type f -exec sha256sum {} \; | sha256sum | cut -d' ' -f1)"
           } > rollback-manual-manifest.txt
 
       - name: Upload rollback restored artifacts

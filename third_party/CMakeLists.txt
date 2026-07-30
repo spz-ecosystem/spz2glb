@@ -83,7 +83,7 @@ fastgltf_add_source_directory(TARGET fastgltf FOLDER src)
 fastgltf_add_source_directory(TARGET fastgltf FOLDER deps/simdjson)
 fastgltf_add_source_directory(TARGET fastgltf FOLDER include)
 
-target_compile_definitions(fastgltf PUBLIC SIMDJSON_VERSION=\"4.3.1\")
+target_compile_definitions(fastgltf PUBLIC SIMDJSON_VERSION=\"4.6.4\")
 target_compile_definitions(fastgltf PRIVATE SIMDJSON_USING_LIBRARY)
 
 set_target_properties(fastgltf PROPERTIES

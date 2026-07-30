@@ -418,8 +418,36 @@ check_file_integrity() {
     fi
   fi
 
+  # Cross-platform #ifdef guard check: detect header files with #ifdef _WIN32
+  # that reference POSIX-only members (#else branch) outside conditional guards.
+  # This catches MSVC failures where variables declared only in the #else branch
+  # are referenced in move constructor initializer lists or assignment operators.
+  local guard_issues=0
+  while IFS= read -r -d '' f; do
+    if grep -q '#ifdef _WIN32' "${f}" 2>/dev/null; then
+      local posix_members
+      posix_members="$(sed -n '/#else/,/#endif/p' "${f}" | grep -oP '^\s+\w+\s+\w+_\s*;' | grep -oP '\w+_' || true)"
+      if [ -n "${posix_members}" ]; then
+        for member in ${posix_members}; do
+          local total_refs
+          total_refs="$(grep -cP "\b${member}\b" "${f}" 2>/dev/null || true)"
+          local inside_else_refs
+          inside_else_refs="$(sed -n '/#else/,/#endif/p' "${f}" | grep -cP "\b${member}\b" 2>/dev/null || true)"
+          if [ "${total_refs}" -gt "${inside_else_refs}" ] 2>/dev/null; then
+            echo "  WARNING: '${member}' declared in #else (POSIX) branch of ${f##*/}" >&2
+            echo "    has ${total_refs} total refs, ${inside_else_refs} inside #else guard." >&2
+            echo "    Exposed refs outside guard will fail MSVC (Windows) compilation." >&2
+            echo "    Wrap all references inside #ifdef _WIN32 / #else / #endif." >&2
+            guard_issues=$((guard_issues + 1))
+          fi
+        done
+      fi
+    fi
+  done < <(find "${PROJECT_DIR}/src" -name '*.h' -o -name '*.hpp' 2>/dev/null | tr '\n' '\0')
+  failures=$((failures + guard_issues))
+
   if [ "${failures}" -gt 0 ]; then
-    fail "P6_INTEGRITY" 8 "${failures} file(s) with UTF-8 encoding errors or CMake syntax issues"
+    fail "P6_INTEGRITY" 8 "${failures} integrity issue(s) (UTF-8, CMake syntax, cross-platform guard)"
   fi
 }
 
