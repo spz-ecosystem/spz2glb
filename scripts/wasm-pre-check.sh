@@ -479,6 +479,7 @@ check_deadcode() {
   local warn_flags=(
     "-Wall" "-Wextra" "-Wpedantic" "-Werror"
     "-Wunused-variable" "-Wunused-but-set-variable" "-Wunused-function"
+    "-Wuninitialized" "-Wmaybe-uninitialized"
     "-Wstring-plus-int"
     "-Wno-unused-parameter"
     "-Wno-old-style-cast"
@@ -514,6 +515,78 @@ check_deadcode() {
     fail "P7_DEADCODE" 9 "${failures} dead code / unused variable issue(s) detected"
   fi
   echo "  No dead code issues found in ${src_dir}/*.cpp" >&2
+
+  # ---- 跨函数作用域引用检查 ----
+  # 查找局部变量（auto/类型声明）被其他函数引用的情况
+  echo "  Cross-function scope reference check:" >&2
+  local cross_failures=0
+  while IFS= read -r -d '' src; do
+    local basename=""
+    basename="$(basename "${src}")"
+    case "${basename}" in
+      spz2glb_wasm_c_api.cpp|spz2glb_wasm_bindings.cpp) continue ;;
+    esac
+
+    # 提取所有函数定义的行号范围
+    local func_decl_lines
+    func_decl_lines="$(grep -n '^[a-zA-Z_].*{' "${src}" 2>/dev/null | grep -v '//' | head -100 || true)"
+
+    # 提取 auto/类型声明的局部变量名（缩进的行，在函数体内）
+    while IFS= read -r decl; do
+      local var_name=""
+      # 匹配 "auto <name> =" 或 "<type> <name> =" 或 "<type> <name>;" 模式
+      var_name="$(echo "${decl}" | grep -oP '(?:auto|constexpr|const|int|bool|char|size_t|uint8_t|uint32_t|uint64_t|float|double|std::\w+)\s+\K\w+(?=\s*[=;])' 2>/dev/null || true)"
+      [ -z "${var_name}" ] && continue
+      # 跳过已知的应跨函数使用的成员（result.outputFile 等）
+      case "${var_name}" in
+        result|output|input|file|report|detail|spzData|glbData|glbPath|spzPath|outPtr|outSize) continue ;;
+      esac
+
+      # 查找这个变量名在文件中的所有使用位置
+      local usage_lines
+      usage_lines="$(grep -n "\b${var_name}\b" "${src}" 2>/dev/null | grep -v '//.*' || true)"
+      local usage_count
+      usage_count="$(echo "${usage_lines}" | wc -l)"
+      # 如果使用次数 > 1（声明本身+使用），进一步分析
+      if [ "${usage_count}" -gt 1 ]; then
+        # 提取声明所在函数行
+        local decl_line
+        decl_line="$(echo "${decl}" | grep -oP '^\d+' || true)"
+        if [ -n "${decl_line}" ]; then
+          # 找到声明所在的函数
+          local decl_func_line
+          decl_func_line="$(echo "${func_decl_lines}" | awk -F: -v dl="${decl_line}" '{
+            line=$1; 
+            if (line <= dl) { last=line; last_func=$0 }
+          } END { print last_func }' 2>/dev/null || true)"
+          
+          # 对所有使用行，检查是否与声明在同一个函数
+          echo "${usage_lines}" | while IFS= read -r ul; do
+            local use_line
+            use_line="$(echo "${ul}" | grep -oP '^\d+' || true)"
+            [ -z "${use_line}" ] && continue
+            if [ -n "${decl_func_line}" ]; then
+              local use_func_line
+              use_func_line="$(echo "${func_decl_lines}" | awk -F: -v ul="${use_line}" '{
+                line=$1;
+                if (line <= ul) { last=line }
+              } END { print last }' 2>/dev/null || true)"
+              # 如果在不同函数中使用了该变量
+              if [ -n "${use_func_line}" ] && [ "${decl_line}" != "${use_func_line}" ] && [ "${use_line}" != "${decl_line}" ]; then
+                echo "  CROSS-SCOPE: \"${var_name}\" declared at line ${decl_line} used at line ${use_line} (different function)" >&2
+                cross_failures=$((cross_failures + 1))
+              fi
+            fi
+          done
+        fi
+      fi
+    done < <(grep -n '^\s\+auto\s\+\|^\s\+constexpr\s\+\|^\s\+const\s\+\|^\s\+int\s\+\|^\s\+bool\s\+\|^\s\+size_t\s\+\|^\s\+uint[0-9]*_t\s\+\|^\s\+float\s\+\|^\s\+double\s\+\|^\s\+std::' "${src}" 2>/dev/null || true)
+  done < <(find "${src_dir}" -maxdepth 1 \( -name '*.cpp' -o -name '*.c' \) ! -name '*.bak' -print0 2>/dev/null)
+
+  if [ "${cross_failures}" -gt 0 ]; then
+    fail "P7_DEADCODE" 9 "${cross_failures} cross-function scope issue(s) detected"
+  fi
+  echo "  No cross-function scope issues found" >&2
 }
 
 # ---------------------------------------------------------------------------

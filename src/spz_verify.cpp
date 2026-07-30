@@ -72,6 +72,18 @@ int countPositionalArgs(int argc, char** argv) {
     return count;
 }
 
+// 返回 argv 中第 N 个位置参数（跳过 --option 及其值），空串表示不够
+std::string positionalArg(int argc, char** argv, int n) {
+    int count = 0;
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg.find("--") == 0) { ++i; continue; }
+        if (count == n) return argv[i];
+        ++count;
+    }
+    return {};
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -84,32 +96,28 @@ int main(int argc, char** argv) {
     spz::Verifier verifier;
 
     if (command == "layer1" && countPositionalArgs(argc, argv) >= 2) {
-        return runLayer1(verifier, argv[2]) ? 0 : 1;
+        const std::string glbPath = positionalArg(argc, argv, 1);
+        if (glbPath.empty()) { printUsage(argv[0]); return 1; }
+        return runLayer1(verifier, glbPath) ? 0 : 1;
     }
 
     if ((command == "layer2" || command == "layer3" || command == "layer4") && countPositionalArgs(argc, argv) >= 3) {
-        int pos = 0;
-        for (int i = 2; i < argc; ++i) {
-            if (std::string(argv[i]).find("--") == 0) { ++i; continue; }
-            if (pos == 0) { /* spz, skip */ pos++; continue; }
-            const auto result = verifier.verify_files(argv[2], argv[i]);
-            auto getDetail = [&]() -> std::string {
-                if (command == "layer2") return result.layer2_detail;
-                if (command == "layer3") return result.layer3_detail;
-                return result.layer4_detail;
-            };
-            auto getPassed = [&]() -> bool {
-                if (command == "layer2") return result.layer2_passed;
-                if (command == "layer3") return result.layer3_passed;
-                return result.layer4_passed;
-            };
-            std::cout << getDetail();
-            std::cout << (getPassed() ? "[PASS] " : "[FAIL] ") << "Layer " << command.back() << " validation " << (getPassed() ? "passed\n" : "failed\n");
-            return getPassed() ? 0 : 1;
-        }
+        const std::string spzPath = positionalArg(argc, argv, 1);
+        const std::string glbPath = positionalArg(argc, argv, 2);
+        if (spzPath.empty() || glbPath.empty()) { printUsage(argv[0]); return 1; }
+        const auto result = verifier.verify_files(spzPath, glbPath);
+        const auto detail = (command == "layer2") ? result.layer2_detail :
+                            (command == "layer3") ? result.layer3_detail : result.layer4_detail;
+        const bool passed = (command == "layer2") ? result.layer2_passed :
+                            (command == "layer3") ? result.layer3_passed : result.layer4_passed;
+        std::cout << detail;
+        std::cout << (passed ? "[PASS] " : "[FAIL] ") << "Layer " << command.back() << " validation " << (passed ? "passed\n" : "failed\n");
+        return passed ? 0 : 1;
     }
 
     if (command == "layer5" && countPositionalArgs(argc, argv) >= 2) {
+        const std::string spzPath = positionalArg(argc, argv, 1);
+        if (spzPath.empty()) { printUsage(argv[0]); return 1; }
         spz::VerifyResult result;
         std::vector<uint8_t> spzData;
         auto readBytes = [](const std::string& path, std::vector<uint8_t>& out) {
@@ -120,8 +128,8 @@ int main(int argc, char** argv) {
             out.resize(static_cast<size_t>(size));
             return file.read(reinterpret_cast<char*>(out.data()), size).good();
         };
-        if (!readBytes(argv[2], spzData)) {
-            std::cerr << "[ERROR] Cannot open SPZ file: " << argv[2] << "\n";
+        if (!readBytes(spzPath, spzData)) {
+            std::cerr << "[ERROR] Cannot open SPZ file: " << spzPath << "\n";
             return 1;
         }
         result.layer5_passed = verifier.verify_layer5(spzData, result.layer5_detail);
