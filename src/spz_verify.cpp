@@ -93,7 +93,6 @@ int main(int argc, char** argv) {
             if (std::string(argv[i]).find("--") == 0) { ++i; continue; }
             if (pos == 0) { /* spz, skip */ pos++; continue; }
             const auto result = verifier.verify_files(argv[2], argv[i]);
-            std::string layerKey = "layer" + command.back();
             auto getDetail = [&]() -> std::string {
                 if (command == "layer2") return result.layer2_detail;
                 if (command == "layer3") return result.layer3_detail;
