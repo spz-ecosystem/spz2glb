@@ -438,17 +438,22 @@ ConversionResult Queue::processFile(const std::string& spzPath, bool doVerify) {
     size_t spzSize = mappedFile.size();
     result.spzSizeBytes = spzSize;
 
-    // 探测 SPZ 版本和压缩格式
-    if (spzSize >= 4) {
-        uint32_t magic = 0;
-        std::memcpy(&magic, spzData, 4);
-        if (magic == kZstdMagic && spzSize >= 36) {
-            result.spzVersion = 4;
-            result.compression = "zstd";
-        } else {
-            // v3 gzip: 尝试读 v3 header
+    // 探测 SPZ 版本和压缩格式（与 spz2glb_core.cpp 的 isGzipData/isZstdData 一致）
+    if (spzSize >= 2) {
+        if (spzSize >= 4) {
+            uint32_t magic4 = 0;
+            std::memcpy(&magic4, spzData, 4);
+            if (magic4 == kZstdMagic && spzSize >= 36) {
+                result.spzVersion = 4;
+                result.compression = "zstd";
+            }
+        }
+        if (result.spzVersion == 0 && spzData[0] == 0x1F && spzData[1] == 0x8B) {
             result.spzVersion = 3;
             result.compression = "gzip";
+        }
+        if (result.spzVersion == 0) {
+            result.compression = "unknown";
         }
     }
 
@@ -475,11 +480,20 @@ ConversionResult Queue::processFile(const std::string& spzPath, bool doVerify) {
         }
     }
 
-    // 解析 GLB 扩展信息
-    std::vector<uint8_t> glbVec(
-        reinterpret_cast<const uint8_t*>(glbData.data()),
-        reinterpret_cast<const uint8_t*>(glbData.data()) + glbData.size());
-    parseGlbExtensions(glbVec, result);
+    // 解析 GLB 扩展信息：从磁盘文件读取，确保数据一致性
+    {
+        std::vector<uint8_t> glbVec;
+        std::ifstream glbIn(glbOutPath, std::ios::binary | std::ios::ate);
+        if (glbIn) {
+            auto fsize = glbIn.tellg();
+            if (fsize > 0) {
+                glbVec.resize(static_cast<size_t>(fsize));
+                glbIn.seekg(0, std::ios::beg);
+                glbIn.read(reinterpret_cast<char*>(glbVec.data()), fsize);
+                parseGlbExtensions(glbVec, result);
+            }
+        }
+    }
 
     // 解析 ILV 003
     std::vector<uint8_t> spzVec(spzData, spzData + spzSize);
