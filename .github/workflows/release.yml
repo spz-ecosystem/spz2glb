@@ -76,15 +76,21 @@ jobs:
 
       - name: Build fastgltf (with warnings suppressed)
         run: |
-          cmake --build build --config Release -j4 --target fastgltf
+          cmake --build build --config Release -j4 --target fastgltf 2>&1 | tee build.log
 
       - name: Build spz2glb (strict warnings)
         run: |
-          cmake --build build --config Release -j4 --target spz2glb
+          cmake --build build --config Release -j4 --target spz2glb 2>&1 | tee -a build.log
 
       - name: Build spz_verify (strict warnings)
         run: |
-          cmake --build build --config Release -j4 --target spz_verify
+          cmake --build build --config Release -j4 --target spz_verify 2>&1 | tee -a build.log
+
+      - name: Dump build log on failure
+        if: failure()
+        run: |
+          echo "=== Build Log (last 100 lines) ==="
+          test -f build.log && tail -100 build.log || echo "no build.log"
 
       - name: Find built executables
         run: |
@@ -163,11 +169,17 @@ jobs:
 
       - name: Build spz2glb WASM
         run: |
-          emmake cmake --build build_wasm --config Release --target spz2glb-wasm
+          emmake cmake --build build_wasm --config Release --target spz2glb-wasm 2>&1 | tee build_wasm.log
 
       - name: Build spz_verify WASM
         run: |
-          emmake cmake --build build_wasm --config Release --target spz_verify-wasm
+          emmake cmake --build build_wasm --config Release --target spz_verify-wasm 2>&1 | tee -a build_wasm.log
+
+      - name: Dump WASM build log on failure
+        if: failure()
+        run: |
+          echo "=== WASM Build Log (last 100 lines) ==="
+          test -f build_wasm.log && tail -100 build_wasm.log || echo "no build_wasm.log"
 
       - name: Validate WASM outputs
         run: |
