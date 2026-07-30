@@ -89,6 +89,13 @@
 - **Memory-mapped file I/O**: Add `src/mapped_file.h` — cross-platform RAII `MappedFile` class using `CreateFileMapping` (Windows) / `mmap` (POSIX), reducing kernel→userspace copy for large file reads
 - **Code cleanup**: Remove unused `loadSpzFile()`, `SpzResult`, `SpzErrorCode` from `spz_to_glb.cpp` (replaced by `MappedFile`)
 
+### CI/Workflow (v2.0.3 continuation — 2026-07-30)
+
+- **verify-native decoupled**: Remove `needs: [build]` dependency from verify-native job — now runs independently (parallel) instead of waiting for the 3-platform build matrix, preventing native verification from being skipped when a single platform fails
+- **MinGW cross-compile check**: Add `x86_64-w64-mingw32-g++ -fsyntax-only` step to verify-native, catching `#ifdef _WIN32` guard mismatches without requiring Windows ZLIB/ZSTD libraries
+- **Rollback security gate**: Add pre-download verification to rollback-artifact-entry — rejects rollback sources not on `main` branch or not completed successfully, with SHA-256 checksum in audit manifest
+- **wasm-pre-check P6**: Extend file integrity stage with cross-platform `#ifdef` guard detection (regex-based static analysis on headers using `#ifdef _WIN32` / `#else` / `#endif`)
+
 ---
 
 ## v2.0.2 (2026-05-11)
