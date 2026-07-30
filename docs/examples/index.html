@@ -291,12 +291,16 @@
         }
 
         function detectSpzVersion(buffer) {
-            // 简单探测 SPZ 版本：读取前 4 字节判断是否是 ZSTD 魔数
-            const view = new DataView(buffer.buffer, buffer.byteOffset, Math.min(4, buffer.byteLength));
-            if (buffer.byteLength < 4) return { version: 0, compression: 'unknown' };
-            const magic = view.getUint32(0, true);
-            if (magic === 0xFD2FB528) return { version: 4, compression: 'zstd' };
-            return { version: 3, compression: 'gzip' };
+            // 照搬门卫 InspectSpzBlob 的逻辑
+            if (buffer.byteLength >= 4 &&
+                buffer[0] === 0x4E && buffer[1] === 0x47 &&
+                buffer[2] === 0x53 && buffer[3] === 0x50) {
+                return { version: 4, compression: 'zstd' };
+            }
+            if (buffer.byteLength >= 2 && buffer[0] === 0x1F && buffer[1] === 0x8B) {
+                return { version: 3, compression: 'gzip' };
+            }
+            return { version: 0, compression: 'unknown' };
         }
 
         async function processItem(item) {
