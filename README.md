@@ -590,6 +590,10 @@ Related projects:
 - [simdjson](https://github.com/simdjson/simdjson) - Ultra-fast JSON parsing library v4.6.4
 - [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting Extension
 
+## Future Plans
+
+This project intends to donate to the **OpenAtom Foundation** at an appropriate stage, to foster broader community collaboration and governance of the SPZ ecosystem. The specific timing and method will be determined as the project matures to community-operation standards.
+
 ## Customization Notes
 
 This project uses a **customized version of fastgltf** (based on upstream [spnda/fastgltf](https://github.com/spnda/fastgltf)) with the following modifications:
