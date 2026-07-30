@@ -274,61 +274,6 @@ jobs:
           fi
           echo "[PASS] MinGW cross-compilation syntax check passed"
 
-  deploy-pages:
-    needs: [wasm-build]
-    runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && github.event.inputs.rollback_run_id == ''
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - name: Prepare Pages root from repository
-        run: |
-          mkdir -p site
-          cp docs/examples/index.html site/index.html
-          cp docs/examples/spz2glb_bindings.js site/spz2glb_bindings.js
-          cp docs/examples/smart_memory.js site/smart_memory.js
-
-      - name: Download WASM artifacts (compat)
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: wasm-modules-compat
-          path: site/dist
-
-      - name: Validate and place WASM modules
-        run: |
-          test -f site/dist/spz2glb.wasm
-          test -f site/dist/spz2glb.js
-          cp site/dist/spz2glb.wasm site/spz2glb.wasm
-          cp site/dist/spz2glb.js site/spz2glb.js
-
-      - name: Generate Pages audit manifest
-        run: |
-          (cd site && sha256sum index.html spz2glb_bindings.js smart_memory.js spz2glb.wasm spz2glb.js > pages-artifact-sha256.txt)
-
-      - name: Upload Pages audit artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: pages-audit
-          path: site/pages-artifact-sha256.txt
-
-      - name: Upload to GitHub Pages
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
 
   release:
     needs: [build, wasm-build, verify-native]
@@ -462,7 +407,7 @@ jobs:
 
   rollback-manifest:
     if: always() && contains(join(needs.*.result, ','), 'failure')
-    needs: [build, wasm-build, verify-native, deploy-pages, release]
+    needs: [build, wasm-build, verify-native, release]
     runs-on: ubuntu-latest
     steps:
       - name: Find previous stable run
