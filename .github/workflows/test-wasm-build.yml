@@ -18,11 +18,13 @@ on:
       - main
       - phase5-browser-lifecycle-20260325
       - feature/spz2glb-v4-zstd-adaptation
+      - clean-pr
     paths:
       - 'CMakeLists.txt'
       - 'src/**'
       - 'docs/examples/**'
       - 'tests/**'
+      - 'scripts/**'
       - '.github/workflows/test-wasm-build.yml'
       - '.github/workflows/release.yml'
 
