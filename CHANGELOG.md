@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.0.3 (2026-07-29)
+## v2.0.3 (2026-07-30)
 
 ### CI/CD Security Hardening
 
@@ -24,7 +24,7 @@
 
 - **Emscripten 6.0.3**: Upgrade Emscripten SDK from `5.0.1` to `6.0.3` across all workflows and documentation
 - **WASM pre-check**: Add `scripts/wasm-pre-check.sh` — pre-push safety net checking environment, build, symbol exports, artifacts, WASM analysis, and workflow lint
-- **Memory constraint**: MAXIMUM_MEMORY set to 512MB (compat profile), consistent with project design limits
+- **Memory constraint**: MAXIMUM_MEMORY set to 1GB (compat profile, 1073741824 bytes)
 - **`-Oz` optimization**: Add WASM-specific size optimization for smaller binary output
 
 ### Verification (spz_verify)
@@ -44,7 +44,7 @@
 
 - **Five-layer verification**: Update READMEs (EN/ZH) from "3-layer" to "5-layer" across all sections
 - **Emscripten version**: Update WASM build instructions from 5.0.1 to 6.0.3
-- **Memory config**: Update MAXIMUM_MEMORY from 1GB to 512MB in documentation tables
+- **Memory config**: Document MAXIMUM_MEMORY (1GB compat, unbounded perf-lite) in WASM memory tables
 - **spz_verify CLI**: Add L4 and L5 command documentation with output examples
 - **spz2glb CLI**: Document `--verify` flag for one-step convert + verify
 - **Dependencies**: Add ZSTD to dependency tables
