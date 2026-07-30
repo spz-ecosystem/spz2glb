@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 选项
 option(SPZ2GLB_BUILD_WASM "Build WASM version" OFF)
-option(ENABLE_KHR_GAUSSIAN_SPLATTING "Enable KHR_gaussian_splatting support" ON)
 
 # 添加 fastgltf (文件直接在 third_party 目录下)
 add_subdirectory(third_party)
@@ -44,13 +43,66 @@ target_link_libraries(spz2glb_core PUBLIC fastgltf)
 
 if(SPZ2GLB_BUILD_WASM)
   target_compile_options(spz2glb_core PRIVATE --use-port=zlib)
+  # --use-port=zstd removed: Emscripten 6.0.3 recognizes the port but C++ sources
+  # guard zstd with #ifndef __EMSCRIPTEN__, so WASM builds do not need it.
 else()
-  find_package(ZLIB REQUIRED)
-  target_link_libraries(spz2glb_core PUBLIC ZLIB::ZLIB)
-endif()
+  # zlib: find_package first, fallback to FetchContent with SHA256 (modeled on gatekeeper)
+  # Uses INTERFACE library to unify system zlib and FetchContent paths.
+  add_library(spz2glb_zlib INTERFACE)
+  find_package(ZLIB QUIET)
+  if(NOT ZLIB_FOUND)
+    message(STATUS "zlib not found, using FetchContent to download v1.3.2")
+    include(FetchContent)
+    FetchContent_Declare(
+      zlib_fetch
+      URL "https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz"
+      URL_HASH SHA256=bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16
+    )
+    FetchContent_MakeAvailable(zlib_fetch)
+    # zlib's CMake creates "zlibstatic" (static) or "zlib" (shared) target
+    if(TARGET zlibstatic)
+      target_link_libraries(spz2glb_zlib INTERFACE zlibstatic)
+    elseif(TARGET zlib)
+      target_link_libraries(spz2glb_zlib INTERFACE zlib)
+    endif()
+  else()
+    target_link_libraries(spz2glb_zlib INTERFACE ZLIB::ZLIB)
+  endif()
+  target_link_libraries(spz2glb_core PUBLIC spz2glb_zlib)
 
-if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-  target_compile_definitions(spz2glb_core PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
+  # zstd: find_package first, fallback to FetchContent with SHA256 + SOURCE_SUBDIR
+  find_package(zstd QUIET)
+  if(NOT zstd_FOUND)
+    message(STATUS "zstd not found, using FetchContent to download v1.5.6")
+    include(FetchContent)
+    FetchContent_Declare(
+      zstd_fetch
+      URL "https://github.com/facebook/zstd/releases/download/v1.5.6/zstd-1.5.6.tar.gz"
+      URL_HASH SHA256=8c29e06cf42aacc1eafc4077ae2ec6c6fcb96a626157e0593d5e82a34fd403c1
+      SOURCE_SUBDIR build/cmake
+    )
+    set(ZSTD_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+    set(ZSTD_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+    set(ZSTD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(zstd_fetch)
+    if(NOT TARGET zstd::zstd)
+      if(TARGET libzstd_static)
+        add_library(zstd::zstd ALIAS libzstd_static)
+      endif()
+    endif()
+    target_link_libraries(spz2glb_core PUBLIC zstd::zstd)
+  else()
+    if(TARGET zstd::libzstd_static)
+      if(NOT TARGET zstd::zstd)
+        add_library(zstd::zstd ALIAS zstd::libzstd_static)
+      endif()
+    elseif(TARGET zstd::libzstd_shared)
+      if(NOT TARGET zstd::zstd)
+        add_library(zstd::zstd ALIAS zstd::libzstd_shared)
+      endif()
+    endif()
+    target_link_libraries(spz2glb_core PUBLIC zstd::zstd)
+  endif()
 endif()
 
 target_compile_options(spz2glb_core PRIVATE ${STRICT_WARNINGS})
@@ -72,11 +124,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
-  target_link_libraries(spz_verify PRIVATE fastgltf ZLIB::ZLIB)
-
-  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(spz_verify PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-  endif()
+  target_link_libraries(spz_verify PRIVATE fastgltf spz2glb_zlib zstd::zstd)
 
   # 严格警告
   target_compile_options(spz_verify PRIVATE ${STRICT_WARNINGS})
@@ -94,11 +142,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
   )
 
-  target_link_libraries(spz2glb PRIVATE spz2glb_core fastgltf ZLIB::ZLIB)
-
-  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(spz2glb PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-  endif()
+  target_link_libraries(spz2glb PRIVATE spz2glb_core fastgltf spz2glb_zlib)
 
   # 严格警告
   target_compile_options(spz2glb PRIVATE ${STRICT_WARNINGS})
@@ -146,10 +190,6 @@ if(SPZ2GLB_BUILD_WASM)
 
   target_link_libraries(spz2glb-wasm PRIVATE spz2glb_core fastgltf)
 
-  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(spz2glb-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-  endif()
-
   # Emscripten ZLIB: compile and link with the zlib port so headers stay visible in CI.
 
   # C++ 编译优化（无 LTO 避免导入名压缩）
@@ -163,6 +203,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wpedantic"
     "-Werror"
     "-Wno-unused-parameter"
+    "-Wno-unused-variable"
     "-Wno-old-style-cast"
     "-Wno-sign-conversion"
   )
@@ -173,6 +214,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-fno-lto"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
+    # --use-port=zstd removed: Emscripten 5.0.1 does not recognize 'zstd' port name.
 
     # 内存配置（Phase 6: compat / perf-lite）
     "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
@@ -229,14 +271,11 @@ if(SPZ2GLB_BUILD_WASM)
 
   target_link_libraries(spz_verify-wasm PRIVATE fastgltf)
 
-  if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(spz_verify-wasm PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-  endif()
-
-  # Emscripten ZLIB: compile and link with the zlib port so verifier sources can include zlib.h.
+  # Emscripten ZLIB + ZSTD: compile and link with the port so verifier sources can include zlib.h + zstd.h.
 
   target_compile_options(spz_verify-wasm PRIVATE
     "--use-port=zlib"
+    # --use-port=zstd removed: Emscripten 5.0.1 does not recognize 'zstd' port name.
     "-O3"
     "-fno-exceptions"
     "-Wall"
@@ -244,6 +283,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-Wpedantic"
     "-Werror"
     "-Wno-unused-parameter"
+    "-Wno-unused-variable"
     "-Wno-old-style-cast"
     "-Wno-sign-conversion"
   )
@@ -252,6 +292,7 @@ if(SPZ2GLB_BUILD_WASM)
     "-O3"
     "-sUSE_ZLIB=1"
     "--use-port=zlib"
+    # --use-port=zstd removed: Emscripten 5.0.1 does not recognize 'zstd' port name.
     "-sINITIAL_MEMORY=${SPZ2GLB_WASM_INITIAL_MEMORY}"
     "${SPZ2GLB_WASM_MAXIMUM_MEMORY_OPTION}"
     "-sALLOW_MEMORY_GROWTH=${SPZ2GLB_WASM_ALLOW_MEMORY_GROWTH}"

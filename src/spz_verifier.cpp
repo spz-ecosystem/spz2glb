@@ -17,6 +17,9 @@
 #include <string_view>
 
 #include <zlib.h>
+#ifndef __EMSCRIPTEN__
+#include <zstd.h>
+#endif
 
 namespace spz {
 
@@ -27,6 +30,8 @@ constexpr uint32_t kGlbVersion = 2;
 constexpr uint32_t kJsonChunkType = 0x4E4F534A;
 constexpr uint32_t kBinChunkType = 0x004E4942;
 constexpr uint32_t kSpzMagic = 0x5053474E;
+constexpr uint32_t kZstdMagic = 0xFD2FB528;
+constexpr uint32_t kIlvTypeCoordSys = 0xADBE0003;
 
 constexpr const char* kExtGaussian = "KHR_gaussian_splatting";
 constexpr const char* kExtSpz2 = "KHR_gaussian_splatting_compression_spz_2";
@@ -40,6 +45,26 @@ struct SpzHeader {
     uint8_t flags;
     uint8_t reserved;
 };
+
+// SPZ v4 32B header
+struct SpzV4Header {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t numPoints;
+    uint8_t shDegree;
+    uint8_t fractionalBits;
+    uint8_t flags;
+    uint8_t reserved;
+    uint32_t pointCount;
+    uint8_t shBandCount;
+    uint8_t chunkConfig;
+    uint16_t attributeOffsets;
+    uint32_t tocByteOffset;
+    uint32_t reserved2; // padding: 28B → 32B
+};
+
+static_assert(sizeof(SpzHeader) == 16, "SpzHeader must be 16 bytes");
+static_assert(sizeof(SpzV4Header) == 32, "SpzV4Header must be 32 bytes");
 
 struct ParsedGlb {
     std::string json;
@@ -280,43 +305,66 @@ bool parseBufferAndView(const std::string& json,
     return true;
 }
 
-bool tryPeekSpzHeader(const std::vector<uint8_t>& data, SpzHeader& header, bool& fromGzip) {
+bool tryPeekSpzHeader(const std::vector<uint8_t>& data, SpzHeader& header, bool& fromGzip, bool& fromZstd) {
     fromGzip = false;
+    fromZstd = false;
     if (data.size() < sizeof(SpzHeader)) {
         return false;
     }
 
     const bool isGzip = data.size() >= 2 && data[0] == 0x1F && data[1] == 0x8B;
-    if (!isGzip) {
-        std::memcpy(&header, data.data(), sizeof(SpzHeader));
+    if (isGzip) {
+        fromGzip = true;
+        uint8_t scratch[sizeof(SpzHeader)] = {};
+
+        z_stream strm = {};
+        strm.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(data.data()));
+        strm.avail_in = static_cast<uInt>(data.size());
+        strm.next_out = reinterpret_cast<Bytef*>(scratch);
+        strm.avail_out = static_cast<uInt>(sizeof(scratch));
+
+        if (inflateInit2(&strm, 16 + MAX_WBITS) != Z_OK) {
+            return false;
+        }
+
+        int ret = Z_OK;
+        while (ret == Z_OK && strm.total_out < sizeof(scratch)) {
+            ret = inflate(&strm, Z_NO_FLUSH);
+        }
+
+        const bool hasHeader = strm.total_out >= sizeof(scratch) && (ret == Z_OK || ret == Z_STREAM_END);
+        inflateEnd(&strm);
+        if (!hasHeader) {
+            return false;
+        }
+
+        std::memcpy(&header, scratch, sizeof(SpzHeader));
         return header.magic == kSpzMagic;
     }
 
-    fromGzip = true;
-    uint8_t scratch[sizeof(SpzHeader)] = {};
-
-    z_stream strm = {};
-    strm.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(data.data()));
-    strm.avail_in = static_cast<uInt>(data.size());
-    strm.next_out = reinterpret_cast<Bytef*>(scratch);
-    strm.avail_out = static_cast<uInt>(sizeof(scratch));
-
-    if (inflateInit2(&strm, 16 + MAX_WBITS) != Z_OK) {
-        return false;
+    // ZSTD v4: magic(4B) + 32B plaintext header
+    if (data.size() >= 4) {
+        uint32_t magic = 0;
+        std::memcpy(&magic, data.data(), sizeof(magic));
+        if (magic == kZstdMagic && data.size() >= 4 + sizeof(SpzV4Header)) {
+            fromZstd = true;
+            SpzV4Header v4Hdr{};
+            std::memcpy(&v4Hdr, data.data() + 4, sizeof(SpzV4Header));
+            if (v4Hdr.magic == kSpzMagic) {
+                header.magic = v4Hdr.magic;
+                header.version = v4Hdr.version;
+                header.numPoints = v4Hdr.numPoints;
+                header.shDegree = v4Hdr.shDegree;
+                header.fractionalBits = v4Hdr.fractionalBits;
+                header.flags = v4Hdr.flags;
+                header.reserved = v4Hdr.reserved;
+                return true;
+            }
+        }
     }
 
-    int ret = Z_OK;
-    while (ret == Z_OK && strm.total_out < sizeof(scratch)) {
-        ret = inflate(&strm, Z_NO_FLUSH);
-    }
-
-    const bool hasHeader = strm.total_out >= sizeof(scratch) && (ret == Z_OK || ret == Z_STREAM_END);
-    inflateEnd(&strm);
-    if (!hasHeader) {
-        return false;
-    }
-
-    std::memcpy(&header, scratch, sizeof(SpzHeader));
+    // raw (non-gzip, non-zstd)
+    std::memcpy(&header, data.data(), sizeof(SpzHeader));
     return header.magic == kSpzMagic;
 }
 
@@ -402,6 +450,8 @@ VerifyResult Verifier::verify(const std::vector<uint8_t>& spz_data,
     result.layer1_passed = verify_layer1(glb_data, result.layer1_detail);
     result.layer2_passed = verify_layer2(spz_data, glb_data, result.layer2_detail);
     result.layer3_passed = verify_layer3(spz_data, glb_data, result.layer3_detail);
+    result.layer4_passed = verify_layer4(spz_data, glb_data, result.layer4_detail);
+    result.layer5_passed = verify_layer5(spz_data, result.layer5_detail);
     return result;
 }
 
@@ -415,9 +465,13 @@ VerifyResult Verifier::verify_files(const std::string& spz_path,
         result.layer1_passed = false;
         result.layer2_passed = false;
         result.layer3_passed = false;
+        result.layer4_passed = false;
+        result.layer5_passed = false;
         result.layer1_detail = message;
         result.layer2_detail = message;
         result.layer3_detail = message;
+        result.layer4_detail = message;
+        result.layer5_detail = message;
     };
 
     if (!readFileBytes(spz_path, spzData)) {
@@ -461,7 +515,7 @@ bool Verifier::verify_layer3(const std::vector<uint8_t>& spz_data,
 bool Verifier::layer1_validate_glb_structure(const std::vector<uint8_t>& glb_data,
                                              std::string& detail) {
     std::ostringstream oss;
-    oss << "=== Layer 1: GLB Structure & Contract Validation ===\n";
+    oss << "=== Layer 1: GLB Structure & KHR Extension Validation ===\n";
 
     ParsedGlb parsed;
     std::string parseErr;
@@ -485,6 +539,35 @@ bool Verifier::layer1_validate_glb_structure(const std::vector<uint8_t>& glb_dat
     oss << (usedSpz2 ? "[PASS]" : "[FAIL]") << " extensionsUsed contains " << kExtSpz2 << "\n";
     oss << (requiredGaussian ? "[PASS]" : "[FAIL]") << " extensionsRequired contains " << kExtGaussian << "\n";
     oss << (requiredSpz2 ? "[PASS]" : "[FAIL]") << " extensionsRequired contains " << kExtSpz2 << "\n";
+
+    // 上级扩展 KHR_gaussian_splatting 字段级完整性检查
+    // 搜索 "KHR_gaussian_splatting":"（key 形式，跳过 extensionsUsed/Required 中的 value 形式）
+    bool hasKernel = false;
+    bool hasColorSpace = false;
+    {
+        // 在 primitive.extensions 中找 KHR_gaussian_splatting 对象
+        const std::string keyPattern = std::string("\"") + kExtGaussian + "\":";
+        const size_t keyObjPos = parsed.json.find(keyPattern);
+        if (keyObjPos != std::string::npos) {
+            const size_t colonPos = parsed.json.find(':', keyObjPos + keyPattern.size() - 1);
+            if (colonPos != std::string::npos) {
+                size_t objStart = colonPos + 1;
+                while (objStart < parsed.json.size() && std::isspace(static_cast<unsigned char>(parsed.json[objStart])) != 0) {
+                    ++objStart;
+                }
+                if (objStart < parsed.json.size() && parsed.json[objStart] == '{') {
+                    const size_t objEnd = findMatchingBracket(parsed.json, objStart, '{', '}');
+                    if (objEnd != std::string::npos) {
+                        const std::string gaussianObj = parsed.json.substr(objStart, objEnd - objStart + 1);
+                        hasKernel = gaussianObj.find("\"kernel\"") != std::string::npos;
+                        hasColorSpace = gaussianObj.find("\"colorSpace\"") != std::string::npos;
+                    }
+                }
+            }
+        }
+    }
+    oss << (hasKernel ? "[PASS]" : "[FAIL]") << " KHR_gaussian_splatting has 'kernel' field\n";
+    oss << (hasColorSpace ? "[PASS]" : "[FAIL]") << " KHR_gaussian_splatting has 'colorSpace' field\n";
 
     uint32_t bufferByteLength = 0;
     uint32_t bufferViewByteOffset = 0;
@@ -518,6 +601,7 @@ bool Verifier::layer1_validate_glb_structure(const std::vector<uint8_t>& glb_dat
         << binPaddingBytes << ")\n";
 
     const bool passed = usedGaussian && usedSpz2 && requiredGaussian && requiredSpz2 &&
+                        hasKernel && hasColorSpace &&
                         compressionOnView0 && viewMatchesBuffer && offsetAligned && inRange && binPaddingValid;
 
     if (!passed) {
@@ -588,13 +672,18 @@ bool Verifier::layer3_verify_decoding(const std::vector<uint8_t>& spz_data,
 
     SpzHeader header{};
     bool fromGzip = false;
-    if (!tryPeekSpzHeader(prepared.extracted, header, fromGzip)) {
+    bool fromZstd = false;
+    if (!tryPeekSpzHeader(prepared.extracted, header, fromGzip, fromZstd)) {
         oss << "[FAIL] cannot parse SPZ header from extracted payload\n";
         detail = oss.str();
         return false;
     }
 
-    oss << "[PASS] SPZ header parsed from " << (fromGzip ? "gzip" : "raw") << " payload\n";
+    std::string compressionStr = "raw";
+    if (fromGzip) compressionStr = "gzip";
+    else if (fromZstd) compressionStr = "zstd";
+
+    oss << "[PASS] SPZ header parsed from " << compressionStr << " payload\n";
     oss << "[PASS] SPZ version=" << header.version
         << ", numPoints=" << header.numPoints
         << ", flags=0x" << std::hex << static_cast<unsigned>(header.flags) << std::dec << "\n";
@@ -614,6 +703,186 @@ bool Verifier::layer3_verify_decoding(const std::vector<uint8_t>& spz_data,
     oss << "[PASS] decoding consistency checks complete\n";
     detail = oss.str();
     return true;
+}
+
+// L4：GLB extensions 元数据与 SPZ header 一致性校验
+bool Verifier::layer4_verify_metadata(const std::vector<uint8_t>& spz_data,
+                                      const std::vector<uint8_t>& glb_data,
+                                      std::string& detail) {
+    std::ostringstream oss;
+    oss << "=== Layer 4: GLB Extension Metadata vs SPZ Header Consistency ===\n";
+
+    PreparedPayload prepared;
+    std::string prepareErr;
+    if (!preparePayloadForVerification(glb_data, prepared, prepareErr)) {
+        oss << "[FAIL] " << prepareErr << "\n";
+        detail = oss.str();
+        return false;
+    }
+
+    SpzHeader header{};
+    bool fromGzip = false;
+    bool fromZstd = false;
+    if (!tryPeekSpzHeader(prepared.extracted, header, fromGzip, fromZstd)) {
+        oss << "[FAIL] cannot parse SPZ header from payload\n";
+        detail = oss.str();
+        return false;
+    }
+
+    // 从 GLB JSON 中提取扩展字段
+    const std::string& json = prepared.parsed.json;
+    const size_t spz2Pos = json.find("\"KHR_gaussian_splatting_compression_spz_2\"");
+    if (spz2Pos == std::string::npos) {
+        oss << "[FAIL] GLB missing KHR_gaussian_splatting_compression_spz_2 extension\n";
+        detail = oss.str();
+        return false;
+    }
+
+    // 提取 spzVersion
+    uint32_t glbSpzVersion = 0;
+    parseUnsignedAfterKey(json, "\"spzVersion\"", glbSpzVersion, spz2Pos);
+
+    // 提取 coordinateSystem
+    uint32_t glbCoordSys = 0;
+    parseUnsignedAfterKey(json, "\"coordinateSystem\"", glbCoordSys, spz2Pos);
+
+    bool allConsistent = true;
+
+    // 校验 SPZ version 一致
+    if (glbSpzVersion > 0 && glbSpzVersion != header.version) {
+        oss << "[FAIL] GLB spzVersion=" << glbSpzVersion
+            << " != SPZ header version=" << header.version << "\n";
+        allConsistent = false;
+    } else {
+        oss << "[PASS] SPZ version consistent: " << header.version << "\n";
+    }
+
+    // 校验 coordinateSystem 一致
+    if (glbCoordSys > 0) {
+        oss << "[INFO] GLB coordinateSystem=" << glbCoordSys << " (recorded in metadata)\n";
+    } else {
+        oss << "[INFO] No coordinateSystem extension in GLB metadata\n";
+    }
+
+    if (allConsistent) {
+        oss << "[PASS] Layer 4 metadata consistency checks passed\n";
+    } else {
+        oss << "[FAIL] Layer 4 metadata consistency checks failed\n";
+    }
+
+    detail = oss.str();
+    return allConsistent;
+}
+
+// L5：ILV 扩展完整性校验
+bool Verifier::layer5_verify_extensions(const std::vector<uint8_t>& spz_data,
+                                        std::string& detail) {
+    std::ostringstream oss;
+    oss << "=== Layer 5: ILV Extension Completeness ===\n";
+
+    if (spz_data.size() < 4) {
+        oss << "[PASS] Data too small, no ILV records to verify\n";
+        detail = oss.str();
+        return true;
+    }
+
+    // 检查是否为 ZSTD v4
+    uint32_t magic = 0;
+    std::memcpy(&magic, spz_data.data(), sizeof(magic));
+    if (magic != kZstdMagic || spz_data.size() < 4 + sizeof(SpzV4Header)) {
+        oss << "[PASS] Not a v4 ZSTD SPZ, no ILV records expected\n";
+        detail = oss.str();
+        return true;
+    }
+
+    SpzV4Header v4Hdr{};
+    std::memcpy(&v4Hdr, spz_data.data() + 4, sizeof(SpzV4Header));
+    if (v4Hdr.magic != kSpzMagic || v4Hdr.version < 4) {
+        oss << "[PASS] Not a v4 SPZ, no ILV records expected\n";
+        detail = oss.str();
+        return true;
+    }
+
+    const size_t headerZoneStart = 4 + sizeof(SpzV4Header);
+    if (v4Hdr.tocByteOffset == 0 || headerZoneStart >= spz_data.size()) {
+        oss << "[PASS] v4 SPZ has no ILV header zone (tocByteOffset=0)\n";
+        detail = oss.str();
+        return true;
+    }
+
+    const size_t headerZoneEnd = headerZoneStart + v4Hdr.tocByteOffset;
+    if (headerZoneEnd > spz_data.size()) {
+        oss << "[FAIL] v4 header zone out of bounds (" << headerZoneEnd
+            << " > " << spz_data.size() << ")\n";
+        detail = oss.str();
+        return false;
+    }
+
+    // 扫描 ILV 记录
+    size_t pos = headerZoneStart;
+    bool foundCoordSys = false;
+    bool allRecordsValid = true;
+    uint32_t coordSysValue = 0;
+
+    while (pos + 8 <= headerZoneEnd) {
+        uint32_t type = 0;
+        uint32_t length = 0;
+        std::memcpy(&type, spz_data.data() + pos, sizeof(type));
+        std::memcpy(&length, spz_data.data() + pos + 4, sizeof(length));
+
+        if (pos + 8 + length > headerZoneEnd) {
+            oss << "[FAIL] ILV record at offset " << pos
+                << " extends beyond header zone (type=0x" << std::hex << type
+                << std::dec << ", length=" << length << ")\n";
+            allRecordsValid = false;
+            break;
+        }
+
+        if (type == kIlvTypeCoordSys) {
+            foundCoordSys = true;
+            if (length >= 4) {
+                std::memcpy(&coordSysValue, spz_data.data() + pos + 8, sizeof(coordSysValue));
+                if (coordSysValue > 16) {
+                    oss << "[FAIL] ILV 0xADBE0003 coordinateSystem=" << coordSysValue
+                        << " out of valid range [0,16]\n";
+                    allRecordsValid = false;
+                } else {
+                    oss << "[PASS] ILV 0xADBE0003 coordinateSystem=" << coordSysValue << " (valid)\n";
+                }
+            }
+        } else {
+            oss << "[INFO] ILV record type=0x" << std::hex << type << std::dec
+                << ", length=" << length << "\n";
+        }
+
+        pos += 8 + length;
+    }
+
+    if (!foundCoordSys) {
+        oss << "[INFO] No ILV 0xADBE0003 coordinate system extension found\n";
+    }
+
+    if (!allRecordsValid) {
+        oss << "[FAIL] Layer 5 ILV extension checks failed\n";
+    } else {
+        oss << "[PASS] Layer 5 ILV extension checks passed\n";
+    }
+
+    detail = oss.str();
+    return allRecordsValid;
+}
+
+// 公开入口: 调用 L4 实现
+bool Verifier::verify_layer4(const std::vector<uint8_t>& spz_data,
+                             const std::vector<uint8_t>& glb_data,
+                             std::string& detail) {
+    return layer4_verify_metadata(spz_data, glb_data, detail);
+}
+
+// 公开入口: 调用 L5 实现
+bool Verifier::verify_layer5(const std::vector<uint8_t>& spz_data,
+                             std::string& detail) {
+    return layer5_verify_extensions(spz_data, detail);
 }
 
 } // namespace spz

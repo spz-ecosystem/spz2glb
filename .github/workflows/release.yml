@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - main
+      - feature/spz2glb-v4-zstd-adaptation
     tags:
       - 'v*'
   workflow_dispatch:
@@ -17,13 +18,11 @@ on:
         default: ''
 
 permissions:
-  actions: read
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
 env:
-  EMSCRIPTEN_VERSION: 5.0.1
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  EMSCRIPTEN_VERSION: 6.0.3
 
 jobs:
   build:
@@ -42,8 +41,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           submodules: recursive
 
       - name: Install dependencies (Ubuntu)
@@ -76,15 +76,21 @@ jobs:
 
       - name: Build fastgltf (with warnings suppressed)
         run: |
-          cmake --build build --config Release -j4 --target fastgltf
+          cmake --build build --config Release -j4 --target fastgltf 2>&1 | tee build.log
 
       - name: Build spz2glb (strict warnings)
         run: |
-          cmake --build build --config Release -j4 --target spz2glb
+          cmake --build build --config Release -j4 --target spz2glb 2>&1 | tee -a build.log
 
       - name: Build spz_verify (strict warnings)
         run: |
-          cmake --build build --config Release -j4 --target spz_verify
+          cmake --build build --config Release -j4 --target spz_verify 2>&1 | tee -a build.log
+
+      - name: Dump build log on failure
+        if: failure()
+        run: |
+          echo "=== Build Log (last 100 lines) ==="
+          test -f build.log && tail -100 build.log || echo "no build.log"
 
       - name: Find built executables
         run: |
@@ -112,13 +118,14 @@ jobs:
           find . -name "spz_verify" -type f -exec cp {} spz_verify-macos-x64 \;
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
+          retention-days: 7
 
       - name: Upload verify artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ matrix.os }}-verify
           path: spz_verify*
@@ -134,22 +141,20 @@ jobs:
         wasm_profile: [compat, perf-lite]
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           submodules: recursive
 
-      - name: Cache Emscripten ports
-        uses: actions/cache@v5
-        with:
-          path: ${{ env.EM_CACHE }}
-          key: emscripten-cache-${{ runner.os }}-${{ env.EMSCRIPTEN_VERSION }}
-          restore-keys: |
-            emscripten-cache-${{ runner.os }}-
-
-      - name: Setup Emscripten
-        uses: mymindstorm/setup-emsdk@v14
-        with:
-          version: ${{ env.EMSCRIPTEN_VERSION }}
+      - name: Setup Emscripten SDK
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git --depth 1 --branch ${{ env.EMSCRIPTEN_VERSION }}
+          ./emsdk/emsdk install ${{ env.EMSCRIPTEN_VERSION }}
+          ./emsdk/emsdk activate ${{ env.EMSCRIPTEN_VERSION }}
+          echo "${GITHUB_WORKSPACE}/emsdk" >> "$GITHUB_PATH"
+          echo "${GITHUB_WORKSPACE}/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
+          echo "EMSDK=${GITHUB_WORKSPACE}/emsdk" >> "$GITHUB_ENV"
+          echo "EM_CONFIG=${GITHUB_WORKSPACE}/emsdk/.emscripten" >> "$GITHUB_ENV"
 
       - name: Show Emscripten toolchain info
         run: |
@@ -164,11 +169,17 @@ jobs:
 
       - name: Build spz2glb WASM
         run: |
-          emmake cmake --build build_wasm --config Release --target spz2glb-wasm
+          emmake cmake --build build_wasm --config Release --target spz2glb-wasm 2>&1 | tee build_wasm.log
 
       - name: Build spz_verify WASM
         run: |
-          emmake cmake --build build_wasm --config Release --target spz_verify-wasm
+          emmake cmake --build build_wasm --config Release --target spz_verify-wasm 2>&1 | tee -a build_wasm.log
+
+      - name: Dump WASM build log on failure
+        if: failure()
+        run: |
+          echo "=== WASM Build Log (last 100 lines) ==="
+          test -f build_wasm.log && tail -100 build_wasm.log || echo "no build_wasm.log"
 
       - name: Validate WASM outputs
         run: |
@@ -178,7 +189,7 @@ jobs:
           test -f dist/spz_verify.js
 
       - name: Upload WASM artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: wasm-modules-${{ matrix.wasm_profile }}
           path: |
@@ -186,14 +197,16 @@ jobs:
             dist/spz2glb.js
             dist/spz_verify.wasm
             dist/spz_verify.js
+          retention-days: 7
 
   verify-native:
     needs: [build]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          persist-credentials: false
           submodules: recursive
 
       - name: Install dependencies
@@ -221,13 +234,18 @@ jobs:
     needs: [wasm-build, verify-native]
     runs-on: ubuntu-latest
     if: (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') && github.event.inputs.rollback_run_id == ''
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
       - name: Prepare Pages root from repository
         run: |
@@ -237,7 +255,7 @@ jobs:
           cp docs/examples/smart_memory.js site/smart_memory.js
 
       - name: Download WASM artifacts (compat)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: wasm-modules-compat
           path: site/dist
@@ -254,42 +272,44 @@ jobs:
           (cd site && sha256sum index.html spz2glb_bindings.js smart_memory.js spz2glb.wasm spz2glb.js > pages-artifact-sha256.txt)
 
       - name: Upload Pages audit artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pages-audit
           path: site/pages-artifact-sha256.txt
 
       - name: Upload to GitHub Pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
 
   release:
     needs: [build, wasm-build, verify-native]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # release job needs contents: write for tag operations
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
       - name: Download release artifacts (CLI)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: 'spz2glb-*'
           path: artifacts
           merge-multiple: true
 
       - name: Download release artifacts (verify)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: '*-verify'
           path: artifacts
           merge-multiple: true
 
       - name: Download release artifacts (WASM profiles)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: 'wasm-modules-*'
           path: artifacts/wasm
@@ -315,7 +335,7 @@ jobs:
           (cd artifacts && find . -type f -print0 | sort -z | xargs -0 sha256sum > release-sha256.txt)
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: artifacts/*
           generate_release_notes: true
@@ -327,28 +347,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts from stable run
-        uses: actions/download-artifact@v5
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          run-id: ${{ github.event.inputs.rollback_run_id }}
-          path: rollback_artifacts
-          merge-multiple: false
+        env:
+          ROLLBACK_RUN_ID: ${{ inputs.rollback_run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$ROLLBACK_RUN_ID" \
+            --repo ${{ github.repository }} \
+            --dir rollback_artifacts
 
       - name: Generate rollback execution manifest
+        env:
+          ROLLBACK_RUN_ID: ${{ inputs.rollback_run_id }}
+          TRIGGER_ACTOR: ${{ github.actor }}
+          TRIGGER_REF: ${{ github.ref }}
         run: |
           {
             echo "current_run_id=${{ github.run_id }}"
-            echo "rollback_source_run_id=${{ github.event.inputs.rollback_run_id }}"
-            echo "trigger_actor=${{ github.actor }}"
-            echo "trigger_ref=${{ github.ref }}"
+            echo "rollback_source_run_id=${ROLLBACK_RUN_ID}"
+            echo "trigger_actor=${TRIGGER_ACTOR}"
+            echo "trigger_ref=${TRIGGER_REF}"
             echo "artifact_count=$(find rollback_artifacts -type f | wc -l)"
           } > rollback-manual-manifest.txt
 
       - name: Upload rollback restored artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: rollback-restored-${{ github.event.inputs.rollback_run_id }}
+          name: rollback-restored
           path: |
             rollback_artifacts
             rollback-manual-manifest.txt
@@ -360,7 +384,7 @@ jobs:
     steps:
       - name: Find previous stable run
         id: stable
-        uses: actions/github-script@v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -394,7 +418,8 @@ jobs:
           } > rollback-manifest.txt
 
       - name: Upload rollback manifest
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: rollback-manifest
           path: rollback-manifest.txt
+          retention-days: 7

@@ -8,91 +8,101 @@
 - Core positioning: **lossless packaging** (SPZ stream stored as-is in GLB)
 - Key enhancement: WASM memory/API capabilities (reserved input, explicit release, stats, dual profile)
 - Dual-end collaboration: scenario split — browser side for lightweight preview/quick checks, local CLI for heavy conversion, batch jobs, and deep verification
-- Validation closure: built-in 3-layer verification (structure/lossless/decoding consistency) + cloud browser smoke
+- Validation closure: built-in 5-layer verification (structure/lossless/decoding consistency/metadata consistency/ILV extension integrity) + cloud browser smoke
 
 ## Responsibility Boundary (Fixed)
 
 - `spz2glb` is responsible for only two things: **SPZ→GLB format packaging** and **GLB delivery/distribution workflow**.
 - `spz2glb` does not own compression algorithm R&D, rendering-engine capability expansion, or generic 3D editing pipelines.
-- GLB compliance and correctness are judged by the **three-layer verification** system (structure / lossless / decoding consistency).
+- GLB compliance and correctness are judged by the **five-layer verification** system (structure / lossless / decoding consistency / metadata consistency / ILV extension integrity).
 - The Web path is for lightweight single-file demos by default; batch and heavy workloads belong to the CLI path.
 
 ## Core Features
 
 - **Lossless Packaging**: SPZ compressed stream stored as-is in GLB, 100% byte-level fidelity
 - **SPZ_2 Extension**: Uses `KHR_gaussian_splatting_compression_spz_2` standard extension
-- **Large-Scale Refactor (v2.0)**: Unified CLI/WASM core path, reduced dual-end divergence
+- **Large-Scale Refactor (v2.0.3)**: Unified CLI/WASM core path, removed compile-time flag for KHR_gaussian_splatting (now always enabled per ratified glTF spec)
+- **KHR Extension Compliance**: Full `KHR_gaussian_splatting` field serialization (`kernel`, `colorSpace`, `sortingMethod`, `projection`); nested `KHR_gaussian_splatting_compression_spz_2` with complete metadata (`spzVersion`, `compression`, `coordinateSystem`)
 - **WASM Enhancements**: Reserved input, explicit output release, memory stats, compat/perf-lite dual profile
 - **Dual-End Collaboration (scenario split)**: lightweight web interaction and fast feedback on browser side; batch, large-file, and heavy verification workflows on local CLI side
-- **Three-Layer Verification**: Structure validation / lossless validation / decoding consistency
+- **Five-Layer Verification**: Structure validation / lossless validation / decoding consistency / metadata consistency / ILV extension integrity
 - **Cross-Platform**: Windows, Linux, macOS (x64 + ARM)
 - **Zero Runtime Dependencies**: C++17 + WASM, no additional runtime dependencies
 
 ## Extension Support Status
 
 ### KHR_gaussian_splatting Extension
-- **Status**: `KHR_gaussian_splatting` has landed in the glTF repository but is **not yet ratified**.
-- **`KHR_gaussian_splatting_compression_spz_2`**: Still explicitly in **draft** status.
+- **Status**: `KHR_gaussian_splatting` has been merged into the glTF specification (**ratified**). The extension is always enabled — no compile-time flag required.
+- **`KHR_gaussian_splatting_compression_spz_2`**: Still in **draft** status.
 - **Current Implementation**:
-  - ✅ **Export**: Writes the full extension chain, including outer `KHR_gaussian_splatting` and nested `KHR_gaussian_splatting_compression_spz_2` data.
+  - ✅ **Export**: Writes the full extension chain with required fields (`kernel`, `colorSpace`), optional properties (`sortingMethod`, `projection`), and nested `KHR_gaussian_splatting_compression_spz_2` with complete metadata (`bufferView`, `spzVersion`, `compression`, `coordinateSystem`).
+  - ✅ **Layer 1 Validation**: Field-level checks ensure KHR_gaussian_splatting contains `kernel` and `colorSpace` in the GLB JSON.
   - ⚠️ **Parse**: Draft extensions are **safely ignored** during parsing, which is the expected fallback behavior.
-  - 🚫 **No hardcoded `Extensions` enum entries**: Draft extensions are intentionally kept out of header enums to avoid locking unfinished interfaces.
-- **Future Changes**: Full parse-time support can be added once the Khronos definitions are ratified.
+- **Future Changes**: Full parse-time support can be added once the spz_2 extension is ratified.
 
 ### Compilation Control
-- **CMake option**: `ENABLE_KHR_GAUSSIAN_SPLATTING` (default: `ON`) controls whether export-side extension data is emitted.
-- **Behavior when disabled**: The converter still runs, but it does not write Gaussian-splatting extension data into the output GLB.
+- KHR_gaussian_splatting support is always enabled. The extension is now part of the ratified glTF specification.
+
+### ILV 003 Coordinate System Extension
+- **Extension ID**: `0xADBE0003`
+- **Purpose**: Maps coordinateSystem (uint32) metadata within SPZ ILV (Information-Label-Value) records.
+- **Implementation**: spz2glb reads and forwards 003 metadata as descriptor (not instruction), leaving coordinate conversion to the renderer's `coordinateConverter()`.
+- **Validation**: Layer 5 (ILV extension integrity) verifies TLV record structure and enforces 003 value range [0, 16].
 
 ## Comparison with `splat-transform`
 
 > Note: this section describes **tool positioning differences**, not an absolute quality ranking.
 
-### Core Difference in One Line
-
-- **`spz2glb`**: **Lossless packaging** of SPZ into GLB (SPZ compressed stream stored as-is)
-- **`splat-transform`**: Reads SPZ, **decompresses and reconstructs** full Gaussian data, then writes GLB (not lossless packaging)
-
-### Detailed Comparison
-
-| Dimension | `spz2glb` (v2.0) | `splat-transform` (v1.10.1) |
+| Dimension | `spz2glb` (v2.0.3) | `splat-transform` (v3.1.7) |
 |-----------|-------------------|-----------------------------|
-| **Core positioning** | **Lossless SPZ→GLB packaging** (preserves SPZ compressed stream) | **Data transformation/reconstruction tool** (multi-format conversion & editing) |
-| **SPZ handling** | No decompression; SPZ stored as binary stream inside GLB | Read SPZ → decompress to full Gaussian data → rebuild GLB |
-| **GLB output** | Uses `KHR_gaussian_splatting_compression_spz_2` extension with original SPZ stream | Uses standard `KHR_gaussian_splatting` extension with decompressed Gaussian attributes |
-| **Data fidelity** | 100% lossless (byte-level SPZ preservation) | Decompress-rebuild cycle involves codec conversion |
-| **Feature scope** | Focused on SPZ↔GLB conversion and verification | Supports read/transform/filter/merge/generate across PLY/SOG/SPZ/KSPLAT/SPLAT formats |
-| **Runtime** | C++17 + WASM, no runtime dependencies | TypeScript/Node.js with WebGPU dependency for SOG compression |
-| **WASM capabilities** | Reserved input, explicit release, memory stats, dual profile | Browser/Node dual-end, not centered on release-grade memory governance |
-| **Validation** | Built-in 3-layer verification (structure/lossless/decoding consistency) + cloud browser smoke | Unit tests + fixture validation |
+| **Developer** | Independent (Pu Junhan) | PlayCanvas |
+| **Core positioning** | **Lossless SPZ→GLB packaging** (SPZ compressed stream preserved as-is) | **Multi-format splat conversion & editing** (decompress-rebuild pipeline) |
+| **Language** | C++17 + WASM | TypeScript (ESM/CJS dual) |
+| **GLB output** | `KHR_gaussian_splatting_compression_spz_2` extension (original SPZ stream, byte-identical) | Standard `KHR_gaussian_splatting` extension (decompressed float32 attributes) |
+| **`spz_2` extension** | ✅ Supported (nested inside KHR_gaussian_splatting) | ❌ Not supported |
+| **SPZ handling** | No decompression; SPZ stored as binary stream inside GLB | Pure JS reader (v2-v4, gzip/zstd) + @adobe/spz WASM writer |
+| **Data fidelity** | 100% lossless (byte-level SPZ preservation in GLB) | Decompress-rebuild cycle; floating-point precision varies by attribute encoding |
+| **Feature scope** | Focused on SPZ↔GLB conversion + 5-layer verification | 9 input formats, 12 output formats, transform/filter/merge/decimate/generate |
+| **Streaming** | File-based (load full SPZ, output full GLB) | ChunkSource streaming pipeline (process 100M+ points without full load) |
+| **GPU acceleration** | N/A (C++ CPU, no GPU dependency) | WebGPU for SOG compression, voxelization, rendering |
+| **Runtime deps** | None (standalone binary + WASM) | Node.js ≥22, @adobe/spz WASM, webgpu |
+| **WASM capabilities** | Reserved input, explicit release, memory stats, dual profile | SPZ write-only via @adobe/spz (read is pure JS) |
+| **Validation** | Built-in 5-layer verification (structure/lossless/decode/metadata/ILV) + CI browser smoke | 45+ test files (format roundtrip, GLB conformance, CLI) |
+| **Cross-platform** | Windows/Linux/macOS (x64 + ARM) native binaries | Cross-platform via Node.js |
+| **License** | MIT | MIT |
 
 ### Usage Recommendations
 
 | Scenario | Recommended Tool |
 |----------|------------------|
-| Need to **losslessly embed** SPZ in GLB, preserving original compression | `spz2glb` |
-| Need GLB with directly renderable Gaussian data (not compressed stream) | `splat-transform` |
-| Need splat transformation, filtering, merging, generation | `splat-transform` |
-| Need cross-format batch processing (SOG/KSPLAT/SPLAT/etc.) | `splat-transform` |
-| Need dual-scenario collaboration (lightweight web + heavy local tasks) with release-grade validation | `spz2glb` |
+| Need to **losslessly embed** SPZ in GLB, preserving original compressed stream byte-for-byte | `spz2glb` |
+| Need GLB with directly renderable float32 Gaussian attributes (no SPZ decoder required) | `splat-transform` |
+| Need multi-format batch processing (PLY/SOG/SPLAT/KSPLAT/SPZ/CSV/HTML/Voxel) | `splat-transform` |
+| Need streaming/huge-scene processing (100M+ points) | `splat-transform` |
+| Need splat transformation, filtering, merging, decimation, generation | `splat-transform` |
+| Need GPU-accelerated operations (SOG compression, voxelization) | `splat-transform` |
+| Need a focused, lightweight converter with release-grade verification | `spz2glb` |
 
-### Basic Conversion
+## Basic Conversion
 
 ```bash
 # Convert SPZ to GLB
 spz2glb model.spz model.glb
 ```
 
-### Three-Layer Verification
+### Five-Layer Verification
 
 ```bash
 # Run all verifications (provide your own SPZ and GLB files)
 spz_verify all input.spz output.glb
 
 # Output:
-# Layer 1: GLB Structure & SPZ_2 Specification Validation - PASSED (7/7)
+# Layer 1: GLB Structure & KHR Extension Validation - PASSED
 # Layer 2: Binary Lossless Verification - PASSED (byte-identical)
 # Layer 3: Decoding Consistency Verification - PASSED (Size match)
-# [SUCCESS] All verifications PASSED!
+# Layer 4: Metadata Consistency Verification - PASSED (SPZ↔GLB metadata)
+# Layer 5: ILV Extension Integrity Verification - PASSED (TLV structure)
+# [SUCCESS] All 5 verifications PASSED!
 ```
 
 > **Note**: Use the actual executable path from your build output (for example `build/spz2glb` / `build/spz_verify`) or add binaries to `PATH`.
@@ -149,14 +159,23 @@ brew install zlib
 ### Converter (spz2glb)
 
 ```bash
-spz2glb <input.spz> <output.glb>
+spz2glb <input.spz> <output.glb> [--verify]
 ```
+
+**Flags**:
+
+| Flag | Description |
+|------|-------------|
+| `--verify` | Run 5-layer verification immediately after conversion (invokes spz_verify internally) |
 
 **Complete Examples**:
 
 ```bash
 # Convert a single file
 spz2glb model.spz model.glb
+
+# Convert and verify
+spz2glb model.spz model.glb --verify
 
 # Batch conversion
 for file in *.spz; do
@@ -178,13 +197,13 @@ done
 [INFO] GLB size: 16 MB
 ```
 
-### Three-Layer Verification Tool (spz_verify)
+### Five-Layer Verification Tool (spz_verify)
 
 > **Important Notes**:
 > - **Independent Tool**: spz_verify is a standalone verification tool, NOT part of the production conversion pipeline
 > - **Development/Testing Use**: Designed for quality assurance, debugging, and testing workflows
 > - **Not Required for Daily Use**: Once conversion is verified, you only need spz2glb for production
-> - **Layer 2 Performs Byte-Level Comparison**: Layer 2 verification extracts the SPZ payload from GLB and performs byte-by-byte comparison with the original SPZ file (slower than Layer 1/3)
+> - **Layer 2 Performs Byte-Level Comparison**: Layer 2 verification extracts the SPZ payload from GLB and performs byte-by-byte comparison with the original SPZ file (slower than Layer 1/3/4/5)
 
 ```bash
 spz_verify <command> [options]
@@ -193,13 +212,15 @@ spz_verify <command> [options]
 **Commands**:
 
 ```bash
-# Run all three layers of verification
+# Run all five layers of verification
 spz_verify all <input.spz> <output.glb>
 
 # Run individual layer verification
 spz_verify layer1 <output.glb>              # GLB structure validation (fast)
-spz_verify layer2 <input.spz> <output.glb>  # Lossless binary validation (MD5, slower)
+spz_verify layer2 <input.spz> <output.glb>  # Lossless binary validation (byte-by-byte comparison, slower)
 spz_verify layer3 <input.spz> <output.glb>  # Decode consistency validation (fast)
+spz_verify layer4 <input.spz> <output.glb>  # Metadata consistency validation (fast)
+spz_verify layer5 <input.spz>              # ILV extension integrity validation (fast)
 ```
 
 **Complete Examples**:
@@ -215,24 +236,33 @@ spz_verify all model.spz model.glb
 spz_verify layer1 model.glb
 spz_verify layer2 model.spz model.glb
 spz_verify layer3 model.spz model.glb
+spz_verify layer4 model.spz model.glb
+spz_verify layer5 model.spz
 ```
 
 **Verification Output**:
 
 ```
-Layer 1: GLB Structure Validation
+Layer 1: GLB Structure & KHR Extension Validation
   ✓ Magic number: 0x46546C67 ("glTF")
   ✓ Version: 2
   ✓ extensionsUsed contains KHR_gaussian_splatting
   ✓ extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
-  ✓ buffers configuration correct
-  ✓ Compression stream mode (attributes empty)
+  ✓ extensionsRequired contains KHR_gaussian_splatting
+  ✓ extensionsRequired contains KHR_gaussian_splatting_compression_spz_2
+  ✓ KHR_gaussian_splatting has 'kernel' field
+  ✓ KHR_gaussian_splatting has 'colorSpace' field
+  ✓ compression.bufferView = 0
+  ✓ bufferView.byteLength matches buffers[0].byteLength
+  ✓ bufferView.byteOffset is 4-byte aligned
+  ✓ bufferView inside buffers[0] range
+  ✓ BIN chunk padding valid
   [PASS] Layer 1 validation passed
 
-Layer 2: Lossless Binary Validation
-  ✓ Original SPZ MD5: abc123...
-  ✓ Extracted data MD5: abc123...
-  ✓ MD5 match confirmed
+Layer 2: Payload Extraction & Byte Equality
+  ✓ SPZ input bytes: 15728640
+  ✓ Extracted bytes: 15728640
+  ✓ Extracted payload is byte-identical to input SPZ
   [PASS] Layer 2 validation passed
 
 Layer 3: Decode Consistency Validation
@@ -240,7 +270,17 @@ Layer 3: Decode Consistency Validation
   ✓ Extension integrity check passed
   [PASS] Layer 3 validation passed
 
-[SUCCESS] All 3 layers validation passed!
+Layer 4: GLB Extension Metadata vs SPZ Header Consistency
+  ✓ SPZ version consistent: 2
+  ✓ GLB coordinateSystem recorded in metadata
+  [PASS] Layer 4 validation passed
+
+Layer 5: ILV Extension Completeness
+  ✓ ILV 0xADBE0003 coordinateSystem=1 (valid, range [0,16])
+  ✓ All ILV records pass integrity checks
+  [PASS] Layer 5 validation passed
+
+[SUCCESS] All 5 layers validation passed!
 ```
 
 ## Automated Verification Script (Recommended)
@@ -274,7 +314,7 @@ $SPZ2GLB "$INPUT" "$OUTPUT"
 echo ""
 
 # Step 2: Verify
-echo "[2/2] Running 3-layer verification..."
+echo "[2/2] Running 5-layer verification..."
 $VERIFY all "$INPUT" "$OUTPUT"
 echo ""
 
@@ -306,7 +346,7 @@ echo [1/2] Converting SPZ to GLB...
 %SPZ2GLB% "%INPUT%" "%OUTPUT%"
 echo.
 
-echo [2/2] Running 3-layer verification...
+echo [2/2] Running 5-layer verification...
 %VERIFY% all "%INPUT%" "%OUTPUT%"
 echo.
 
@@ -332,8 +372,8 @@ verify.bat model.spz
 # Install Emscripten
 git clone https://github.com/emscripten-core/emsdk.git
 cd emsdk
-./emsdk install 5.0.1
-./emsdk activate 5.0.1
+./emsdk install 6.0.3
+./emsdk activate 6.0.3
 source ./emsdk_env.sh
 
 # Build WASM modules
@@ -403,6 +443,7 @@ If large-file browser processing becomes a hard requirement, a separate WASM64 b
 
 The WASM build includes:
 - **-O3 + strict warnings**: Optimized build with warning-clean gate
+- **-Oz**: WASM-specific size optimization (reduces .wasm binary size)
 - **-fno-exceptions**: No exception overhead
 - **compat/perf-lite dual profile**: Configurable memory behavior by runtime target
 - **Memory pool**: Bump allocator for fast allocation
@@ -417,13 +458,14 @@ The WASM build includes:
 - CMake 3.15+
 - C++17 compiler
 - ZLIB (automatically installed via system package manager)
+- ZSTD (v4 SPZ format support)
 
 **Dependency Details**:
 
 | Tool | Dependencies | Purpose |
 |------|--------------|---------|
-| spz2glb | ZLIB, fastgltf, simdjson | SPZ to GLB conversion |
-| spz_verify | ZLIB only | Three-layer verification |
+| spz2glb | ZLIB, ZSTD, fastgltf, simdjson | SPZ to GLB conversion |
+| spz_verify | ZLIB, ZSTD | Five-layer verification |
 
 ## Project Structure
 
@@ -433,7 +475,7 @@ spz2glb/
 ├── LICENSE                     # MIT License
 ├── README.md / README-zh.md    # Documentation
 ├── src/
-│   ├── spz2glb_core.cpp/.h     # Core conversion logic (v2.0 unified entry)
+│   ├── spz2glb_core.cpp/.h     # Core conversion logic (v2.0.3 unified entry)
 │   ├── spz2glb_wasm_c_api.cpp/.h  # WASM C API (reserve/release/stats)
 │   ├── memory_pool.cpp/.h      # Memory pool and hot object pool
 │   ├── spz_to_glb.cpp          # CLI main entry
@@ -444,9 +486,25 @@ spz2glb/
 │   ├── include/fastgltf/
 │   ├── src/
 │   └── deps/simdjson/         # simdjson v4.3.1 (built-in)
-├── tests/                      # Test scripts and fixtures
-└── .github/workflows/          # CI/CD workflows
+├── tests/
+│   ├── gen_fixture.mjs           # Synthetic fixture generator
+│   ├── data/
+│   │   └── bench/                # Benchmark dataset
+│   └── ...                       # Test scripts and fixtures
+├── scripts/
+│   ├── wasm-pre-check.sh         # WASM pre-build environment check
+│   └── ...                       # Utility scripts
+└── .github/workflows/            # CI/CD workflows
 ```
+
+## Test Data
+
+The `tests/` directory includes:
+
+- **Synthetic fixtures** (`tests/gen_fixture.mjs`): Generates minimal valid SPZ files for unit tests, covering v3/v4 SPZ variants and edge cases (empty files, truncated headers, malformed extensions). v2 support requires extending the generator (currently not implemented).
+- **Benchmark dataset** (`tests/data/bench/`): A set of representative SPZ files of varying sizes and compression profiles used for performance benchmarking and regression testing.
+
+Both are regenerable and do not bundle real user data.
 
 ## Technical Details
 
@@ -526,6 +584,7 @@ MIT License - See [LICENSE](LICENSE) for details
 Related projects:
 
 - [spz_gatekeeper](https://github.com/spz-ecosystem/spz_gatekeeper) - SPZ Gatekeeper: format legality validation and ecosystem governance
+- [spz-anime-text2scene-bench](https://github.com/spz-ecosystem/spz-anime-text2scene-bench) - Anime-style text-to-scene benchmark dataset in SPZ format
 - [fastgltf](https://github.com/spnda/fastgltf) - High-performance glTF library (by Sean Apeler, MIT License)
 - [simdjson](https://github.com/simdjson/simdjson) - Ultra-fast JSON parsing library v4.3.1
 - [KHR_gaussian_splatting](https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_gaussian_splatting) - Khronos Gaussian Splatting Extension

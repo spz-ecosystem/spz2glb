@@ -103,10 +103,6 @@ add_executable(wasm_c_api_test
 
 target_link_libraries(wasm_c_api_test PRIVATE spz2glb_core fastgltf ZLIB::ZLIB)
 
-if(ENABLE_KHR_GAUSSIAN_SPLATTING)
-    target_compile_definitions(wasm_c_api_test PRIVATE FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING=1)
-endif()
-
 add_test(
     NAME "wasm_c_api_test"
     COMMAND wasm_c_api_test

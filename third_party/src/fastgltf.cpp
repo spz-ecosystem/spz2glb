@@ -6089,9 +6089,7 @@ void fg::Exporter::writeMeshes(const Asset& asset, std::string& json) {
                 }
 
 				const bool hasExtensions = !itp->mappings.empty() || itp->dracoCompression
-#if FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING
 					|| itp->gaussianSplat
-#endif
 					;
 				if (hasExtensions) {
 					json += R"(,"extensions":{)";
@@ -6122,23 +6120,40 @@ void fg::Exporter::writeMeshes(const Asset& asset, std::string& json) {
 					}
 					json += "}}";
 				}
-#if FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING
 				if (itp->gaussianSplat) {
 					if (!itp->mappings.empty() || itp->dracoCompression)
 						json += ',';
 					
 					json += R"("KHR_gaussian_splatting":{)";
 					
+					// KHR_gaussian_splatting required properties
+					json += R"("kernel":")" + itp->gaussianSplat->kernel + '"';
+					json += R"(,"colorSpace":")" + itp->gaussianSplat->colorSpace + '"';
+					
+					// Optional properties (only write if non-default)
+					if (itp->gaussianSplat->sortingMethod != "cameraDistance")
+						json += R"(,"sortingMethod":")" + itp->gaussianSplat->sortingMethod + '"';
+					if (itp->gaussianSplat->projection != "perspective")
+						json += R"(,"projection":")" + itp->gaussianSplat->projection + '"';
+					
 					if (itp->gaussianSplat->spzCompression) {
 						json += R"("extensions":{)";
 						json += R"("KHR_gaussian_splatting_compression_spz_2":{)";
 						json += R"("bufferView":)" + std::to_string(itp->gaussianSplat->spzCompression->bufferView);
+						if (itp->gaussianSplat->spzCompression->spzVersion > 0) {
+							json += R"(,"spzVersion":)" + std::to_string(itp->gaussianSplat->spzCompression->spzVersion);
+						}
+						if (!itp->gaussianSplat->spzCompression->compression.empty()) {
+							json += R"(,"compression":")" + itp->gaussianSplat->spzCompression->compression + R"(")";
+						}
+						if (itp->gaussianSplat->spzCompression->coordinateSystem > 0) {
+							json += R"(,"coordinateSystem":)" + std::to_string(itp->gaussianSplat->spzCompression->coordinateSystem);
+						}
 						json += "}}";
 					}
 					
 					json += "}";
 				}
-#endif
 				if (hasExtensions) {
 					json += "}";
 				}
