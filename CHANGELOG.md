@@ -93,8 +93,10 @@
 
 - **verify-native decoupled**: Remove `needs: [build]` dependency from verify-native job — now runs independently (parallel) instead of waiting for the 3-platform build matrix, preventing native verification from being skipped when a single platform fails
 - **MinGW cross-compile check**: Add `x86_64-w64-mingw32-g++ -fsyntax-only` step to verify-native, catching `#ifdef _WIN32` guard mismatches without requiring Windows ZLIB/ZSTD libraries
-- **Rollback security gate**: Add pre-download verification to rollback-artifact-entry — rejects rollback sources not on `main` branch or not completed successfully, with SHA-256 checksum in audit manifest
-- **wasm-pre-check P6**: Extend file integrity stage with cross-platform `#ifdef` guard detection (regex-based static analysis on headers using `#ifdef _WIN32` / `#else` / `#endif`)
+- **P6 integrity in verify-native**: Replicate UTF-8 encoding and CMake syntax checks from wasm-pre-check.sh into verify-native, forming dual coverage (WASM + native)
+- **Rollback security gate**: Add pre-download verification to rollback-artifact-entry — rejects rollback sources not on `main` branch or not completed successfully, with SHA-256 checksum and verified commit SHA in audit manifest
+- **Playwright upgrade**: 1.53.0 → 1.62.0
+- **Multi-browser WASM testing**: Extend browser smoke tests (hash matrix + glue loading) from Chromium-only to Chromium + Firefox + WebKit, running on all three engines in parallel
 
 ---
 
