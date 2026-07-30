@@ -282,8 +282,9 @@ export function parseGlbJson(glbBuffer) {
             totalSizeBytes: totalLen,
             extensionsUsed: json.extensionsUsed || [],
             extensionsRequired: json.extensionsRequired || [],
-            khrGaussianSplatting: json.extensions?.KHR_gaussian_splatting || null,
-            spzCompression: json.extensions?.KHR_gaussian_splatting?.extensions?.KHR_gaussian_splatting_compression_spz_2 || null,
+            // KHR 扩展在 primitive 级别：meshes[0].primitives[0].extensions
+            KHR_gaussian_splatting: json.meshes?.[0]?.primitives?.[0]?.extensions?.KHR_gaussian_splatting || null,
+            KHR_gaussian_splatting_compression_spz_2: json.meshes?.[0]?.primitives?.[0]?.extensions?.KHR_gaussian_splatting?.extensions?.KHR_gaussian_splatting_compression_spz_2 || null,
         };
     } catch {
         return null;
@@ -330,22 +331,22 @@ export function generateReportJson(opts) {
         },
         extensionsUsed: opts.glbInfo?.extensionsUsed || [],
         extensionsRequired: opts.glbInfo?.extensionsRequired || [],
-        khrGaussianSplatting: opts.glbInfo?.khrGaussianSplatting ? {
-            kernel: opts.glbInfo.khrGaussianSplatting.kernel || '',
-            colorSpace: opts.glbInfo.khrGaussianSplatting.colorSpace || '',
-            sortingMethod: opts.glbInfo.khrGaussianSplatting.sortingMethod || '',
-            projection: opts.glbInfo.khrGaussianSplatting.projection || '',
+        KHR_gaussian_splatting: opts.glbInfo?.KHR_gaussian_splatting ? {
+            kernel: opts.glbInfo.KHR_gaussian_splatting.kernel || '',
+            colorSpace: opts.glbInfo.KHR_gaussian_splatting.colorSpace || '',
+            sortingMethod: opts.glbInfo.KHR_gaussian_splatting.sortingMethod || '',
+            projection: opts.glbInfo.KHR_gaussian_splatting.projection || '',
         } : {},
-        spzCompression: opts.glbInfo?.spzCompression ? {
-            bufferView: opts.glbInfo.spzCompression.bufferView ?? 0,
-            spzVersion: opts.glbInfo.spzCompression.spzVersion ?? 0,
-            compression: opts.glbInfo.spzCompression.compression || '',
-            coordinateSystem: opts.glbInfo.spzCompression.coordinateSystem ?? -1,
+        KHR_gaussian_splatting_compression_spz_2: opts.glbInfo?.KHR_gaussian_splatting_compression_spz_2 ? {
+            bufferView: opts.glbInfo.KHR_gaussian_splatting_compression_spz_2.bufferView ?? 0,
+            spzVersion: opts.glbInfo.KHR_gaussian_splatting_compression_spz_2.spzVersion ?? 0,
+            compression: opts.glbInfo.KHR_gaussian_splatting_compression_spz_2.compression || '',
+            coordinateSystem: opts.glbInfo.KHR_gaussian_splatting_compression_spz_2.coordinateSystem ?? -1,
         } : {},
         coordinateSystem: {
-            found: (opts.glbInfo?.spzCompression?.coordinateSystem ?? -1) >= 0,
+            found: (opts.glbInfo?.KHR_gaussian_splatting_compression_spz_2?.coordinateSystem ?? -1) >= 0,
             extensionId: '0xADBE0003',
-            value: opts.glbInfo?.spzCompression?.coordinateSystem ?? -1,
+            value: opts.glbInfo?.KHR_gaussian_splatting_compression_spz_2?.coordinateSystem ?? -1,
         },
         timestamp,
         generator: {

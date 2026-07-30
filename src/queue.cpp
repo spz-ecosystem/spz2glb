@@ -169,7 +169,7 @@ std::string ConversionResult::toJson() const {
     }
     j << "],\n";
 
-    j << "  \"khrGaussianSplatting\": {\n";
+    j << "  \"KHR_gaussian_splatting\": {\n";
     j << "    \"kernel\": \"" << kernel << "\",\n";
     j << "    \"colorSpace\": \"" << colorSpace << "\"";
     if (!sortingMethod.empty()) j << ",\n    \"sortingMethod\": \"" << sortingMethod << "\"";
@@ -177,7 +177,7 @@ std::string ConversionResult::toJson() const {
     j << "\n  },\n";
 
     // spz_2 扩展
-    j << "  \"spzCompression\": {\n";
+    j << "  \"KHR_gaussian_splatting_compression_spz_2\": {\n";
     j << "    \"bufferView\": " << spz2BufferView << ",\n";
     j << "    \"spzVersion\": " << spz2SpzVersion << ",\n";
     j << "    \"compression\": \"" << spz2Compression << "\",\n";
