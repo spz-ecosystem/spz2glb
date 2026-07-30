@@ -276,7 +276,7 @@ void spz2glb_get_version(int* major, int* minor, int* patch) {
         *minor = 0;
     }
     if (patch != nullptr) {
-        *patch = 2;
+        *patch = 3;
     }
 }
 
