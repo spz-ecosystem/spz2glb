@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(spz2glb VERSION 2.0.2 LANGUAGES CXX)
+project(spz2glb VERSION 2.0.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -148,6 +148,7 @@ if(NOT SPZ2GLB_BUILD_WASM)
   add_executable(spz2glb
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_to_glb.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz_verifier.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/queue.cpp
   )
 
   target_link_libraries(spz2glb PRIVATE spz2glb_core fastgltf spz2glb_zlib)

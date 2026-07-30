@@ -71,8 +71,48 @@ EMSCRIPTEN_BINDINGS(spz2glb_module) {
 #else  // __EMSCRIPTEN__
 
 #include "spz_verifier.h"
+#include "queue.h"
+#include "mapped_file.h"
 
 #ifndef SPZ2GLB_NO_CLI_MAIN
+
+/// 生成单次转换的 JSON 报告到 stdout
+bool generateReport(const std::string& spzPath, const std::string& glbPath) {
+    spz2glb::MappedFile spzFile;
+    if (!spzFile.open(spzPath)) {
+        std::cerr << "[ERROR] Cannot open SPZ file: " << spzPath << std::endl;
+        return false;
+    }
+
+    spz2glb::MappedFile glbFile;
+    if (!glbFile.open(glbPath)) {
+        std::cerr << "[ERROR] Cannot open GLB file: " << glbPath << std::endl;
+        return false;
+    }
+
+    spz2glb::ConversionResult result;
+    result.inputFile = std::filesystem::path(spzPath).filename().string();
+    result.outputFile = std::filesystem::path(glbPath).filename().string();
+    result.spzSizeBytes = spzFile.size();
+    result.glbSizeBytes = glbFile.size();
+
+    // 解析 GLB 扩展信息
+    std::vector<uint8_t> glbVec(glbFile.data(), glbFile.data() + glbFile.size());
+
+    // 解析 GLB 基本信息
+    constexpr uint32_t kGlbMagic = 0x46546C67;
+    if (glbVec.size() >= 12) {
+        uint32_t magic = 0;
+        std::memcpy(&magic, glbVec.data(), 4);
+        if (magic == kGlbMagic) {
+            std::memcpy(&result.glbTotalSize, glbVec.data() + 8, 4);
+        }
+    }
+
+    std::cout << result.toJson() << std::flush;
+    return true;
+}
+
 bool convertSingleFile(const std::string& inputPath, const std::string& outputPath, bool doVerify) {
     spz2glb::MappedFile mappedFile;
     if (!mappedFile.open(inputPath)) {
@@ -147,19 +187,35 @@ void printUsage(const char* progName) {
     std::cout << "SPZ to GLB Converter v2.0.3\n";
     std::cout << "Usage:\n";
     std::cout << "  " << progName << " <input.spz> <output.glb> [--verify]\n";
-    std::cout << "  " << progName << " --batch .spz [--verify]\n\n";
+    std::cout << "  " << progName << " --batch EXT [--verify]\n";
+    std::cout << "  " << progName << " --queue-add <file.spz>...\n";
+    std::cout << "  " << progName << " --queue\n";
+    std::cout << "  " << progName << " --queue-status\n";
+    std::cout << "  " << progName << " --queue-clear\n";
+    std::cout << "  " << progName << " --report <input.spz> <output.glb>\n\n";
     std::cout << "Options:\n";
-    std::cout << "  --verify     Run 5-layer verification after conversion\n";
-    std::cout << "  --batch EXT  Batch convert all files with given extension (e.g. .spz)\n";
-    std::cout << "  --help, -h   Show this help message\n";
+    std::cout << "  --verify       Run 5-layer verification after conversion\n";
+    std::cout << "  --batch EXT    Batch convert all files with given extension (e.g. .spz)\n";
+    std::cout << "  --queue-add    Add file(s) to the .spzqueue directory\n";
+    std::cout << "  --queue        Start queue processing daemon\n";
+    std::cout << "  --queue-status Show queue status\n";
+    std::cout << "  --queue-clear  Clear all queue directories\n";
+    std::cout << "  --report       Generate JSON report for a single conversion\n";
+    std::cout << "  --help, -h     Show this help message\n";
 }
 
 int main(int argc, char** argv) {
     bool doVerify = false;
     bool batchMode = false;
+    bool queueMode = false;
+    bool queueAddMode = false;
+    bool queueStatusMode = false;
+    bool queueClearMode = false;
+    bool reportMode = false;
     std::string batchExt;
     std::string inputPath;
     std::string outputPath;
+    std::vector<std::string> queueFiles;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -175,6 +231,22 @@ int main(int argc, char** argv) {
             if (batchExt.front() != '.') {
                 batchExt = "." + batchExt;
             }
+        } else if (arg == "--queue") {
+            queueMode = true;
+        } else if (arg == "--queue-add") {
+            queueAddMode = true;
+            // 收集后续所有非选项参数作为文件列表
+            for (int j = i + 1; j < argc; j++) {
+                if (argv[j][0] == '-') break;
+                queueFiles.push_back(argv[j]);
+            }
+            i = argc; // 跳过已处理的文件参数
+        } else if (arg == "--queue-status") {
+            queueStatusMode = true;
+        } else if (arg == "--queue-clear") {
+            queueClearMode = true;
+        } else if (arg == "--report") {
+            reportMode = true;
         } else if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
             return 0;
@@ -189,6 +261,36 @@ int main(int argc, char** argv) {
             printUsage(argv[0]);
             return 1;
         }
+    }
+
+    // 队列模式
+    if (queueAddMode) {
+        spz2glb::Queue q;
+        return q.add(queueFiles) ? 0 : 1;
+    }
+
+    if (queueMode) {
+        spz2glb::Queue q;
+        return q.run(2, doVerify) ? 0 : 1;
+    }
+
+    if (queueStatusMode) {
+        spz2glb::Queue q;
+        return q.printStatus() ? 0 : 1;
+    }
+
+    if (queueClearMode) {
+        spz2glb::Queue q;
+        return q.clear() ? 0 : 1;
+    }
+
+    // 报告模式
+    if (reportMode) {
+        if (inputPath.empty() || outputPath.empty()) {
+            std::cerr << "[ERROR] --report requires <input.spz> and <output.glb>" << std::endl;
+            return 1;
+        }
+        return generateReport(inputPath, outputPath) ? 0 : 1;
     }
 
     if (batchMode) {
