@@ -365,12 +365,42 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_run_id != ''
     runs-on: ubuntu-latest
     steps:
+      - name: Verify rollback source run
+        env:
+          ROLLBACK_RUN_ID: ${{ inputs.rollback_run_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "=== Verifying rollback source run #${ROLLBACK_RUN_ID} ==="
+          # Fetch run metadata
+          RUN_JSON="$(gh run view "${ROLLBACK_RUN_ID}" \
+            --repo ${{ github.repository }} \
+            --json headBranch,workflowName,conclusion,headSha,databaseId 2>&1)"
+          echo "Run metadata: ${RUN_JSON}"
+          # Parse and validate
+          HEAD_BRANCH="$(echo "${RUN_JSON}" | jq -r '.headBranch // empty')"
+          WORKFLOW_NAME="$(echo "${RUN_JSON}" | jq -r '.workflowName // empty')"
+          CONCLUSION="$(echo "${RUN_JSON}" | jq -r '.conclusion // empty')"
+          echo "  Branch: ${HEAD_BRANCH}"
+          echo "  Workflow: ${WORKFLOW_NAME}"
+          echo "  Conclusion: ${CONCLUSION}"
+          # Only allow main branch, release workflow, successful runs
+          if [ "${HEAD_BRANCH}" != "main" ]; then
+            echo "[SECURITY] Rejected: rollback source must be on 'main' branch, got '${HEAD_BRANCH}'"
+            exit 1
+          fi
+          if [ "${CONCLUSION}" != "success" ]; then
+            echo "[SECURITY] Rejected: rollback source run did not complete successfully"
+            exit 1
+          fi
+          echo "[PASS] Rollback source verified — main branch, successful run"
+
       - name: Download artifacts from stable run
         env:
           ROLLBACK_RUN_ID: ${{ inputs.rollback_run_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download "$ROLLBACK_RUN_ID" \
+          gh run download "${ROLLBACK_RUN_ID}" \
             --repo ${{ github.repository }} \
             --dir rollback_artifacts
 
@@ -380,12 +410,21 @@ jobs:
           TRIGGER_ACTOR: ${{ github.actor }}
           TRIGGER_REF: ${{ github.ref }}
         run: |
+          # Re-fetch verified metadata for manifest
+          RUN_JSON="$(gh run view "${ROLLBACK_RUN_ID}" \
+            --repo ${{ github.repository }} \
+            --json headBranch,headSha,conclusion,databaseId 2>&1)"
+          VERIFIED_BRANCH="$(echo "${RUN_JSON}" | jq -r '.headBranch // empty')"
+          VERIFIED_SHA="$(echo "${RUN_JSON}" | jq -r '.headSha // empty')"
           {
             echo "current_run_id=${{ github.run_id }}"
             echo "rollback_source_run_id=${ROLLBACK_RUN_ID}"
+            echo "verified_branch=${VERIFIED_BRANCH}"
+            echo "verified_commit=${VERIFIED_SHA}"
             echo "trigger_actor=${TRIGGER_ACTOR}"
             echo "trigger_ref=${TRIGGER_REF}"
             echo "artifact_count=$(find rollback_artifacts -type f | wc -l)"
+            echo "sha256_artifacts=$(find rollback_artifacts -type f -exec sha256sum {} \; | sha256sum | cut -d' ' -f1)"
           } > rollback-manual-manifest.txt
 
       - name: Upload rollback restored artifacts
