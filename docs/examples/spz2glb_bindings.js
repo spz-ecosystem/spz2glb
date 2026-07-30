@@ -236,3 +236,133 @@ function freeBuffer(module, ptr) {
     }
 }
 
+/**
+ * GLB JSON 解析：从 GLB 二进制提取 JSON 区块并解析
+ * @param {Uint8Array} glbBuffer - GLB 文件完整数据
+ * @returns {object|null} 解析结果或 null
+ */
+export function parseGlbJson(glbBuffer) {
+    const view = new DataView(glbBuffer.buffer, glbBuffer.byteOffset, glbBuffer.byteLength);
+    if (glbBuffer.length < 12) return null;
+
+    const magic = view.getUint32(0, true);
+    if (magic !== 0x46546C67) return null;
+
+    const version = view.getUint32(4, true);
+    if (version !== 2) return null;
+
+    const totalLen = view.getUint32(8, true);
+
+    let offset = 12;
+    let jsonStr = '';
+    let jsonChunkSize = 0;
+    let binChunkSize = 0;
+
+    while (offset + 8 <= glbBuffer.length) {
+        const chunkLen = view.getUint32(offset, true);
+        const chunkType = view.getUint32(offset + 4, true);
+
+        if (chunkType === 0x4E4F534A) {
+            jsonChunkSize = chunkLen;
+            const decoder = new TextDecoder('utf-8');
+            jsonStr = decoder.decode(glbBuffer.slice(offset + 8, offset + 8 + Math.min(chunkLen, glbBuffer.length - offset - 8)));
+        } else if (chunkType === 0x004E4942) {
+            binChunkSize = chunkLen;
+        }
+        offset += 8 + ((chunkLen + 3) & ~3);
+    }
+
+    if (!jsonStr) return null;
+
+    try {
+        const json = JSON.parse(jsonStr);
+        return {
+            jsonChunkSize,
+            binChunkSize,
+            totalSizeBytes: totalLen,
+            extensionsUsed: json.extensionsUsed || [],
+            extensionsRequired: json.extensionsRequired || [],
+            khrGaussianSplatting: json.extensions?.KHR_gaussian_splatting || null,
+            spzCompression: json.extensions?.KHR_gaussian_splatting?.extensions?.KHR_gaussian_splatting_compression_spz_2 || null,
+        };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * 生成 JSON 报告字符串（镜像 CLI 端 ConversionResult::toJson）
+ * @param {object} opts - 报告参数
+ * @param {string} opts.fileName - SPZ 文件名
+ * @param {number} opts.spzSizeBytes - SPZ 大小
+ * @param {number} opts.spzVersion - SPZ 版本
+ * @param {string} opts.compression - 压缩格式
+ * @param {number} opts.glbSizeBytes - GLB 大小
+ * @param {object} opts.glbInfo - GLB 解析结果（parseGlbJson 返回值）
+ * @param {boolean} opts.success - 是否成功
+ * @param {string} opts.errorMsg - 错误信息
+ * @param {number} opts.timingMs - 耗时
+ * @returns {string} JSON 字符串
+ */
+export function generateReportJson(opts) {
+    const now = new Date();
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const tz = -now.getTimezoneOffset();
+    const tzSign = tz >= 0 ? '+' : '-';
+    const tzHours = pad2(Math.abs(Math.trunc(tz / 60)));
+    const tzMins = pad2(Math.abs(tz % 60));
+    const timestamp = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}${tzSign}${tzHours}${tzMins}`;
+
+    const report = {
+        file: opts.fileName,
+        sizeBytes: opts.spzSizeBytes,
+        spz: {
+            version: opts.spzVersion || 0,
+            compression: opts.compression || 'unknown',
+        },
+        glb: {
+            magic: '0x46546C67',
+            version: 2,
+            jsonChunkSize: opts.glbInfo?.jsonChunkSize || 0,
+            binChunkSize: opts.glbInfo?.binChunkSize || 0,
+            totalSizeBytes: opts.glbInfo?.totalSizeBytes || 0,
+            outputSizeBytes: opts.glbSizeBytes,
+        },
+        extensionsUsed: opts.glbInfo?.extensionsUsed || [],
+        extensionsRequired: opts.glbInfo?.extensionsRequired || [],
+        khrGaussianSplatting: opts.glbInfo?.khrGaussianSplatting ? {
+            kernel: opts.glbInfo.khrGaussianSplatting.kernel || '',
+            colorSpace: opts.glbInfo.khrGaussianSplatting.colorSpace || '',
+            sortingMethod: opts.glbInfo.khrGaussianSplatting.sortingMethod || '',
+            projection: opts.glbInfo.khrGaussianSplatting.projection || '',
+        } : {},
+        spzCompression: opts.glbInfo?.spzCompression ? {
+            bufferView: opts.glbInfo.spzCompression.bufferView ?? 0,
+            spzVersion: opts.glbInfo.spzCompression.spzVersion ?? 0,
+            compression: opts.glbInfo.spzCompression.compression || '',
+            coordinateSystem: opts.glbInfo.spzCompression.coordinateSystem ?? -1,
+        } : {},
+        coordinateSystem: {
+            found: (opts.glbInfo?.spzCompression?.coordinateSystem ?? -1) >= 0,
+            extensionId: '0xADBE0003',
+            value: opts.glbInfo?.spzCompression?.coordinateSystem ?? -1,
+        },
+        timestamp,
+        generator: {
+            name: 'spz2glb',
+            version: '2.0.3',
+            license: 'MIT',
+            url: 'https://github.com/spz-ecosystem/spz2glb',
+        },
+        result: opts.success ? 'success' : 'failed',
+        timingMs: opts.timingMs,
+    };
+
+    // 失败时添加错误信息
+    if (!opts.success && opts.errorMsg) {
+        report.error = opts.errorMsg;
+    }
+
+    return JSON.stringify(report, null, 2);
+}
+
