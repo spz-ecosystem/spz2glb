@@ -447,6 +447,7 @@ bool preparePayloadForVerification(const std::vector<uint8_t>& glbData,
 VerifyResult Verifier::verify(const std::vector<uint8_t>& spz_data,
                               const std::vector<uint8_t>& glb_data) {
     VerifyResult result = {};
+    result.report_passed = true; // 可选，默认通过
     result.layer1_passed = verify_layer1(glb_data, result.layer1_detail);
     result.layer2_passed = verify_layer2(spz_data, glb_data, result.layer2_detail);
     result.layer3_passed = verify_layer3(spz_data, glb_data, result.layer3_detail);
@@ -469,6 +470,7 @@ VerifyResult Verifier::verify_files(const std::string& spz_path,
     std::vector<uint8_t> glbData;
 
     auto markAllFailed = [&result](const std::string& message) {
+        result.report_passed = true; // 可选，默认通过
         result.layer1_passed = false;
         result.layer2_passed = false;
         result.layer3_passed = false;
@@ -890,6 +892,95 @@ bool Verifier::verify_layer4(const std::vector<uint8_t>& spz_data,
 bool Verifier::verify_layer5(const std::vector<uint8_t>& spz_data,
                              std::string& detail) {
     return layer5_verify_extensions(spz_data, detail);
+}
+
+// ──────────────────────────────────────────────
+// JSON 报告验证（可选入口）
+// ──────────────────────────────────────────────
+bool Verifier::verify_report_file(const std::string& report_path,
+                                   std::string& detail) {
+    std::ifstream file(report_path);
+    if (!file.is_open()) {
+        detail = "[SKIP] No report file, skip report validation\n";
+        return true;
+    }
+
+    std::stringstream buf;
+    buf << file.rdbuf();
+    const std::string json = buf.str();
+
+    if (json.empty()) {
+        detail = "[FAIL] Report file is empty\n";
+        return false;
+    }
+
+    std::ostringstream oss;
+    oss << "[REPORT] Validating: " << report_path << "\n";
+    int errors = 0;
+
+    // 辅助：检查数组中是否包含指定扩展名
+    auto checkInArray = [&](const std::string& arrayKey, const std::string& ext) -> bool {
+        const auto arr = json.find("\"" + arrayKey + "\"");
+        if (arr == std::string::npos) {
+            oss << "  [FAIL] Missing \"" << arrayKey << "\"\n";
+            return false;
+        }
+        const auto close = json.find(']', arr);
+        const auto match = json.find("\"" + ext + "\"", arr);
+        if (match == std::string::npos || match > close) {
+            oss << "  [FAIL] \"" << arrayKey << "\" missing \"" << ext << "\"\n";
+            return false;
+        }
+        return true;
+    };
+
+    // 辅助：检查扩展对象是否存在
+    auto checkObj = [&](const std::string& key) -> size_t {
+        const auto pos = json.find("\"" + key + "\":");
+        if (pos == std::string::npos) {
+            oss << "  [FAIL] Missing \"" << key << "\" object\n";
+            errors++;
+        }
+        return pos;
+    };
+
+    // ── 1. extensionsUsed ──
+    checkInArray("extensionsUsed", "KHR_gaussian_splatting");
+    checkInArray("extensionsUsed", "KHR_gaussian_splatting_compression_spz_2");
+
+    // ── 2. extensionsRequired ──
+    checkInArray("extensionsRequired", "KHR_gaussian_splatting");
+    checkInArray("extensionsRequired", "KHR_gaussian_splatting_compression_spz_2");
+
+    // ── 3. KHR_gaussian_splatting 子字段 ──
+    const auto gsPos = checkObj("KHR_gaussian_splatting");
+    if (gsPos != std::string::npos) {
+        auto hasField = [&](const std::string& field) {
+            return json.find("\"" + field + "\":", gsPos) != std::string::npos;
+        };
+        if (!hasField("kernel"))     { oss << "  [FAIL] KHR_gaussian_splatting missing \"kernel\"\n"; errors++; }
+        if (!hasField("colorSpace")) { oss << "  [FAIL] KHR_gaussian_splatting missing \"colorSpace\"\n"; errors++; }
+    }
+
+    // ── 4. KHR_gaussian_splatting_compression_spz_2 子字段 ──
+    const auto spz2Pos = checkObj("KHR_gaussian_splatting_compression_spz_2");
+    if (spz2Pos != std::string::npos) {
+        auto hasField = [&](const std::string& field) {
+            return json.find("\"" + field + "\":", spz2Pos) != std::string::npos;
+        };
+        if (!hasField("bufferView")) { oss << "  [FAIL] spz_2 missing \"bufferView\"\n"; errors++; }
+        if (!hasField("spzVersion")) { oss << "  [FAIL] spz_2 missing \"spzVersion\"\n"; errors++; }
+        if (!hasField("compression")){ oss << "  [FAIL] spz_2 missing \"compression\"\n"; errors++; }
+    }
+
+    if (errors == 0) {
+        oss << "[PASS] Report validation OK\n";
+        detail = oss.str();
+        return true;
+    }
+    oss << "[FAIL] Report: " << errors << " issue(s)\n";
+    detail = oss.str();
+    return false;
 }
 
 } // namespace spz
