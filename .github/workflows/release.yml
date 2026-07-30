@@ -277,7 +277,7 @@ jobs:
   deploy-pages:
     needs: [wasm-build]
     runs-on: ubuntu-latest
-    if: (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') && github.event.inputs.rollback_run_id == ''
+    if: (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && github.event.inputs.rollback_run_id == ''
     permissions:
       pages: write
       id-token: write
