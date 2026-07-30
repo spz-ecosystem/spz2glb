@@ -31,14 +31,14 @@
             justify-content: center;
             padding: 20px;
         }
-        .container { width: 100%; max-width: 560px; }
+        .container { width: 100%; max-width: 640px; }
         .card {
             background: var(--card-bg);
             border-radius: var(--border-radius);
             box-shadow: var(--shadow);
             padding: 48px 40px;
         }
-        .header { text-align: center; margin-bottom: 40px; }
+        .header { text-align: center; margin-bottom: 32px; }
         .header h1 {
             font-size: 32px;
             font-weight: 700;
@@ -50,7 +50,7 @@
         .drop-zone {
             border: 2px dashed #d1d5db;
             border-radius: 12px;
-            padding: 40px;
+            padding: 32px;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s;
@@ -60,66 +60,105 @@
         .drop-icon { font-size: 48px; margin-bottom: 16px; }
         .drop-text { font-size: 16px; color: var(--text-primary); margin-bottom: 4px; }
         .drop-hint { font-size: 13px; color: var(--text-secondary); }
-        .file-info {
-            margin-top: 16px;
-            padding: 12px;
-            background: #f3f4f6;
-            border-radius: 8px;
-            font-size: 14px;
-            display: none;
+
+        /* 队列状态条 */
+        .queue-bar {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            justify-content: center;
         }
+        .queue-stat {
+            flex: 1;
+            padding: 8px 4px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 12px;
+            background: #f3f4f6;
+        }
+        .queue-stat .count { font-size: 18px; font-weight: 700; }
+        .queue-stat.pending .count { color: var(--warning); }
+        .queue-stat.processing .count { color: var(--primary); }
+        .queue-stat.done .count { color: var(--success); }
+        .queue-stat.failed .count { color: var(--error); }
+
+        /* 文件列表 */
+        .file-list { margin-top: 16px; display: none; }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .file-item .name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .file-item .status-badge {
+            font-weight: 600;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-left: 8px;
+            white-space: nowrap;
+        }
+        .file-item .status-badge.queued { background: #fef3c7; color: #92400e; }
+        .file-item .status-badge.processing { background: #dbeafe; color: #1e40af; }
+        .file-item .status-badge.done { background: #d1fae5; color: #065f46; }
+        .file-item .status-badge.failed { background: #fee2e2; color: #991b1b; }
+
+        .file-item .actions {
+            display: flex;
+            gap: 6px;
+            margin-left: 8px;
+        }
+        .file-item .actions button {
+            width: auto;
+            margin: 0;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            background: var(--primary);
+            color: white;
+            transition: opacity 0.2s;
+        }
+        .file-item .actions button:hover { opacity: 0.8; }
+        .file-item .actions button.report-btn { background: #374151; }
+
         .status {
-            padding: 16px;
+            padding: 12px;
             border-radius: 12px;
             text-align: center;
-            font-size: 14px;
-            margin-top: 16px;
+            font-size: 13px;
+            margin-top: 12px;
             display: none;
         }
         .status.loading { background: #fef3c7; color: var(--warning); }
         .status.success { background: #d1fae5; color: var(--success); }
         .status.error { background: #fee2e2; color: var(--error); }
-        button {
-            width: 100%;
-            padding: 16px;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-top: 20px;
-        }
-        button:hover:not(:disabled) { background: var(--primary-dark); }
-        button:disabled { background: #d1d5db; cursor: not-allowed; }
         .loading-spinner {
             display: inline-block;
-            width: 16px;
-            height: 16px;
+            width: 14px;
+            height: 14px;
             border: 2px solid currentColor;
             border-right-color: transparent;
             border-radius: 50%;
             animation: spin 0.75s linear infinite;
             vertical-align: middle;
-            margin-right: 8px;
+            margin-right: 6px;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-            gap: 12px;
-            margin-top: 20px;
-        }
-        .stat {
-            background: #f3f4f6;
-            border-radius: 8px;
-            padding: 12px;
-            text-align: center;
-        }
-        .stat-value { font-size: 16px; font-weight: 600; color: var(--primary); }
-        .stat-label { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+        button:disabled { background: #d1d5db; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -127,81 +166,40 @@
         <div class="card">
             <div class="header">
                 <h1>🌀 SPZ → GLB</h1>
-                <p>高性能 WebAssembly 在线转换</p>
+                <p>高性能 WebAssembly 在线转换 · 支持多文件队列</p>
             </div>
 
             <div class="drop-zone" id="dropZone">
-                <input type="file" id="fileInput" accept=".spz">
+                <input type="file" id="fileInput" accept=".spz" multiple>
                 <div class="drop-icon">📁</div>
-                <div class="drop-text">点击或拖拽上传 SPZ 文件</div>
-                <div class="drop-hint">支持 .spz 格式</div>
+                <div class="drop-text">点击或拖拽选择 SPZ 文件</div>
+                <div class="drop-hint">支持多文件批量选择</div>
             </div>
 
-            <div class="file-info" id="fileInfo"></div>
+            <!-- 队列状态条 -->
+            <div class="queue-bar" id="queueBar" style="display:none;">
+                <div class="queue-stat pending" id="qPending"><div class="count">0</div>待处理</div>
+                <div class="queue-stat processing" id="qProcessing"><div class="count">0</div>处理中</div>
+                <div class="queue-stat done" id="qDone"><div class="count">0</div>已完成</div>
+                <div class="queue-stat failed" id="qFailed"><div class="count">0</div>失败</div>
+            </div>
+
+            <!-- 文件列表 -->
+            <div class="file-list" id="fileList"></div>
 
             <div class="status" id="statusBox"></div>
-
-            <div class="stats" id="statsBox" style="display:none;">
-                <div class="stat">
-                    <div class="stat-value" id="statTime">-</div>
-                    <div class="stat-label">耗时 (ms)</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="statInput">-</div>
-                    <div class="stat-label">输入大小</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="statOutput">-</div>
-                    <div class="stat-label">输出大小</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="statCurrent">-</div>
-                    <div class="stat-label">当前内存</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="statPeak">-</div>
-                    <div class="stat-label">峰值内存</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="statAllocs">-</div>
-                    <div class="stat-label">分配次数</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="statFails">-</div>
-                    <div class="stat-label">失败次数</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="statWorkUsed">-</div>
-                    <div class="stat-label">工作区占用</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="statWorkCapacity">-</div>
-                    <div class="stat-label">工作区容量</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="statWorkPeak">-</div>
-                    <div class="stat-label">工作区峰值</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-value" id="statHotAvailable">-</div>
-                    <div class="stat-label">热池剩余</div>
-                </div>
-            </div>
-
-            <button id="convertBtn" disabled>选择文件后点击转换</button>
         </div>
     </div>
 
     <script type="module">
-        import { loadSpz2Glb } from './spz2glb_bindings.js';
+        import { loadSpz2Glb, parseGlbJson, generateReportJson } from './spz2glb_bindings.js';
         import SmartMemoryManager from './smart_memory.js';
 
         let spz2glb = null;
-        let selectedFile = null;
         let memManager = null;
-        let isConverting = false;
-        const testConfig = readTestConfig();
-        window.__spz2glbTestState = testConfig.captureState ? createEmptyTestState() : null;
+        let queue = [];
+        let processing = 0;
+        const MAX_PARALLEL = 2;
 
         function showStatus(msg, type) {
             const el = document.getElementById('statusBox');
@@ -216,136 +214,197 @@
             return (bytes / 1024 / 1024).toFixed(2) + ' MB';
         }
 
-        function formatRecommendation(recommendation) {
-            return `推荐 ≤ ${recommendation.recommendedMaxSize}MB | 硬上限 ${recommendation.hardMaxSize}MB`;
-        }
-
-        function setStat(id, value) {
-            document.getElementById(id).textContent = value;
-        }
-
-        function readTestConfig() {
-            const params = new URLSearchParams(window.location.search);
-            const rawChunkSize = params.get('chunkSize');
-            if (rawChunkSize === null) {
-                return { chunkSize: null, captureState: false };
+        function updateQueueBar() {
+            const counts = { pending: 0, processing: 0, done: 0, failed: 0 };
+            for (const item of queue) {
+                counts[item.status]++;
             }
+            document.getElementById('qPending').querySelector('.count').textContent = counts.pending;
+            document.getElementById('qProcessing').querySelector('.count').textContent = counts.processing;
+            document.getElementById('qDone').querySelector('.count').textContent = counts.done;
+            document.getElementById('qFailed').querySelector('.count').textContent = counts.failed;
+            document.getElementById('queueBar').style.display = 'flex';
+        }
 
-            const chunkSize = Number.parseInt(rawChunkSize, 10);
-            if (!Number.isFinite(chunkSize) || chunkSize <= 0) {
-                throw new Error(`Invalid chunkSize query parameter: ${rawChunkSize}`);
+        function renderFileList() {
+            const list = document.getElementById('fileList');
+            list.innerHTML = '';
+            for (const item of queue) {
+                const div = document.createElement('div');
+                div.className = 'file-item';
+                div.id = 'fi-' + item.id;
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'name';
+                nameSpan.textContent = item.file.name;
+
+                const badge = document.createElement('span');
+                badge.className = 'status-badge ' + item.status;
+                const labels = { queued: '排队中', processing: '转换中', done: '已完成', failed: '失败' };
+                badge.textContent = labels[item.status] || item.status;
+
+                const actions = document.createElement('span');
+                actions.className = 'actions';
+
+                if (item.status === 'done') {
+                    const dlBtn = document.createElement('button');
+                    dlBtn.textContent = 'GLB';
+                    dlBtn.addEventListener('click', () => downloadFile(item.glbBlob, item.file.name.replace(/\.spz$/i, '.glb')));
+                    actions.appendChild(dlBtn);
+
+                    const rptBtn = document.createElement('button');
+                    rptBtn.className = 'report-btn';
+                    rptBtn.textContent = '📋 报告';
+                    rptBtn.addEventListener('click', () => {
+                        const blob = new Blob([item.reportJson], { type: 'application/json' });
+                        downloadFile(blob, item.file.name + '.report.json');
+                    });
+                    actions.appendChild(rptBtn);
+                } else if (item.status === 'failed') {
+                    const rptBtn = document.createElement('button');
+                    rptBtn.className = 'report-btn';
+                    rptBtn.textContent = '📋 报告';
+                    rptBtn.addEventListener('click', () => {
+                        const blob = new Blob([item.reportJson], { type: 'application/json' });
+                        downloadFile(blob, item.file.name + '.report.json');
+                    });
+                    actions.appendChild(rptBtn);
+                }
+
+                div.appendChild(nameSpan);
+                div.appendChild(badge);
+                div.appendChild(actions);
+                list.appendChild(div);
             }
-
-            return { chunkSize, captureState: true };
+            list.style.display = queue.length > 0 ? 'block' : 'none';
         }
 
-        function createEmptyTestState(inputSize = 0) {
-            return {
-                inputSize,
-                outputSize: 0,
-                blobSize: 0,
-                chunkSize: testConfig.chunkSize,
-                chunkWrites: [],
-                operations: [],
-            };
-        }
-
-        function getTestState() {
-            return window.__spz2glbTestState;
-        }
-
-        function resetTestState(inputSize = 0) {
-            if (!testConfig.captureState) {
-                return;
-            }
-            window.__spz2glbTestState = createEmptyTestState(inputSize);
-        }
-
-        function updateTestState(patch) {
-            const state = getTestState();
-            if (!state) {
-                return;
-            }
-            Object.assign(state, patch);
-        }
-
-        function recordTestOperation(name, detail = {}) {
-            const state = getTestState();
-            if (!state) {
-                return;
-            }
-            state.operations.push({ name, ...detail });
-        }
-
-        function recordChunkWrite(chunk) {
-            const state = getTestState();
-            if (!state) {
-                return;
-            }
-            state.chunkWrites.push(chunk);
-        }
-
-        function getConvertFileOptions() {
-            if (testConfig.chunkSize == null) {
-                return undefined;
-            }
-            return {
-                chunkSize: testConfig.chunkSize,
-                onChunk: recordChunkWrite,
-            };
-        }
-
-        function setFileSelectionEnabled(enabled) {
-            fileInput.disabled = !enabled;
-            dropZone.style.pointerEvents = enabled ? 'auto' : 'none';
-            dropZone.style.opacity = enabled ? '1' : '0.7';
-        }
-
-        function downloadGlbResult(glbResult, fileName) {
-            const bytesView = glbResult.getBytesView();
-            recordTestOperation('output-view-read', { viewSize: bytesView.byteLength });
-
-            const blob = new Blob([bytesView], { type: 'application/octet-stream' });
-            updateTestState({ blobSize: blob.size });
-            recordTestOperation('output-blob-created', { blobSize: blob.size });
-
+        function downloadFile(blob, fileName) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = fileName.replace(/\.spz$/i, '.glb');
+            a.download = fileName;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            recordTestOperation('download-started', { downloadName: a.download });
         }
 
-        function renderConversionStats(file, glbResult, elapsedMs, memoryStats) {
-            setStat('statTime', elapsedMs.toFixed(0));
-            setStat('statInput', formatSize(file.size));
-            setStat('statOutput', formatSize(glbResult.size));
-            setStat('statCurrent', formatSize(memoryStats.currentUsageBytes));
-            setStat('statPeak', formatSize(memoryStats.peakUsageBytes));
-            setStat('statAllocs', String(memoryStats.totalAllocations));
-            setStat('statFails', String(memoryStats.failedAllocations));
-            setStat('statWorkUsed', formatSize(memoryStats.workUsed));
-            setStat('statWorkCapacity', formatSize(memoryStats.workCapacity));
-            setStat('statWorkPeak', formatSize(memoryStats.workPeak));
-            setStat('statHotAvailable', String(memoryStats.hotAvailable));
-            document.getElementById('statsBox').style.display = 'grid';
+        function detectSpzVersion(buffer) {
+            // 简单探测 SPZ 版本：读取前 4 字节判断是否是 ZSTD 魔数
+            const view = new DataView(buffer.buffer, buffer.byteOffset, Math.min(4, buffer.byteLength));
+            if (buffer.byteLength < 4) return { version: 0, compression: 'unknown' };
+            const magic = view.getUint32(0, true);
+            if (magic === 0xFD2FB528) return { version: 4, compression: 'zstd' };
+            return { version: 3, compression: 'gzip' };
         }
 
-        async function validateSelectedFile(file) {
-            if (!spz2glb) {
-                return { ok: false, message: 'WASM 模块尚未加载完成' };
+        async function processItem(item) {
+            processing++;
+            item.status = 'processing';
+            updateQueueBar();
+            renderFileList();
+
+            const file = item.file;
+            const startTime = performance.now();
+            let glbResult = null;
+            let success = false;
+            let errorMsg = '';
+            let glbInfo = null;
+
+            try {
+                showStatus(`<span class="loading-spinner"></span>转换: ${file.name}`, 'loading');
+
+                glbResult = await spz2glb.convertFile(file);
+
+                if (!glbResult) {
+                    throw new Error('WASM 转换返回空结果');
+                }
+
+                // 解析 GLB JSON
+                const glbBytes = glbResult.getBytesView();
+                const glbCopy = new Uint8Array(glbBytes);
+                glbInfo = parseGlbJson(glbCopy);
+
+                // 构建报告
+                const spzDetect = detectSpzVersion(new Uint8Array(await file.slice(0, Math.min(64, file.size)).arrayBuffer()));
+
+                item.reportJson = generateReportJson({
+                    fileName: file.name,
+                    spzSizeBytes: file.size,
+                    spzVersion: spzDetect.version,
+                    compression: spzDetect.compression,
+                    glbSizeBytes: glbResult.size,
+                    glbInfo,
+                    success: true,
+                    timingMs: performance.now() - startTime,
+                });
+
+                // 保存 GLB 供下载
+                item.glbBlob = new Blob([glbCopy], { type: 'application/octet-stream' });
+
+                success = true;
+                showStatus(`✅ ${file.name} 转换成功`, 'success');
+            } catch (err) {
+                errorMsg = err.message;
+                item.reportJson = generateReportJson({
+                    fileName: file.name,
+                    spzSizeBytes: file.size,
+                    spzVersion: 0,
+                    compression: 'unknown',
+                    glbSizeBytes: 0,
+                    glbInfo: null,
+                    success: false,
+                    errorMsg: err.message,
+                    timingMs: performance.now() - startTime,
+                });
+                showStatus(`❌ ${file.name}: ${err.message}`, 'error');
+            } finally {
+                if (glbResult) glbResult.release();
+                item.status = success ? 'done' : 'failed';
+                processing--;
+                updateQueueBar();
+                renderFileList();
+                // 自动推进队列
+                processQueue();
+            }
+        }
+
+        async function processQueue() {
+            if (!spz2glb) return;
+
+            const nextItems = queue.filter(item => item.status === 'queued');
+            while (processing < MAX_PARALLEL && nextItems.length > 0) {
+                const item = nextItems.shift();
+                processItem(item);
+                // 等待微任务让队列状态更新
+                await new Promise(resolve => setTimeout(resolve, 0));
             }
 
-            const headerBytes = new Uint8Array(await file.slice(0, 64 * 1024).arrayBuffer());
-            if (!spz2glb.validateSpzHeader(headerBytes)) {
-                return { ok: false, message: 'SPZ 头部预检失败，请确认文件未损坏且格式正确' };
+            const allDone = queue.every(item => item.status === 'done' || item.status === 'failed');
+            if (allDone && queue.length > 0) {
+                const doneCount = queue.filter(i => i.status === 'done').length;
+                const failCount = queue.filter(i => i.status === 'failed').length;
+                showStatus(`✅ 队列完成: ${doneCount} 成功, ${failCount} 失败`, doneCount > 0 ? 'success' : 'error');
             }
+        }
 
-            return { ok: true, message: 'SPZ 头部预检通过' };
+        function addFilesToQueue(fileList) {
+            for (const file of fileList) {
+                if (!file.name.endsWith('.spz')) continue;
+                // 去重
+                if (queue.some(item => item.file.name === file.name && item.file.size === file.size)) continue;
+                queue.push({
+                    id: Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                    file,
+                    status: 'queued',
+                    glbBlob: null,
+                    reportJson: '',
+                });
+            }
+            updateQueueBar();
+            renderFileList();
+            processQueue();
         }
 
         async function init() {
@@ -356,17 +415,18 @@
             const tierLabel = { low: '低端', medium: '中端', high: '高端' }[info.device.tier];
 
             showStatus(`<span class="loading-spinner"></span>正在加载 WASM 模块...<br>
-                <small style="opacity:0.7">${deviceIcon} ${info.device.type} (${tierLabel}) | 内存限制: ${info.memoryLimit}MB | 推荐: ≤${info.recommendedMaxFileSize}MB | 硬上限: ${info.hardMaxFileSize}MB</small>`, 'loading');
+                <small style="opacity:0.7">${deviceIcon} ${info.device.type} (${tierLabel}) | 推荐 ≤${info.recommendedMaxFileSize}MB</small>`, 'loading');
 
             try {
                 const memConfig = memManager.getWasmMemoryConfig();
                 spz2glb = await loadSpz2Glb('./spz2glb.wasm', { memory: memConfig.memory });
-                showStatus(`✅ WASM 模块加载成功！版本: ${spz2glb.getVersion()}<br>
-                    <small style="opacity:0.7">建议文件大小 ≤ ${info.recommendedMaxFileSize}MB，硬上限 ${info.hardMaxFileSize}MB</small>`, 'success');
-                if (selectedFile) {
-                    await handleFile(selectedFile);
-                }
-                setTimeout(() => document.getElementById('statusBox').style.display = 'none', 3000);
+                showStatus(`✅ WASM 加载成功！版本: ${spz2glb.getVersion()}<br>
+                    <small style="opacity:0.7">最大并行: ${MAX_PARALLEL} | 建议文件 ≤ ${info.recommendedMaxFileSize}MB</small>`, 'success');
+                setTimeout(() => {
+                    if (queue.every(item => item.status !== 'queued' && item.status !== 'processing')) {
+                        document.getElementById('statusBox').style.display = 'none';
+                    }
+                }, 3000);
             } catch (err) {
                 showStatus('❌ WASM 加载失败: ' + err.message, 'error');
             }
@@ -374,148 +434,23 @@
 
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
-        const fileInfo = document.getElementById('fileInfo');
-        const convertBtn = document.getElementById('convertBtn');
 
-        dropZone.addEventListener('click', () => {
-            if (!isConverting) {
-                fileInput.click();
-            }
-        });
+        dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', e => {
             e.preventDefault();
-            if (!isConverting) {
-                dropZone.style.borderColor = 'var(--primary)';
-            }
+            dropZone.style.borderColor = 'var(--primary)';
         });
         dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#d1d5db'; });
         dropZone.addEventListener('drop', e => {
             e.preventDefault();
             dropZone.style.borderColor = '#d1d5db';
-            if (isConverting) {
-                return;
-            }
-            const file = e.dataTransfer.files[0];
-            if (file && file.name.endsWith('.spz')) handleFile(file);
+            const files = e.dataTransfer.files;
+            if (files.length > 0) addFilesToQueue(files);
         });
         fileInput.addEventListener('change', () => {
-            if (isConverting) {
-                return;
-            }
-            const file = fileInput.files[0];
-            if (file) handleFile(file);
-        });
-
-        async function handleFile(file) {
-            const recommendation = memManager.getRecommendation(file.size / (1024 * 1024));
-            selectedFile = file;
-            fileInfo.style.display = 'block';
-
-            const validation = await validateSelectedFile(file);
-            if (!validation.ok) {
-                fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})<br>
-                    <span style="color:var(--error)">✖ ${validation.message}</span><br>
-                    <small style="opacity:0.7">${formatRecommendation(recommendation)}</small>`;
-                convertBtn.disabled = true;
-                convertBtn.textContent = '文件头校验失败';
-                return;
-            }
-
-            if (recommendation.state === 'standard') {
-                fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})<br>
-                    <small style="opacity:0.7">${validation.message} | ${formatRecommendation(recommendation)}</small>`;
-                convertBtn.disabled = false;
-                convertBtn.textContent = '转换 ' + file.name;
-                return;
-            }
-
-            if (recommendation.state === 'light') {
-                fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})<br>
-                    <span style="color:var(--warning)">⚠️ ${recommendation.message}</span><br>
-                    <small style="opacity:0.7">${validation.message} | ${formatRecommendation(recommendation)} | CLI: ${recommendation.cliCommand}</small>`;
-                convertBtn.disabled = false;
-                convertBtn.textContent = '继续转换（接近上限）';
-                return;
-            }
-
-            fileInfo.innerHTML = `<strong>${file.name}</strong> (${formatSize(file.size)})<br>
-                <span style="color:var(--error)">✖ ${recommendation.message}</span><br>
-                <small style="opacity:0.7">${validation.message} | ${formatRecommendation(recommendation)} | CLI: ${recommendation.cliCommand}</small>`;
-            convertBtn.disabled = true;
-            convertBtn.textContent = '文件超出浏览器上限';
-        }
-
-        convertBtn.addEventListener('click', async () => {
-            if (!selectedFile || !spz2glb || isConverting) return;
-
-            const file = selectedFile;
-            const convertOptions = getConvertFileOptions();
-            const chunkSize = convertOptions?.chunkSize ?? 1024 * 1024;
-            const recommendation = memManager.getRecommendation(file.size / (1024 * 1024));
-            if (!recommendation.allowConversion) {
-                showStatus(`❌ ${recommendation.message}<br><small style="opacity:0.7">命令行: ${recommendation.cliCommand}</small>`, 'error');
-                return;
-            }
-
-            const validation = await validateSelectedFile(file);
-            if (!validation.ok) {
-                showStatus(`❌ ${validation.message}`, 'error');
-                convertBtn.disabled = true;
-                convertBtn.textContent = '文件头校验失败';
-                return;
-            }
-
-            isConverting = true;
-            setFileSelectionEnabled(false);
-            convertBtn.disabled = true;
-            convertBtn.innerHTML = '<span class="loading-spinner"></span>转换中...';
-            document.getElementById('statsBox').style.display = 'none';
-            spz2glb.resetMemoryStats();
-
-            const startTime = performance.now();
-            showStatus('<span class="loading-spinner"></span>正在分块写入 WASM 并转换...', 'loading');
-
-            let glbResult = null;
-            resetTestState(file.size);
-            recordTestOperation('conversion-start', { chunkSize, fileName: file.name });
-            try {
-                glbResult = await spz2glb.convertFile(file, convertOptions);
-                if (!glbResult) throw new Error('转换失败');
-
-                updateTestState({ outputSize: glbResult.size });
-                recordTestOperation('conversion-finished', { outputSize: glbResult.size });
-
-                const endTime = performance.now();
-                const memoryStats = spz2glb.getMemoryStats();
-                recordTestOperation('memory-stats-read', {
-                    currentUsageBytes: memoryStats.currentUsageBytes,
-                    peakUsageBytes: memoryStats.peakUsageBytes,
-                });
-                renderConversionStats(file, glbResult, endTime - startTime, memoryStats);
-
-                downloadGlbResult(glbResult, file.name);
-                showStatus('✅ 转换成功！', 'success');
-            } catch (err) {
-                recordTestOperation('conversion-error', { message: err.message });
-                showStatus('❌ 错误: ' + err.message, 'error');
-            } finally {
-                if (glbResult) {
-                    glbResult.release();
-                    recordTestOperation('output-released');
-                    if (testConfig.captureState) {
-                        try {
-                            glbResult.getBytesView();
-                            recordTestOperation('post-release-view-read-unexpected');
-                        } catch (releaseError) {
-                            recordTestOperation('post-release-view-error', { message: releaseError.message });
-                        }
-                    }
-                }
-                isConverting = false;
-                setFileSelectionEnabled(true);
-                await handleFile(file);
-            }
-
+            const files = fileInput.files;
+            if (files.length > 0) addFilesToQueue(files);
+            fileInput.value = '';
         });
 
         init();
