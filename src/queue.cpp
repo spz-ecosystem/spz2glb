@@ -192,10 +192,16 @@ std::string ConversionResult::toJson() const {
     j << "  },\n";
 
     // 结果
-    // 系统时间戳
+    // 系统时间戳（跨平台 safe 版本）
     std::time_t now = std::time(nullptr);
+    std::tm tm_buf{};
     char timeBuf[32];
-    if (std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%S%z", std::localtime(&now))) {
+#ifdef _WIN32
+    localtime_s(&tm_buf, &now);
+#else
+    localtime_r(&now, &tm_buf);
+#endif
+    if (std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%S%z", &tm_buf)) {
         j << "  \"timestamp\": \"" << timeBuf << "\",\n";
     }
 
