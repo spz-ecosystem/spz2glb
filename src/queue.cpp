@@ -499,7 +499,7 @@ void Queue::finalize(const ConversionResult& result) {
     if (result.success) {
         moveFile(src, doneDir_);
         // 写入 JSON 报告
-        std::string reportPath = doneDir_ + "/" + outName + ".report.json";
+        std::string reportPath = doneDir_ + "/" + result.outputFile + ".report.json";
         std::ofstream report(reportPath);
         if (report) {
             report << result.toJson();
