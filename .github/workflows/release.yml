@@ -33,10 +33,16 @@ jobs:
         include:
           - os: windows-latest
             artifact: spz2glb-windows-x64.exe
+            arch: windows-x64
           - os: ubuntu-latest
             artifact: spz2glb-linux-x64
-          - os: macos-latest
+            arch: linux-x64
+          - os: macos-13
             artifact: spz2glb-macos-x64
+            arch: macos-x64
+          - os: macos-latest
+            artifact: spz2glb-macos-arm64
+            arch: macos-arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -54,7 +60,7 @@ jobs:
           sudo apt-get install -y zlib1g-dev
 
       - name: Install dependencies (macOS)
-        if: matrix.os == 'macos-latest'
+        if: startsWith(matrix.os, 'macos')
         run: |
           brew install zlib
 
@@ -113,10 +119,10 @@ jobs:
           find . -name "spz_verify" -type f -exec cp {} spz_verify-linux-x64 \;
 
       - name: Rename artifacts (macOS)
-        if: matrix.os == 'macos-latest'
+        if: startsWith(matrix.os, 'macos')
         run: |
           find . -name "spz2glb" -type f -exec cp {} ${{ matrix.artifact }} \;
-          find . -name "spz_verify" -type f -exec cp {} spz_verify-macos-x64 \;
+          find . -name "spz_verify" -type f -exec cp {} spz_verify-${{ matrix.arch }} \;
 
       - name: Upload artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
