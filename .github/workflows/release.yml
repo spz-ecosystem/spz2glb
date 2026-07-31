@@ -8,6 +8,7 @@ on:
       - main
       - feature/spz2glb-v4-zstd-adaptation
       - clean-pr
+      - feature/changelog-gate
     tags:
       - 'v*'
   workflow_dispatch:
@@ -26,6 +27,25 @@ env:
   EMSCRIPTEN_VERSION: 6.0.3
 
 jobs:
+  changelog-check:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Verify CHANGELOG covers all commits since previous tag
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          bash scripts/changelog-check.sh
+
   build:
     strategy:
       fail-fast: false
@@ -295,7 +315,7 @@ jobs:
 
 
   release:
-    needs: [build, wasm-build, verify-native]
+    needs: [build, wasm-build, verify-native, changelog-check]
     runs-on: ubuntu-latest
     permissions:
       contents: write  # release job needs contents: write for tag operations

@@ -19,6 +19,7 @@ on:
       - phase5-browser-lifecycle-20260325
       - feature/spz2glb-v4-zstd-adaptation
       - clean-pr
+      - feature/changelog-gate
     paths:
       - 'CMakeLists.txt'
       - 'src/**'

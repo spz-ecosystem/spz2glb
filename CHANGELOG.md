@@ -2,7 +2,7 @@
 
 ## v2.0.4 (2026-07-31)
 
-Changes since v2.0.3 tag (`1e131a6`). Merged PRs: [#15](https://github.com/spz-ecosystem/spz2glb/pull/15), [#16](https://github.com/spz-ecosystem/spz2glb/pull/16), [#18](https://github.com/spz-ecosystem/spz2glb/pull/18), [#19](https://github.com/spz-ecosystem/spz2glb/pull/19), [#20](https://github.com/spz-ecosystem/spz2glb/pull/20), plus follow-up fixes committed directly on `clean-pr` (SPZ v4 header alignment, version bump, macOS CI matrix).
+Changes since v2.0.3 tag (`1e131a6`). Merged PRs: [#15](https://github.com/spz-ecosystem/spz2glb/pull/15), [#16](https://github.com/spz-ecosystem/spz2glb/pull/16), [#18](https://github.com/spz-ecosystem/spz2glb/pull/18), [#19](https://github.com/spz-ecosystem/spz2glb/pull/19), [#20](https://github.com/spz-ecosystem/spz2glb/pull/20) (feature work), [#21](https://github.com/spz-ecosystem/spz2glb/pull/21) (release assembly), [#22](https://github.com/spz-ecosystem/spz2glb/pull/22) (release-fixing follow-up), plus follow-up fixes committed directly on `clean-pr` (SPZ v4 header alignment, version bump, macOS CI matrix).
 
 ### SPZ v4 Header Alignment (fix)
 
@@ -44,6 +44,12 @@ Changes since v2.0.3 tag (`1e131a6`). Merged PRs: [#15](https://github.com/spz-e
   - `macos-latest` (ARM64) → `spz2glb-macos-arm64`
 - **Replace retired `macos-13`**: GitHub retired the `macos-13` runner label on 2025-12-04. Intel x64 builds now use the official replacement `macos-15-intel` (the last x86_64 macOS image, available until Aug 2027).
 - **Runner condition**: macOS conditional switched from `matrix.os == 'macos-latest'` to `startsWith(matrix.os, 'macos')` to cover both runners.
+
+### Release Assembly & Fixing Follow-up (PR #21, #22)
+
+- **Release assembly (PR #21)**: Aggregate all v2.0.4 feature commits from `clean-pr` into `main` and create the `v2.0.4` tag.
+- **macOS build fix (PR #22)**: Remove unused `kExtGaussian` / `kExtSpz2` constants from `src/queue.cpp` that broke the macOS `-Werror` build (Clang `-Wunused-const-variable`). This had silently shipped the first v2.0.4 release without macOS `spz2glb` binaries — the `| tee` pipeline in the build steps masked the compiler failure (pipeline returns tee's exit code 0).
+- **CI unmask (PR #22)**: Add `set -euo pipefail` + `shell: bash` to every tee-piped build step in `release.yml` / `pages.yml` so build failures can no longer be hidden. Windows PowerShell cannot parse `pipefail` (`set` is a Set-Variable alias), so the affected steps explicitly pin bash (Git Bash ships on GitHub-hosted Windows runners).
 
 ### Code Quality & CI Enhancement
 
