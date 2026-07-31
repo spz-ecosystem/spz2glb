@@ -34,9 +34,6 @@ constexpr uint32_t kSpzMagic = 0x5053474E;
 constexpr uint32_t kZstdMagic = 0xFD2FB528;
 constexpr uint32_t kIlvTypeCoordSys = 0xADBE0003;
 
-constexpr const char* kExtGaussian = "KHR_gaussian_splatting";
-constexpr const char* kExtSpz2 = "KHR_gaussian_splatting_compression_spz_2";
-
 /// 从 JSON 中提取 key 对应的 uint32 值（在 searchStart 之后查找）
 bool parseUnsignedAfterKey(const std::string& json, const std::string& key,
                            uint32_t& value, size_t searchStart = 0) {
