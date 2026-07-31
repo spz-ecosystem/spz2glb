@@ -54,12 +54,14 @@ jobs:
             -DSPZ2GLB_WASM_PROFILE=compat
 
       - name: Build spz2glb WASM
+        shell: bash
         run: |
           set -euo pipefail
           emmake cmake --build build_pages --config Release --target spz2glb-wasm 2>&1 | tee build_pages.log
 
       - name: Dump build log on failure
         if: failure()
+        shell: bash
         run: |
           echo "=== Build Log (last 100 lines) ==="
           test -f build_pages.log && tail -100 build_pages.log || echo "no build_pages.log"

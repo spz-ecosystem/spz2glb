@@ -82,22 +82,26 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build fastgltf (with warnings suppressed)
+        shell: bash
         run: |
           set -euo pipefail
           cmake --build build --config Release -j4 --target fastgltf 2>&1 | tee build.log
 
       - name: Build spz2glb (strict warnings)
+        shell: bash
         run: |
           set -euo pipefail
           cmake --build build --config Release -j4 --target spz2glb 2>&1 | tee -a build.log
 
       - name: Build spz_verify (strict warnings)
+        shell: bash
         run: |
           set -euo pipefail
           cmake --build build --config Release -j4 --target spz_verify 2>&1 | tee -a build.log
 
       - name: Dump build log on failure
         if: failure()
+        shell: bash
         run: |
           echo "=== Build Log (last 100 lines) ==="
           test -f build.log && tail -100 build.log || echo "no build.log"
@@ -178,17 +182,20 @@ jobs:
             -DSPZ2GLB_WASM_PROFILE=${{ matrix.wasm_profile }}
 
       - name: Build spz2glb WASM
+        shell: bash
         run: |
           set -euo pipefail
           emmake cmake --build build_wasm --config Release --target spz2glb-wasm 2>&1 | tee build_wasm.log
 
       - name: Build spz_verify WASM
+        shell: bash
         run: |
           set -euo pipefail
           emmake cmake --build build_wasm --config Release --target spz_verify-wasm 2>&1 | tee -a build_wasm.log
 
       - name: Dump WASM build log on failure
         if: failure()
+        shell: bash
         run: |
           echo "=== WASM Build Log (last 100 lines) ==="
           test -f build_wasm.log && tail -100 build_wasm.log || echo "no build_wasm.log"
