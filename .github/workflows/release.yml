@@ -8,6 +8,7 @@ on:
       - main
       - feature/spz2glb-v4-zstd-adaptation
       - clean-pr
+      - feature/changelog-gate
     tags:
       - 'v*'
   workflow_dispatch:
