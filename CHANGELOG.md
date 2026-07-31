@@ -1,6 +1,41 @@
 # Changelog
 
-## v2.0.3 (2026-07-29)
+## v2.0.4 (2026-07-30)
+
+Changes since v2.0.3 tag (`1e131a6`). Merged PRs: [#15](https://github.com/spz-ecosystem/spz2glb/pull/15), [#16](https://github.com/spz-ecosystem/spz2glb/pull/16), [#18](https://github.com/spz-ecosystem/spz2glb/pull/18), [#19](https://github.com/spz-ecosystem/spz2glb/pull/19), [#20](https://github.com/spz-ecosystem/spz2glb/pull/20).
+
+### CLI Queue & Web Mirror (PR #15)
+
+- **File-system queue**: Add `--queue-add`, `--queue`, `--queue-status`, `--queue-clear` CLI commands. Queue directories: pending/processing/done/failed.
+- **JSON report**: Per-file conversion report with full metadata (SPZ version/compression, GLB structure, KHR extensions, coordinate system, timing, generator info).
+- **Web queue mirror**: Multi-file selection via `<input multiple>` and drag-drop. 4-slot queue status bar. Per-file GLB download + JSON report export.
+- **MSVC fixes**: Remove unused variables, replace `localtime` with safe variants for MSVC compatibility.
+
+### Deploy-Pages Refactoring (PR #16, #18)
+
+- **Independent pages workflow**: Extract deploy-pages from `release.yml` to dedicated `pages.yml` (`build_pages` + `deploy_pages`), mirroring gatekeeper structure.
+- **Tag trigger**: Add `startsWith(github.ref, 'refs/tags/')` condition so Pages deployment runs on tag push (not just `workflow_dispatch` or push to main).
+
+### WASM / Web Fixes (PR #19, #20)
+
+- **SPZ version detection**: Fix `detectSpzVersion()` — use NGSP magic (`0x5053474E`) for v4 and gzip magic (`0x1F8B`) for v3, replacing incorrect ZSTD header (`0xFD2FB528`) detection.
+- **WASM runtime version**: Fix `spz2glb_get_version()` patch number (was still returning 2.0.2).
+- **KHR report field names**: Use standard `KHR_gaussian_splatting` / `KHR_gaussian_splatting_compression_spz_2` field names in JSON report (was abbreviated `khrGaussianSplatting` / `spzCompression`). Fix `parseGlbJson` to read from primitive-level extensions (not root-level).
+- **Runtime performance stats**: Add collapsible 11-dimension performance panel (WASM memory stats, device info, alloc/free/fail counts, hot pool, work area usage, recommended file size limit).
+- **Optional `--report` validation**: Add `--report <file.json>` to `spz_verify` CLI. Validates `extensionsUsed/Required`, KHR sub-fields against actual conversion result.
+
+### Code Quality & CI Enhancement (pending commits)
+
+- **P7_DEADCODE stage**: Add uninitialized variable checks (`-Wuninitialized`, `-Wmaybe-uninitialized`) and cross-function scope reference detection to `wasm-pre-check.sh`.
+- **Cross-review alignment**: Resolve scope analysis issues in `spz_verify.cpp` flagged by cross-review.
+- **unused layerKey**: Remove unused `layerKey` variable from `spz_verify.cpp` fixing WASM `-Werror` build.
+- **outName scope fix**: Replace `outName` reference in `queue.cpp::finalize()` with `result.outputFile` to fix cross-function scope violation.
+- **CI trigger branches**: Add `clean-pr` branch to both `release.yml` and `test-wasm-build.yml` trigger lists.
+- **Report filename**: Mark `.glb` suffix in report JSON filenames for clarity.
+
+---
+
+## v2.0.3 (2026-07-30)
 
 ### CI/CD Security Hardening
 
@@ -60,7 +95,7 @@
 - **YAML indentation**: Fix `run: |` block indentation in fixture list preparation step
 - **commit_msg.txt**: Remove accidentally tracked file from repository
 
-### KHR Extension (v2.0.3 continuation — 2026-07-30)
+### KHR Extension
 
 - **Compile flag removal**: Remove `FASTGLTF_ENABLE_KHR_GAUSSIAN_SPLATTING` from fastgltf fork per upstream feedback (spnda/fastgltf#137). The extension is Release Candidate (pending Khronos Board vote), no compile-time gate needed. Impacts:
   - `third_party/CMakeLists.txt`: Remove `option()` for the flag
@@ -73,14 +108,14 @@
 - **Layer 1 enhancement**: Add field-level checks for `kernel` and `colorSpace` presence in the parent KHR_gaussian_splatting extension JSON
 - **CI debug logging**: Add `Dump build log on failure` steps to both `test-wasm-build.yml` and `release.yml` workflows, capturing build errors directly in CI console output
 
-### Documentation (v2.0.3 continuation)
+### Documentation
 
 - **Extension status**: Update READMEs (EN/ZH) — KHR_gaussian_splatting marked as **Release Candidate**, compile flag removed, spz_2 still draft
 - **Layer 1 output**: Update CLI help and verification output examples to reflect 12-check L1 validation with kernel/colorSpace field checks
 - **Compilation Control**: Replace old `ENABLE_KHR_GAUSSIAN_SPLATTING` option docs with "always enabled" statement
 - **Customization Notes**: Expand fastgltf customization section with struct fields, JSON serialization, compile flag removal details, simdjson source embedding approach
 
-### CLI Performance Optimizations (v2.0.3 continuation — 2026-07-30)
+### CLI Performance Optimizations
 
 - **simdjson upgrade**: Update embedded simdjson from v4.3.1 to v4.6.4 (2026-05-06 release), syncing with fastgltf upstream compatibility
 - **Compiler optimization flags**: Add explicit `-O3` (GCC/Clang) / `/O2` (MSVC) to all CLI targets, ensuring optimized builds even without `-DCMAKE_BUILD_TYPE=Release`
@@ -89,7 +124,7 @@
 - **Memory-mapped file I/O**: Add `src/mapped_file.h` — cross-platform RAII `MappedFile` class using `CreateFileMapping` (Windows) / `mmap` (POSIX), reducing kernel→userspace copy for large file reads
 - **Code cleanup**: Remove unused `loadSpzFile()`, `SpzResult`, `SpzErrorCode` from `spz_to_glb.cpp` (replaced by `MappedFile`)
 
-### CI/Workflow (v2.0.3 continuation — 2026-07-30)
+### CI/Workflow
 
 - **verify-native decoupled**: Remove `needs: [build]` dependency from verify-native job — now runs independently (parallel) instead of waiting for the 3-platform build matrix, preventing native verification from being skipped when a single platform fails
 - **MinGW cross-compile check**: Add `x86_64-w64-mingw32-g++ -fsyntax-only` step to verify-native, catching `#ifdef _WIN32` guard mismatches without requiring Windows ZLIB/ZSTD libraries
