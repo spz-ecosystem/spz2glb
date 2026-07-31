@@ -297,7 +297,7 @@
                     rptBtn.textContent = '📋 报告';
                     rptBtn.addEventListener('click', () => {
                         const blob = new Blob([item.reportJson], { type: 'application/json' });
-                        downloadFile(blob, item.file.name + '.report.json');
+                        downloadFile(blob, item.file.name.replace(/\.spz$/i, '.glb') + '.report.json');
                     });
                     actions.appendChild(rptBtn);
                 } else if (item.status === 'failed') {
@@ -306,7 +306,7 @@
                     rptBtn.textContent = '📋 报告';
                     rptBtn.addEventListener('click', () => {
                         const blob = new Blob([item.reportJson], { type: 'application/json' });
-                        downloadFile(blob, item.file.name + '.report.json');
+                        downloadFile(blob, item.file.name.replace(/\.spz$/i, '.glb') + '.report.json');
                     });
                     actions.appendChild(rptBtn);
                 }

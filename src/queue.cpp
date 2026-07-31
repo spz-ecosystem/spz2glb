@@ -208,7 +208,7 @@ std::string ConversionResult::toJson() const {
     // 生成工具信息
     j << "  \"generator\": {\n";
     j << "    \"name\": \"spz2glb\",\n";
-    j << "    \"version\": \"2.0.3\",\n";
+    j << "    \"version\": \"2.0.4\",\n";
     j << "    \"license\": \"MIT\",\n";
     j << "    \"url\": \"https://github.com/spz-ecosystem/spz2glb\"\n";
     j << "  },\n";
@@ -499,7 +499,7 @@ void Queue::finalize(const ConversionResult& result) {
     if (result.success) {
         moveFile(src, doneDir_);
         // 写入 JSON 报告
-        std::string reportPath = doneDir_ + "/" + result.inputFile + ".report.json";
+        std::string reportPath = doneDir_ + "/" + result.outputFile + ".report.json";
         std::ofstream report(reportPath);
         if (report) {
             report << result.toJson();

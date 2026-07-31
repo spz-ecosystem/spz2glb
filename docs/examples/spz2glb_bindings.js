@@ -351,7 +351,7 @@ export function generateReportJson(opts) {
         timestamp,
         generator: {
             name: 'spz2glb',
-            version: '2.0.3',
+            version: '2.0.4',
             license: 'MIT',
             url: 'https://github.com/spz-ecosystem/spz2glb',
         },
