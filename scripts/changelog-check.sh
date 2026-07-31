@@ -26,15 +26,18 @@ STOP = {'the','and','for','with','from','into','was','are','not','all','add','fi
 
 def covered(subject):
     """Return None if covered, else a reason string."""
+    # docs: / docs(scope): commits are self-documenting — exempt before PR matching,
+    # so CHANGELOG-maintenance PRs (e.g. #25 recording #23/#24) do not require their
+    # own entry, avoiding an infinite regression loop.
+    if re.match(r'^docs(\([^)]*\))?:', subject):
+        return None
     prs = re.findall(r'\(#(\d+)\)', subject)
     if prs:
         for p in prs:
             if f'#{p}' not in changelog:
                 return f"PR #{p} not mentioned in CHANGELOG.md"
         return None
-    # direct commit (no PR number): match keywords, docs: commits are self-documenting
-    if re.match(r'^docs:', subject):
-        return None
+    # direct commit (no PR number): match keywords
     core = re.sub(r'^(fix|feat|docs|chore|ci|refactor|test|build|perf|style)(\([^)]*\))?:\s*', '', subject)
     words = [w for w in re.split(r'[^a-z0-9]+', core.lower()) if len(w) > 3 and w not in STOP]
     if not words:

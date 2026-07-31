@@ -2,12 +2,13 @@
 
 ## v2.0.4.1 (2026-07-31)
 
-Changes since v2.0.4 tag (`3a134b4`). Merged PRs: [#23](https://github.com/spz-ecosystem/spz2glb/pull/23), [#24](https://github.com/spz-ecosystem/spz2glb/pull/24).
+Changes since v2.0.4 tag (`3a134b4`). Merged PRs: [#23](https://github.com/spz-ecosystem/spz2glb/pull/23), [#24](https://github.com/spz-ecosystem/spz2glb/pull/24), [#25](https://github.com/spz-ecosystem/spz2glb/pull/25), [#26](https://github.com/spz-ecosystem/spz2glb/pull/26).
 
 ### Pre-Tag Changelog-Coverage Gate (PR #23)
 
 - **`changelog-check` job in `release.yml`**: On tag push, verify every commit since the previous tag is covered by `CHANGELOG.md`. Squash-merged PRs are matched by their `(#N)` PR number; direct commits fall back to keyword matching; `docs:` commits are self-documenting and exempt.
 - **Rationale**: The tag-as-freeze model means PRs merged after a tag never reach that version's changelog — the gate makes incomplete coverage fail the release instead of silently shipping.
+- **Self-documentation exemption (PR #26)**: `docs:`/`docs(scope):` commits are now exempted *before* PR-number matching, so CHANGELOG-maintenance PRs do not require their own entry (avoids the infinite regression loop where recording PR #25 would itself need PR #26, etc.).
 
 ### Donation Statement (PR #24)
 
