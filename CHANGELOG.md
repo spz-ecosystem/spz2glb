@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.0.4.1 (2026-07-31)
+
+Changes since v2.0.4 tag (`3a134b4`). Merged PRs: [#23](https://github.com/spz-ecosystem/spz2glb/pull/23), [#24](https://github.com/spz-ecosystem/spz2glb/pull/24).
+
+### Pre-Tag Changelog-Coverage Gate (PR #23)
+
+- **`changelog-check` job in `release.yml`**: On tag push, verify every commit since the previous tag is covered by `CHANGELOG.md`. Squash-merged PRs are matched by their `(#N)` PR number; direct commits fall back to keyword matching; `docs:` commits are self-documenting and exempt.
+- **Rationale**: The tag-as-freeze model means PRs merged after a tag never reach that version's changelog — the gate makes incomplete coverage fail the release instead of silently shipping.
+
+### Donation Statement (PR #24)
+
+- **Future Plans / 未来规划 section**: README.md and README-zh.md now declare intent to donate to the **OpenAtom Foundation** at an appropriate stage, to foster broader community collaboration and governance of the SPZ ecosystem (consistent with `spz_gatekeeper`).
+
 ## v2.0.4 (2026-07-31)
 
 Changes since v2.0.3 tag (`1e131a6`). Merged PRs: [#15](https://github.com/spz-ecosystem/spz2glb/pull/15), [#16](https://github.com/spz-ecosystem/spz2glb/pull/16), [#18](https://github.com/spz-ecosystem/spz2glb/pull/18), [#19](https://github.com/spz-ecosystem/spz2glb/pull/19), [#20](https://github.com/spz-ecosystem/spz2glb/pull/20) (feature work), [#21](https://github.com/spz-ecosystem/spz2glb/pull/21) (release assembly), [#22](https://github.com/spz-ecosystem/spz2glb/pull/22) (release-fixing follow-up), plus follow-up fixes committed directly on `clean-pr` (SPZ v4 header alignment, version bump, macOS CI matrix).
