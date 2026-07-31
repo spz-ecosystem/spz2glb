@@ -46,21 +46,17 @@ struct SpzHeader {
     uint8_t reserved;
 };
 
-// SPZ v4 32B header
+// SPZ v4 32B header (Niantic upstream NgspFileHeader 规格)
 struct SpzV4Header {
-    uint32_t magic;
-    uint32_t version;
-    uint32_t numPoints;
-    uint8_t shDegree;
-    uint8_t fractionalBits;
-    uint8_t flags;
-    uint8_t reserved;
-    uint32_t pointCount;
-    uint8_t shBandCount;
-    uint8_t chunkConfig;
-    uint16_t attributeOffsets;
-    uint32_t tocByteOffset;
-    uint32_t reserved2; // padding: 28B → 32B
+    uint32_t magic;           // 0-3:  0x5053474E
+    uint32_t version;         // 4-7:  4
+    uint32_t numPoints;       // 8-11
+    uint8_t shDegree;         // 12
+    uint8_t fractionalBits;   // 13
+    uint8_t flags;            // 14
+    uint8_t numStreams;       // 15:  ZSTD 属性流数量
+    uint32_t tocByteOffset;   // 16-19: TOC 偏移量
+    uint8_t reserved[12];     // 20-31: 预留
 };
 
 static_assert(sizeof(SpzHeader) == 16, "SpzHeader must be 16 bytes");
@@ -357,7 +353,7 @@ bool tryPeekSpzHeader(const std::vector<uint8_t>& data, SpzHeader& header, bool&
                 header.shDegree = v4Hdr.shDegree;
                 header.fractionalBits = v4Hdr.fractionalBits;
                 header.flags = v4Hdr.flags;
-                header.reserved = v4Hdr.reserved;
+                header.reserved = v4Hdr.numStreams;
                 return true;
             }
         }
