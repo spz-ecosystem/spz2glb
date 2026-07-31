@@ -83,7 +83,6 @@ std::string positionalArg(int argc, char** argv, int n) {
     }
     return {};
 }
-
 } // namespace
 
 int main(int argc, char** argv) {
