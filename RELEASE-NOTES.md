@@ -44,6 +44,12 @@ This release aligns the SPZ v4 header parsing with the upstream Niantic `NgspFil
 - **Split macOS matrix**: `macos-latest` now defaults to ARM64 — the matrix was split into `macos-15-intel` (Intel x64 → `spz2glb-macos-x64`) and `macos-latest` (ARM64 → `spz2glb-macos-arm64`), each producing native CLI + `spz_verify` binaries.
 - **Replace retired `macos-13`**: The `macos-13` runner label was retired by GitHub on 2025-12-04; Intel x64 builds now use the official replacement `macos-15-intel` (the last x86_64 macOS image, available until Aug 2027). macOS runner condition switched to `startsWith(matrix.os, 'macos')`.
 
+### Release Assembly & Fixing Follow-up (PR #21, #22)
+
+- **Release assembly (PR #21)**: Aggregates all v2.0.4 feature commits from `clean-pr` into `main` and creates the `v2.0.4` tag.
+- **macOS build fix (PR #22)**: Removes unused `kExtGaussian` / `kExtSpz2` constants from `src/queue.cpp` that broke the macOS `-Werror` build (Clang `-Wunused-const-variable`). This had silently shipped the first v2.0.4 release without macOS `spz2glb` binaries — the `| tee` pipeline in the build steps masked the compiler failure.
+- **CI unmask (PR #22)**: Adds `set -euo pipefail` + `shell: bash` to every tee-piped build step in `release.yml` / `pages.yml` so build failures can no longer be hidden. Windows PowerShell cannot parse `pipefail`, so the affected steps explicitly pin bash.
+
 ### Code Quality & CI Enhancement
 
 - **P7_DEADCODE**: Uninitialized variable checks (`-Wuninitialized`, `-Wmaybe-uninitialized`) and cross-function scope detection in `wasm-pre-check.sh`.
