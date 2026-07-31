@@ -1,14 +1,22 @@
 # spz2glb v2.0.4 Release Notes
 
-**Release Date**: July 30, 2026  
+**Release Date**: July 31, 2026  
 **Tag**: v2.0.4  
-**Type**: CLI Queue, Web Mirror, CI/Workflow Refactoring, WASM Fixes & Code Quality
+**Type**: SPZ v4 Header Fix, CLI Queue, Web Mirror, macOS x64/ARM64 CI Matrix, WASM Fixes & Code Quality
 
 ## Overview
 
-This release adds a file-system based CLI queue with web mirror, extracts deploy-pages into an independent workflow, fixes SPZ version detection and KHR report field naming, and strengthens code quality with enhanced WASM pre-check dead-code detection.
+This release aligns the SPZ v4 header parsing with the upstream Niantic `NgspFileHeader` spec (fixing ILV `0xADBE0003` coordinate-system detection), adds a file-system based CLI queue with web mirror, splits the macOS CI matrix into Intel x64 + Apple Silicon ARM64 builds, fixes SPZ version detection and KHR report field naming, and strengthens code quality with enhanced WASM pre-check dead-code detection.
 
 ## Changes Since v2.0.3
+
+### SPZ v4 Header Alignment (fix)
+
+- **`SpzV4Header` byte offsets** in `spz2glb_core.cpp` / `spz_verifier.cpp` aligned with the upstream Niantic `NgspFileHeader` (32-byte) spec:
+  - byte 15: `numStreams` (was `reserved`)
+  - bytes 16-19: `tocByteOffset` (was `pointCount`)
+  - bytes 20-31: `reserved[12]` (was `shBandCount` / `chunkConfig` / `attributeOffsets`)
+- **Impact**: previously `tocByteOffset` read from the reserved region (always 0), so Layer 5 could not locate the header zone and ILV `0xADBE0003` detection silently failed on v4 ZSTD files. Layout now matches gatekeeper's verified parsing.
 
 ### CLI Queue & Web Mirror (PR #15)
 
@@ -25,10 +33,16 @@ This release adds a file-system based CLI queue with web mirror, extracts deploy
 ### WASM / Web Fixes (PR #19, #20)
 
 - **SPZ version detection**: Fix `detectSpzVersion()` — use NGSP magic (`0x5053474E`) for v4 and gzip magic (`0x1F8B`) for v3, replacing incorrect ZSTD header (`0xFD2FB528`) detection.
-- **WASM runtime version**: Fix `spz2glb_get_version()` patch number from 2.0.2 to 2.0.3.
+- **WASM runtime version**: Fix `spz2glb_get_version()` patch number (was still returning 2.0.2), later bumped again to 2.0.4 for this release.
 - **KHR report field names**: Use standard `KHR_gaussian_splatting` / `KHR_gaussian_splatting_compression_spz_2` in JSON reports (was `khrGaussianSplatting` / `spzCompression`). Parse from primitive-level extensions, not root-level.
 - **Runtime performance panel**: Collapsible 11-dimension stats (WASM memory, device info, alloc/free/fail counts, hot pool, work area, recommended file size limit).
 - **Optional `--report` validation**: `spz_verify` CLI validates `extensionsUsed/Required` and KHR sub-fields against conversion result via `--report <file.json>`.
+
+### Version Bump & macOS CI Matrix
+
+- **Version 2.0.3 → 2.0.4**: Update version strings across `CMakeLists.txt`, `src/queue.cpp` (report `generator.version`), `src/spz_to_glb.cpp` (CLI banner), and `docs/examples/spz2glb_bindings.js` (WASM demo).
+- **Split macOS matrix**: `macos-latest` now defaults to ARM64 — the matrix was split into `macos-15-intel` (Intel x64 → `spz2glb-macos-x64`) and `macos-latest` (ARM64 → `spz2glb-macos-arm64`), each producing native CLI + `spz_verify` binaries.
+- **Replace retired `macos-13`**: The `macos-13` runner label was retired by GitHub on 2025-12-04; Intel x64 builds now use the official replacement `macos-15-intel` (the last x86_64 macOS image, available until Aug 2027). macOS runner condition switched to `startsWith(matrix.os, 'macos')`.
 
 ### Code Quality & CI Enhancement
 

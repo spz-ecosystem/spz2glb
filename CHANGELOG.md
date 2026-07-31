@@ -1,8 +1,17 @@
 # Changelog
 
-## v2.0.4 (2026-07-30)
+## v2.0.4 (2026-07-31)
 
-Changes since v2.0.3 tag (`1e131a6`). Merged PRs: [#15](https://github.com/spz-ecosystem/spz2glb/pull/15), [#16](https://github.com/spz-ecosystem/spz2glb/pull/16), [#18](https://github.com/spz-ecosystem/spz2glb/pull/18), [#19](https://github.com/spz-ecosystem/spz2glb/pull/19), [#20](https://github.com/spz-ecosystem/spz2glb/pull/20).
+Changes since v2.0.3 tag (`1e131a6`). Merged PRs: [#15](https://github.com/spz-ecosystem/spz2glb/pull/15), [#16](https://github.com/spz-ecosystem/spz2glb/pull/16), [#18](https://github.com/spz-ecosystem/spz2glb/pull/18), [#19](https://github.com/spz-ecosystem/spz2glb/pull/19), [#20](https://github.com/spz-ecosystem/spz2glb/pull/20), plus follow-up fixes committed directly on `clean-pr` (SPZ v4 header alignment, version bump, macOS CI matrix).
+
+### SPZ v4 Header Alignment (fix)
+
+- **SpzV4Header byte offset fix**: Align `SpzV4Header` field layout in `spz2glb_core.cpp` / `spz_verifier.cpp` with the upstream Niantic `NgspFileHeader` (32-byte) spec:
+  - byte 15: `numStreams` (was `reserved`)
+  - bytes 16-19: `tocByteOffset` (was `pointCount`)
+  - bytes 20-31: `reserved[12]` (was `shBandCount` / `chunkConfig` / `attributeOffsets`)
+- **Bug fixed**: The misaligned layout made `tocByteOffset` read from the reserved region (always 0), so Layer 5 could never locate the header zone and ILV extension detection (`0xADBE0003` coordinate system) silently failed on v4 ZSTD SPZ files. The layout now matches gatekeeper's verified header parsing.
+- **Debug output**: `peekSpzHeaderFromZstd` now prints `numStreams` + `tocByteOffset` instead of the previously misaligned fields.
 
 ### CLI Queue & Web Mirror (PR #15)
 
@@ -24,7 +33,19 @@ Changes since v2.0.3 tag (`1e131a6`). Merged PRs: [#15](https://github.com/spz-e
 - **Runtime performance stats**: Add collapsible 11-dimension performance panel (WASM memory stats, device info, alloc/free/fail counts, hot pool, work area usage, recommended file size limit).
 - **Optional `--report` validation**: Add `--report <file.json>` to `spz_verify` CLI. Validates `extensionsUsed/Required`, KHR sub-fields against actual conversion result.
 
-### Code Quality & CI Enhancement (pending commits)
+### Version Bump
+
+- **Version 2.0.3 → 2.0.4**: Update version strings across `CMakeLists.txt` (project VERSION), `src/queue.cpp` (JSON report `generator.version`), `src/spz_to_glb.cpp` (CLI banner), and `docs/examples/spz2glb_bindings.js` (WASM demo).
+
+### macOS CI Matrix (Intel x64 + Apple Silicon ARM64)
+
+- **Split macOS matrix**: `macos-latest` now defaults to ARM64, so the release matrix was split into two entries producing native CLI + `spz_verify` binaries for both architectures:
+  - `macos-15-intel` (Intel x64) → `spz2glb-macos-x64`
+  - `macos-latest` (ARM64) → `spz2glb-macos-arm64`
+- **Replace retired `macos-13`**: GitHub retired the `macos-13` runner label on 2025-12-04. Intel x64 builds now use the official replacement `macos-15-intel` (the last x86_64 macOS image, available until Aug 2027).
+- **Runner condition**: macOS conditional switched from `matrix.os == 'macos-latest'` to `startsWith(matrix.os, 'macos')` to cover both runners.
+
+### Code Quality & CI Enhancement
 
 - **P7_DEADCODE stage**: Add uninitialized variable checks (`-Wuninitialized`, `-Wmaybe-uninitialized`) and cross-function scope reference detection to `wasm-pre-check.sh`.
 - **Cross-review alignment**: Resolve scope analysis issues in `spz_verify.cpp` flagged by cross-review.

@@ -50,6 +50,7 @@
 - **用途**: 在 SPZ ILV（Information-Label-Value）记录中映射 coordinateSystem（uint32）元数据。
 - **实现**: spz2glb 读取并透传 003 元数据作为描述符（而非指令），坐标转换由渲染器的 `coordinateConverter()` 处理。
 - **验证**: Layer 5（ILV 扩展完整性）校验 TLV 记录结构并强制 003 值域 [0, 16]。
+- **v4 头部对齐**: Layer 5 通过 SPZ v4 头部中的 `tocByteOffset` 定位 ILV header zone，其字段布局已与上游 Niantic `NgspFileHeader`（32 字节）规范对齐——与门卫的已验证解析一致。
 
 ## 与 `splat-transform` 的对比
 

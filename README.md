@@ -50,6 +50,7 @@
 - **Purpose**: Maps coordinateSystem (uint32) metadata within SPZ ILV (Information-Label-Value) records.
 - **Implementation**: spz2glb reads and forwards 003 metadata as descriptor (not instruction), leaving coordinate conversion to the renderer's `coordinateConverter()`.
 - **Validation**: Layer 5 (ILV extension integrity) verifies TLV record structure and enforces 003 value range [0, 16].
+- **v4 header alignment**: Layer 5 locates the ILV header zone via `tocByteOffset` in the SPZ v4 header, whose field layout is aligned with the upstream Niantic `NgspFileHeader` (32-byte) spec — identical to gatekeeper's verified parsing.
 
 ## Comparison with `splat-transform`
 
