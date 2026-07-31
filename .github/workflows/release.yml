@@ -83,14 +83,17 @@ jobs:
 
       - name: Build fastgltf (with warnings suppressed)
         run: |
+          set -euo pipefail
           cmake --build build --config Release -j4 --target fastgltf 2>&1 | tee build.log
 
       - name: Build spz2glb (strict warnings)
         run: |
+          set -euo pipefail
           cmake --build build --config Release -j4 --target spz2glb 2>&1 | tee -a build.log
 
       - name: Build spz_verify (strict warnings)
         run: |
+          set -euo pipefail
           cmake --build build --config Release -j4 --target spz_verify 2>&1 | tee -a build.log
 
       - name: Dump build log on failure
@@ -176,10 +179,12 @@ jobs:
 
       - name: Build spz2glb WASM
         run: |
+          set -euo pipefail
           emmake cmake --build build_wasm --config Release --target spz2glb-wasm 2>&1 | tee build_wasm.log
 
       - name: Build spz_verify WASM
         run: |
+          set -euo pipefail
           emmake cmake --build build_wasm --config Release --target spz_verify-wasm 2>&1 | tee -a build_wasm.log
 
       - name: Dump WASM build log on failure

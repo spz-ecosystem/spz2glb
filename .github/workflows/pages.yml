@@ -55,6 +55,7 @@ jobs:
 
       - name: Build spz2glb WASM
         run: |
+          set -euo pipefail
           emmake cmake --build build_pages --config Release --target spz2glb-wasm 2>&1 | tee build_pages.log
 
       - name: Dump build log on failure
