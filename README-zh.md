@@ -6,26 +6,28 @@
 
 - 当前稳定版本线：**v2.x**（具体版本请以 [Releases](https://github.com/spz-ecosystem/spz2glb/releases) 与仓库 tag 为准）
 - 核心定位：**无损打包**（SPZ 压缩流原封不动存入 GLB）
-- 重点增强：WASM 内存与 API 能力（预分配、显式释放、统计与双档配置）
-- 双端协同：按场景分工 —— 浏览器侧负责轻量预览/快速校验，本地 CLI 负责重任务转换/批处理/深度验证
-- 验证闭环：内置五层验证（结构/无损/解码一致性/元数据一致性/ILV 扩展完整性）+ 云端 browser smoke
+- 重点增强：WASM 内存与 API 能力（预分配、显式释放、统计与双档配置）+ CLI 队列/批处理
+- 双端协同：按场景分工 —— 浏览器侧负责轻量预览/快速校验，本地 CLI 负责重任务转换/批处理/队列处理/深度验证
+- 验证闭环：内置五层验证（结构/无损/解码一致性/元数据一致性/ILV 扩展完整性）+ 云端 browser smoke + JSON 报告验证
 
 ## 职责边界（固定）
 
 - `spz2glb` 只负责两件事：**SPZ→GLB 格式封装**与 **GLB 分发交付链路**。
 - `spz2glb` 不承担压缩算法研发、渲染引擎能力扩展、通用 3D 编辑流水线等超出边界的职责。
-- GLB 合规与正确性判定统一由**五层验证**负责（结构验证 / 无损验证 / 解码一致性验证 / 元数据一致性验证 / ILV 扩展完整性验证）。
-- Web 侧默认面向轻量单文件演示；批量与重任务属于 CLI 路径，不在 Web 默认职责内。
+- 转换正确性与 GLB 合规性由**五层验证** + 可选 `--report` JSON 报告校验共同判定（结构验证 / 无损验证 / 解码一致性验证 / 元数据一致性验证 / ILV 扩展完整性验证）。
+- Web 侧面向轻量交互演示，支持队列处理（最多 2 并发）；CLI 侧负责批量、队列与重验证任务。
 
 ## 核心特性
 
 - **无损打包**: SPZ 压缩流原封不动存入 GLB，100% 字节级保真
 - **SPZ_2 扩展**: 使用 `KHR_gaussian_splatting_compression_spz_2` 标准扩展
-- **大规模重构（v2.0.3）**: 统一 CLI/WASM 核心链路，移除 KHR_gaussian_splatting 编译开关（扩展已进入 Khronos 官方目录，Release Candidate，始终启用）
+- **大规模重构（v2.0.4）**: 统一 CLI/WASM 核心链路，移除 KHR_gaussian_splatting 编译开关（扩展已进入 Khronos 官方目录，Release Candidate，始终启用）
 - **KHR 扩展合规**: 完整 `KHR_gaussian_splatting` 字段序列化（`kernel`、`colorSpace`、`sortingMethod`、`projection`）；嵌套 `KHR_gaussian_splatting_compression_spz_2` 携带完整元数据（`spzVersion`、`compression`、`coordinateSystem`）
-- **WASM 增强**: 预分配输入、显式输出释放、内存统计、compat/perf-lite 双档
-- **双端协同（双场景分工）**: 网页侧轻量交互与快速反馈；本地 CLI 侧重批处理、大文件与重验证
-- **五层验证**: 结构验证 / 无损验证 / 解码一致性验证 / 元数据一致性验证 / ILV 扩展完整性验证
+- **CLI 队列处理**: 内置文件系统队列（`--queue-add`/`--queue`/`--queue-status`/`--queue-clear`），支持 pending/processing/done/failed 四态管理
+- **JSON 转换报告**: 每次转换自动生成 JSON 报告，包含 SPZ/GLB/KHR 完整元数据与时间戳
+- **WASM 增强**: 预分配输入、显式输出释放、内存统计、compat/perf-lite 双档 + 运行时性能面板（11 维统计）
+- **双端协同（双场景分工）**: 网页侧轻量交互与快速反馈；本地 CLI 侧重批处理、队列、大文件与重验证
+- **五层验证**: 结构验证 / 无损验证 / 解码一致性验证 / 元数据一致性验证 / ILV 扩展完整性验证 + 可选 `--report` JSON 报告校验
 - **跨平台**: Windows、Linux、macOS (x64 + ARM)
 - **零依赖运行时**: C++17 + WASM，无额外运行时依赖
 
@@ -53,7 +55,7 @@
 
 > 说明：这里强调的是**工具定位差异**，不是绝对优劣判断。
 
-| 维度 | `spz2glb` (v2.0.3) | `splat-transform` (v3.1.7) |
+| 维度 | `spz2glb` (v2.0.4) | `splat-transform` (v3.1.7) |
 |------|-------------------|-----------------------------|
 | **开发者** | 独立开发者（Pu Junhan） | PlayCanvas |
 | **核心定位** | **无损 SPZ→GLB 打包**（SPZ 压缩流原封不动存入 GLB） | **多格式 splat 转换与编辑**（解压-重建管线） |
@@ -110,11 +112,22 @@ spz_verify all input.spz output.glb
 ### 批量处理
 
 ```bash
-# 批量转换所有 SPZ 文件
+# 方式一：shell 循环（传统方式）
 for file in *.spz; do
     spz2glb "$file" "${file%.spz}.glb"
 done
+
+# 方式二：单进程批量（推荐，避免重复进程启动开销）
+spz2glb --batch .spz --verify
+
+# 方式三：队列处理（文件系统队列，支持恢复与报告导出）
+spz2glb --queue-add scene1.spz scene2.spz scene3.spz
+spz2glb --queue                             # 串行转换
+spz2glb --queue-status                      # 查看队列状态
+# 每文件 JSON 报告写入 queue/done/ 目录，可通过 spz_verify --report 验证
 ```
+
+> CLI 模式为串行转换。JSON 报告格式与 Web 端一致，CLI 端可通过 `spz_verify --report` 消费验证。
 
 ## 快速开始
 
@@ -122,36 +135,39 @@ done
 
 从 [Releases](https://github.com/spz-ecosystem/spz2glb/releases) 下载对应平台的二进制文件：
 
-- Windows: `spz2glb-windows-x64.exe`
-- Linux: `spz2glb-linux-x64`
-- macOS: `spz2glb-macos-x64`
+- **CLI**: `spz2glb-windows-x64.exe` / `spz2glb-linux-x64` / `spz2glb-macos-x64` / `spz2glb-macos-arm64`
+- **WASM**: `spz2glb-compat.js + .wasm` / `spz2glb-perf-lite.js + .wasm`（附带 Web Demo）
+- **验证工具**: `spz_verify-compat.js + .wasm`
 
-### 方式二：从源码编译（一键编译）
+### 方式二：从源码编译
 
 ```bash
-# 1. 克隆仓库
+# 1. 克隆仓库并进入编译目录
 git clone https://github.com/spz-ecosystem/spz2glb.git
-cd spz2glb
+cd spz2glb/tools/spz_to_glb
 
 # 2. 一键编译（自动处理所有依赖）
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 
-# 3. 运行（使用实际二进制路径或 PATH 命令）
-spz2glb input.spz output.glb
+# 3. 运行示例
+./build/spz2glb input.spz output.glb --verify    # 转换 + 五层验证
+./build/spz2glb --queue-add input.spz              # 加入队列
+./build/spz2glb --queue                            # 串行处理队列
+./build/spz_verify all input.spz output.glb        # 独立验证
 ```
 
-**平台特定依赖安装**（编译前）：
+**平台依赖**（编译前安装）：
 
 ```bash
 # Ubuntu/Debian
-sudo apt-get install -y zlib1g-dev
+sudo apt-get install -y zlib1g-dev libzstd-dev
 
 # macOS
-brew install zlib
+brew install zlib zstd
 
 # Windows
-# 无需手动安装，CI 使用 vcpkg 自动安装
+# 无需手动安装，vcpkg 自动处理
 ```
 
 ## 使用方法
@@ -167,6 +183,11 @@ spz2glb <input.spz> <output.glb> [--verify]
 | 标志 | 说明 |
 |------|------|
 | `--verify` | 转换完成后立即运行五层验证（内部调用 spz_verify） |
+| `--batch EXT` | 批量转换所有匹配 EXT 的文件（如 `.spz`），单进程处理 |
+| `--queue-add` | 将文件加入转换队列（pending 目录） |
+| `--queue` | 处理队列（依次转换所有 pending 文件） |
+| `--queue-status` | 显示队列状态（pending/processing 计数、done/failed 历史） |
+| `--queue-clear` | 清理已完成的队列结果 |
 
 **完整示例**：
 
@@ -177,24 +198,54 @@ spz2glb model.spz model.glb
 # 转换并验证
 spz2glb model.spz model.glb --verify
 
-# 批量转换
-for file in *.spz; do
-    spz2glb "$file" "${file%.spz}.glb"
-done
+# 批量转换（单进程）
+spz2glb --batch .spz --verify
+
+# 队列工作流
+spz2glb --queue-add scene1.spz scene2.spz scene3.spz
+spz2glb --queue
+spz2glb --queue-status
 ```
 
-**输出示例**：
+**输出示例**（单文件）：
 
 ```
-[INFO] Loading SPZ: model.spz
-[INFO] SPZ version: 2
-[INFO] Num points: 100000
-[INFO] SH degree: 3
-[INFO] SPZ size (raw compressed): 15 MB
-[INFO] Creating glTF Asset with KHR extensions
-[INFO] Exporting GLB...
+[INFO] Converting to GLB...
+[INFO] Writing GLB: model.glb
 [SUCCESS] GLB exported: model.glb
-[INFO] GLB size: 16 MB
+[INFO] GLB size: 15.73 MB
+```
+
+使用 `--verify` 时，验证摘要紧随其后：
+
+```
+============================================================
+Running Five-Layer Verification...
+============================================================
+...
+============================================================
+Summary:
+  Layer 1 (GLB Structure): PASSED
+  Layer 2 (Binary Lossless): PASSED
+  Layer 3 (Decoding): PASSED
+  Layer 4 (Metadata): PASSED
+  Layer 5 (ILV Extension): PASSED
+============================================================
+[SUCCESS] All verifications PASSED!
+```
+
+**队列输出示例**：
+
+```
+[QUEUE] 3 file(s) added to queue
+
+[QUEUE] maxParallel=1, 3 file(s) pending
+[QUEUE] Processing: scene1.spz
+[QUEUE] Processing: scene2.spz
+[QUEUE] Processing: scene3.spz
+
+[QUEUE] Complete: 3 processed (3 success, 0 failed)
+[QUEUE] Reports written to queue/done/
 ```
 
 ### 五层验证工具 (spz_verify)
@@ -209,11 +260,20 @@ done
 spz_verify <command> [options]
 ```
 
+**选项**：
+
+| 选项 | 说明 |
+|------|------|
+| `--report <file.json>` | 校验转换报告 JSON 与实际转换结果的一致性 |
+
 **命令**：
 
 ```bash
 # 运行全部五层验证
 spz_verify all <input.spz> <output.glb>
+
+# 运行全部五层验证并校验报告
+spz_verify all <input.spz> <output.glb> --report report.json
 
 # 单独运行某层验证
 spz_verify layer1 <output.glb>              # GLB 结构验证 (快速)
@@ -243,45 +303,110 @@ spz_verify layer5 model.spz
 **验证输出**：
 
 ```
-Layer 1: GLB Structure & KHR Extension Validation
-  ✓ Magic number: 0x46546C67 ("glTF")
-  ✓ Version: 2
-  ✓ extensionsUsed contains KHR_gaussian_splatting
-  ✓ extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
-  ✓ extensionsRequired contains KHR_gaussian_splatting
-  ✓ extensionsRequired contains KHR_gaussian_splatting_compression_spz_2
-  ✓ KHR_gaussian_splatting has 'kernel' field
-  ✓ KHR_gaussian_splatting has 'colorSpace' field
-  ✓ compression.bufferView = 0
-  ✓ bufferView.byteLength matches buffers[0].byteLength
-  ✓ bufferView.byteOffset is 4-byte aligned
-  ✓ bufferView inside buffers[0] range
-  ✓ BIN chunk padding valid
-  [PASS] Layer 1 validation passed
+=== Layer 1: GLB Structure & KHR Extension Validation ===
+[PASS] GLB header/chunks are structurally valid
+[PASS] JSON chunk length=1024, padding=0 (4-byte aligned)
+[PASS] BIN chunk length=15728640
+[PASS] extensionsUsed contains KHR_gaussian_splatting
+[PASS] extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
+[PASS] extensionsRequired contains KHR_gaussian_splatting
+[PASS] extensionsRequired contains KHR_gaussian_splatting_compression_spz_2
+[PASS] KHR_gaussian_splatting has 'kernel' field
+[PASS] KHR_gaussian_splatting has 'colorSpace' field
+[PASS] compression.bufferView=0
+[PASS] bufferView.byteLength=15728640 matches buffers[0].byteLength=15728640
+[PASS] bufferView.byteOffset is 4-byte aligned
+[PASS] bufferView is inside buffers[0] range
+[PASS] BIN chunk padding is within 0..3 bytes (actual=0)
+[PASS] Layer 1 contract assertions passed
 
-Layer 2: Payload Extraction & Byte Equality
-  ✓ SPZ input bytes: 15728640
-  ✓ Extracted bytes: 15728640
-  ✓ Extracted payload is byte-identical to input SPZ
-  [PASS] Layer 2 validation passed
+=== Layer 2: Payload Extraction & Byte Equality ===
+SPZ input bytes: 15728640
+Extracted bytes: 15728640
+[PASS] extracted payload is byte-identical to input SPZ
 
-Layer 3: Decode Consistency Validation
-  ✓ GLB structure valid
-  ✓ Extension integrity check passed
-  [PASS] Layer 3 validation passed
+=== Layer 3: Decoding Consistency & v4 Header/Trailer Checks ===
+[PASS] SPZ header parsed from gzip payload
+[PASS] SPZ version=3, numPoints=100000, flags=0x0
+[PASS] non-v4 payload (v3) header checks complete
+[PASS] decoding consistency checks complete
 
-Layer 4: GLB Extension Metadata vs SPZ Header Consistency
-  ✓ SPZ version consistent: 2
-  ✓ GLB coordinateSystem recorded in metadata
-  [PASS] Layer 4 validation passed
+=== Layer 4: GLB Extension Metadata vs SPZ Header Consistency ===
+[PASS] SPZ version consistent: 3
+[INFO] GLB coordinateSystem=1 (recorded in metadata)
+[PASS] Layer 4 metadata consistency checks passed
 
-Layer 5: ILV Extension Completeness
-  ✓ ILV 0xADBE0003 coordinateSystem=1 (valid, range [0,16])
-  ✓ All ILV records pass integrity checks
-  [PASS] Layer 5 validation passed
+=== Layer 5: ILV Extension Completeness ===
+[PASS] Not a v4 ZSTD SPZ, no ILV records expected
+[PASS] Layer 5 ILV extension checks passed
 
-[SUCCESS] All 5 layers validation passed!
+============================================================
+Summary:
+  Layer 1 (GLB Structure): PASSED
+  Layer 2 (Binary Lossless): PASSED
+  Layer 3 (Decoding): PASSED
+  Layer 4 (Metadata): PASSED
+  Layer 5 (ILV Extension): PASSED
+============================================================
+[SUCCESS] All 5 verifications PASSED!
 ```
+
+### JSON 转换报告
+
+每次成功转换（CLI `--queue` 或 Web Demo）都会生成包含完整元数据的 JSON 报告：
+
+```json
+{
+  "file": "model.spz",
+  "sizeBytes": 15728640,
+  "spz": {
+    "version": 3,
+    "compression": "gzip"
+  },
+  "glb": {
+    "magic": "0x46546C67",
+    "version": 2,
+    "jsonChunkSize": 1024,
+    "binChunkSize": 15728640,
+    "totalSizeBytes": 15730688,
+    "outputSizeBytes": 15729664
+  },
+  "extensionsUsed": [
+    "KHR_gaussian_splatting",
+    "KHR_gaussian_splatting_compression_spz_2"
+  ],
+  "extensionsRequired": [
+    "KHR_gaussian_splatting"
+  ],
+  "KHR_gaussian_splatting": {
+    "kernel": "3D_GAUSSIAN",
+    "colorSpace": "SRGB",
+    "sortingMethod": "SPZ_ORDER"
+  },
+  "KHR_gaussian_splatting_compression_spz_2": {
+    "bufferView": 0,
+    "spzVersion": 3,
+    "compression": "gzip",
+    "coordinateSystem": 1
+  },
+  "coordinateSystem": {
+    "found": true,
+    "extensionId": "0xADBE0003",
+    "value": 1
+  },
+  "timestamp": "2026-07-30T15:00:00+0800",
+  "generator": {
+    "name": "spz2glb",
+    "version": "2.0.4",
+    "license": "MIT",
+    "url": "https://github.com/spz-ecosystem/spz2glb"
+  },
+  "result": "success",
+  "timingMs": 1523
+}
+```
+
+> 报告 JSON 可通过 `spz_verify --report report.json` 验证。CLI 队列与 Web Demo 的报告格式一致，支持两端交叉验证。
 
 ## 自动化验证脚本（推荐）
 
@@ -392,6 +517,17 @@ emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
 **重要**：请确保 `spz2glb.js` 与 `spz2glb.wasm` 来自同一次构建并放在同一目录，通过 HTTP 服务器加载。若构建产物包含附加侧文件，也应按同一版本集一起部署。
 
+### Web Demo 功能
+
+附带的 `index.html` 提供完整功能演示：
+- **单文件转换**: 上传一个 `.spz` 文件，下载单个 `.glb`
+- **多文件队列**（`MAX_PARALLEL = 2`）: 拖拽或多选文件，最多 2 个并发处理。每个文件串行转换（SPZ→GLB）。
+- **支持 v3 和 v4**: gzip 压缩（v3）和 ZSTD 压缩（v4）SPZ 文件均可处理。
+- **JSON 报告导出**: 每个完成的转换可下载 JSON 报告，包含 SPZ/GLB/KHR 完整元数据和时间戳。
+- **CLI 兼容**: 导出的 JSON 报告可通过 `spz_verify --report <file.json>` 在 CLI 端验证。
+- **运行时性能面板**: 自动展示 11 维统计（WASM 版本、设备信息、内存统计、分配/释放/失败计数、推荐文件大小上限）。
+- **智能内存分配**: 设备感知分档自动调整内存预算。
+
 ### JavaScript API
 
 ```javascript
@@ -404,8 +540,15 @@ if (!result) throw new Error('转换失败');
 
 const glbBytes = result.bytes;        // 指向 WASM 内存的 Uint8Array 视图
 const glbBlob = result.toBlob('model/gltf-binary');
+
+// 内存遥测数据（同时在内置性能面板中展示）
 const stats = api.getMemoryStats();
 console.log('峰值内存(MB):', (stats.peakUsageBytes / 1024 / 1024).toFixed(2));
+
+// 网页 Demo 还提供：
+// - JSON 转换报告：SPZ/GLB/KHR 完整元数据
+// - 运行时性能面板：11 维度统计
+// - 多文件队列：支持拖拽选择和逐一下载
 
 result.release(); // 必须释放 WASM 输出缓冲
 ```
@@ -448,6 +591,7 @@ WASM 构建包含以下优化：
 - **compat/perf-lite 双档**：按运行目标配置内存行为
 - **内存池**：bump allocator 快速分配
 - **热点对象池**：固定大小对象复用
+- **运行时性能面板**：11 维度统计（WASM 版本、设备信息、峰值/当前内存、分配/释放/失败计数、热点池使用、工作区统计、推荐文件大小上限）
 
 > 示例：`dunhuang_000000.spz`（24.78 MB）在网页端转换成功，耗时约 `506 ms`，峰值内存约 `49.56 MB`。
 
@@ -475,7 +619,7 @@ spz2glb/
 ├── LICENSE                     # MIT 许可证
 ├── README.md / README-zh.md    # 文档
 ├── src/
-│   ├── spz2glb_core.cpp/.h     # 核心转换逻辑（v2.0.3 统一入口）
+│   ├── spz2glb_core.cpp/.h     # 核心转换逻辑（v2.0.4 统一入口）
 │   ├── spz2glb_wasm_c_api.cpp/.h  # WASM C API（预分配/释放/统计）
 │   ├── memory_pool.cpp/.h      # 内存池与热点对象池
 │   ├── mapped_file.h           # 跨平台内存映射文件读取器 (RAII)

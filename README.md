@@ -6,26 +6,28 @@
 
 - Current stable line: **v2.x** (for exact version, see [Releases](https://github.com/spz-ecosystem/spz2glb/releases) and repository tags)
 - Core positioning: **lossless packaging** (SPZ stream stored as-is in GLB)
-- Key enhancement: WASM memory/API capabilities (reserved input, explicit release, stats, dual profile)
-- Dual-end collaboration: scenario split — browser side for lightweight preview/quick checks, local CLI for heavy conversion, batch jobs, and deep verification
-- Validation closure: built-in 5-layer verification (structure/lossless/decoding consistency/metadata consistency/ILV extension integrity) + cloud browser smoke
+- Key enhancement: WASM memory/API capabilities (reserved input, explicit release, stats, dual profile) + CLI queue/batch processing
+- Dual-end collaboration: scenario split — browser side for lightweight preview/quick checks, local CLI for heavy conversion, batch jobs, queue processing, and deep verification
+- Validation closure: built-in 5-layer verification (structure/lossless/decoding consistency/metadata consistency/ILV extension integrity) + cloud browser smoke + JSON report validation
 
 ## Responsibility Boundary (Fixed)
 
 - `spz2glb` is responsible for only two things: **SPZ→GLB format packaging** and **GLB delivery/distribution workflow**.
 - `spz2glb` does not own compression algorithm R&D, rendering-engine capability expansion, or generic 3D editing pipelines.
-- GLB compliance and correctness are judged by the **five-layer verification** system (structure / lossless / decoding consistency / metadata consistency / ILV extension integrity).
-- The Web path is for lightweight single-file demos by default; batch and heavy workloads belong to the CLI path.
+- Conversion correctness and GLB compliance are verified by the **five-layer verification** system + optional `--report` JSON report validation (structure / lossless / decoding consistency / metadata consistency / ILV extension integrity).
+- The Web path targets lightweight interactive demos with queue support (max 2 concurrent); the CLI path handles batch, queue, and heavy verification workflows.
 
 ## Core Features
 
 - **Lossless Packaging**: SPZ compressed stream stored as-is in GLB, 100% byte-level fidelity
 - **SPZ_2 Extension**: Uses `KHR_gaussian_splatting_compression_spz_2` standard extension
-- **Large-Scale Refactor (v2.0.3)**: Unified CLI/WASM core path, removed compile-time flag for KHR_gaussian_splatting (now always enabled per Khronos official extensions directory)
+- **Large-Scale Refactor (v2.0.4)**: Unified CLI/WASM core path, removed compile-time flag for KHR_gaussian_splatting (now always enabled per Khronos official extensions directory)
 - **KHR Extension Compliance**: Full `KHR_gaussian_splatting` field serialization (`kernel`, `colorSpace`, `sortingMethod`, `projection`); nested `KHR_gaussian_splatting_compression_spz_2` with complete metadata (`spzVersion`, `compression`, `coordinateSystem`)
-- **WASM Enhancements**: Reserved input, explicit output release, memory stats, compat/perf-lite dual profile
-- **Dual-End Collaboration (scenario split)**: lightweight web interaction and fast feedback on browser side; batch, large-file, and heavy verification workflows on local CLI side
-- **Five-Layer Verification**: Structure validation / lossless validation / decoding consistency / metadata consistency / ILV extension integrity
+- **CLI Queue Processing**: Built-in file-system queue (`--queue-add`/`--queue`/`--queue-status`/`--queue-clear`) with pending/processing/done/failed state management
+- **JSON Conversion Report**: Auto-generated JSON report per conversion with full SPZ/GLB/KHR metadata and timestamp
+- **WASM Enhancements**: Reserved input, explicit output release, memory stats, compat/perf-lite dual profile + runtime performance panel (11-dimension telemetry)
+- **Dual-End Collaboration (scenario split)**: lightweight web interaction and fast feedback on browser side; batch, queue, large-file, and heavy verification workflows on local CLI side
+- **Five-Layer Verification**: Structure validation / lossless validation / decoding consistency / metadata consistency / ILV extension integrity + optional `--report` JSON report validation
 - **Cross-Platform**: Windows, Linux, macOS (x64 + ARM)
 - **Zero Runtime Dependencies**: C++17 + WASM, no additional runtime dependencies
 
@@ -53,7 +55,7 @@
 
 > Note: this section describes **tool positioning differences**, not an absolute quality ranking.
 
-| Dimension | `spz2glb` (v2.0.3) | `splat-transform` (v3.1.7) |
+| Dimension | `spz2glb` (v2.0.4) | `splat-transform` (v3.1.7) |
 |-----------|-------------------|-----------------------------|
 | **Developer** | Independent (Pu Junhan) | PlayCanvas |
 | **Core positioning** | **Lossless SPZ→GLB packaging** (SPZ compressed stream preserved as-is) | **Multi-format splat conversion & editing** (decompress-rebuild pipeline) |
@@ -110,48 +112,62 @@ spz_verify all input.spz output.glb
 ### Batch Processing
 
 ```bash
-# Batch convert all SPZ files
+# Option 1: shell loop (traditional)
 for file in *.spz; do
     spz2glb "$file" "${file%.spz}.glb"
 done
+
+# Option 2: single-process batch (recommended, avoids repeated process startup overhead)
+spz2glb --batch .spz --verify
+
+# Option 3: queue processing (file-system queue with resume and report export)
+spz2glb --queue-add scene1.spz scene2.spz scene3.spz
+spz2glb --queue                             # serial conversion
+spz2glb --queue-status                      # view queue state
+# Per-file JSON reports written to queue/done/, validated by spz_verify --report
 ```
+
+> CLI mode uses serial conversion. JSON report format is identical to the Web demo. Reports can be consumed by `spz_verify --report` on the CLI side.
 
 ## Quick Start
 
 ### Option 1: Download Pre-compiled Binaries
 
-Download binaries for your platform from [Releases](https://github.com/spz-ecosystem/spz2glb/releases):
+Download from [Releases](https://github.com/spz-ecosystem/spz2glb/releases):
 
-- Windows: `spz2glb-windows-x64.exe`
-- Linux: `spz2glb-linux-x64`
-- macOS: `spz2glb-macos-x64`
+- **CLI**: `spz2glb-windows-x64.exe` / `spz2glb-linux-x64` / `spz2glb-macos-x64` / `spz2glb-macos-arm64`
+- **WASM**: `spz2glb-compat.js + .wasm` / `spz2glb-perf-lite.js + .wasm` (bundled Web demo)
+- **Verification**: `spz_verify-compat.js + .wasm`
 
-### Option 2: Build from Source (One-Click Build)
+### Option 2: Build from Source
 
 ```bash
-# 1. Clone the repository
+# 1. Clone and enter build directory
 git clone https://github.com/spz-ecosystem/spz2glb.git
-cd spz2glb
+cd spz2glb/tools/spz_to_glb
 
-# 2. One-click build (handles all dependencies automatically)
+# 2. One-click build (all dependencies handled automatically)
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release -j$(nproc)
 
-# 3. Run (use actual binary path or PATH command)
-spz2glb input.spz output.glb
+# 3. Run examples
+./build/spz2glb input.spz output.glb --verify   # convert + 5-layer verify
+./build/spz2glb --queue-add input.spz             # add to queue
+./build/spz2glb --queue                           # process queue serially
+./build/spz_verify all input.spz output.glb       # standalone verification
 ```
 
-**Platform-Specific Dependencies** (install before building):
+**Platform Dependencies** (install before building):
 
 ```bash
 # Ubuntu/Debian
-sudo apt-get install -y zlib1g-dev
+sudo apt-get install -y zlib1g-dev libzstd-dev
 
 # macOS
-brew install zlib
+brew install zlib zstd
 
 # Windows
-# No manual installation required, CI uses vcpkg to install automatically
+# No manual installation required; vcpkg handles dependencies automatically
 ```
 
 ## Usage
@@ -167,6 +183,11 @@ spz2glb <input.spz> <output.glb> [--verify]
 | Flag | Description |
 |------|-------------|
 | `--verify` | Run 5-layer verification immediately after conversion (invokes spz_verify internally) |
+| `--batch EXT` | Batch convert all files matching EXT (e.g. `.spz`) in a single process |
+| `--queue-add` | Add file(s) to conversion queue (pending directory) |
+| `--queue` | Process the queue (convert all pending files sequentially) |
+| `--queue-status` | Show queue state (pending/processing count, done/failed history) |
+| `--queue-clear` | Clear completed queue results |
 
 **Complete Examples**:
 
@@ -177,24 +198,54 @@ spz2glb model.spz model.glb
 # Convert and verify
 spz2glb model.spz model.glb --verify
 
-# Batch conversion
-for file in *.spz; do
-    spz2glb "$file" "${file%.spz}.glb"
-done
+# Batch conversion (single process)
+spz2glb --batch .spz --verify
+
+# Queue workflow
+spz2glb --queue-add scene1.spz scene2.spz scene3.spz
+spz2glb --queue
+spz2glb --queue-status
 ```
 
-**Output Example**:
+**Output Example** (single file):
 
 ```
-[INFO] Loading SPZ: model.spz
-[INFO] SPZ version: 2
-[INFO] Num points: 100000
-[INFO] SH degree: 3
-[INFO] SPZ size (raw compressed): 15 MB
-[INFO] Creating glTF Asset with KHR extensions
-[INFO] Exporting GLB...
+[INFO] Converting to GLB...
+[INFO] Writing GLB: model.glb
 [SUCCESS] GLB exported: model.glb
-[INFO] GLB size: 16 MB
+[INFO] GLB size: 15.73 MB
+```
+
+With `--verify`, verification summary follows:
+
+```
+============================================================
+Running Five-Layer Verification...
+============================================================
+...
+============================================================
+Summary:
+  Layer 1 (GLB Structure): PASSED
+  Layer 2 (Binary Lossless): PASSED
+  Layer 3 (Decoding): PASSED
+  Layer 4 (Metadata): PASSED
+  Layer 5 (ILV Extension): PASSED
+============================================================
+[SUCCESS] All verifications PASSED!
+```
+
+**Queue Output Example**:
+
+```
+[QUEUE] 3 file(s) added to queue
+
+[QUEUE] maxParallel=1, 3 file(s) pending
+[QUEUE] Processing: scene1.spz
+[QUEUE] Processing: scene2.spz
+[QUEUE] Processing: scene3.spz
+
+[QUEUE] Complete: 3 processed (3 success, 0 failed)
+[QUEUE] Reports written to queue/done/
 ```
 
 ### Five-Layer Verification Tool (spz_verify)
@@ -209,11 +260,20 @@ done
 spz_verify <command> [options]
 ```
 
+**Options**:
+
+| Option | Description |
+|--------|-------------|
+| `--report <file.json>` | Validate conversion report JSON against actual conversion result |
+
 **Commands**:
 
 ```bash
 # Run all five layers of verification
 spz_verify all <input.spz> <output.glb>
+
+# Run all five layers with report validation
+spz_verify all <input.spz> <output.glb> --report report.json
 
 # Run individual layer verification
 spz_verify layer1 <output.glb>              # GLB structure validation (fast)
@@ -243,45 +303,110 @@ spz_verify layer5 model.spz
 **Verification Output**:
 
 ```
-Layer 1: GLB Structure & KHR Extension Validation
-  ✓ Magic number: 0x46546C67 ("glTF")
-  ✓ Version: 2
-  ✓ extensionsUsed contains KHR_gaussian_splatting
-  ✓ extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
-  ✓ extensionsRequired contains KHR_gaussian_splatting
-  ✓ extensionsRequired contains KHR_gaussian_splatting_compression_spz_2
-  ✓ KHR_gaussian_splatting has 'kernel' field
-  ✓ KHR_gaussian_splatting has 'colorSpace' field
-  ✓ compression.bufferView = 0
-  ✓ bufferView.byteLength matches buffers[0].byteLength
-  ✓ bufferView.byteOffset is 4-byte aligned
-  ✓ bufferView inside buffers[0] range
-  ✓ BIN chunk padding valid
-  [PASS] Layer 1 validation passed
+=== Layer 1: GLB Structure & KHR Extension Validation ===
+[PASS] GLB header/chunks are structurally valid
+[PASS] JSON chunk length=1024, padding=0 (4-byte aligned)
+[PASS] BIN chunk length=15728640
+[PASS] extensionsUsed contains KHR_gaussian_splatting
+[PASS] extensionsUsed contains KHR_gaussian_splatting_compression_spz_2
+[PASS] extensionsRequired contains KHR_gaussian_splatting
+[PASS] extensionsRequired contains KHR_gaussian_splatting_compression_spz_2
+[PASS] KHR_gaussian_splatting has 'kernel' field
+[PASS] KHR_gaussian_splatting has 'colorSpace' field
+[PASS] compression.bufferView=0
+[PASS] bufferView.byteLength=15728640 matches buffers[0].byteLength=15728640
+[PASS] bufferView.byteOffset is 4-byte aligned
+[PASS] bufferView is inside buffers[0] range
+[PASS] BIN chunk padding is within 0..3 bytes (actual=0)
+[PASS] Layer 1 contract assertions passed
 
-Layer 2: Payload Extraction & Byte Equality
-  ✓ SPZ input bytes: 15728640
-  ✓ Extracted bytes: 15728640
-  ✓ Extracted payload is byte-identical to input SPZ
-  [PASS] Layer 2 validation passed
+=== Layer 2: Payload Extraction & Byte Equality ===
+SPZ input bytes: 15728640
+Extracted bytes: 15728640
+[PASS] extracted payload is byte-identical to input SPZ
 
-Layer 3: Decode Consistency Validation
-  ✓ GLB structure valid
-  ✓ Extension integrity check passed
-  [PASS] Layer 3 validation passed
+=== Layer 3: Decoding Consistency & v4 Header/Trailer Checks ===
+[PASS] SPZ header parsed from gzip payload
+[PASS] SPZ version=3, numPoints=100000, flags=0x0
+[PASS] non-v4 payload (v3) header checks complete
+[PASS] decoding consistency checks complete
 
-Layer 4: GLB Extension Metadata vs SPZ Header Consistency
-  ✓ SPZ version consistent: 2
-  ✓ GLB coordinateSystem recorded in metadata
-  [PASS] Layer 4 validation passed
+=== Layer 4: GLB Extension Metadata vs SPZ Header Consistency ===
+[PASS] SPZ version consistent: 3
+[INFO] GLB coordinateSystem=1 (recorded in metadata)
+[PASS] Layer 4 metadata consistency checks passed
 
-Layer 5: ILV Extension Completeness
-  ✓ ILV 0xADBE0003 coordinateSystem=1 (valid, range [0,16])
-  ✓ All ILV records pass integrity checks
-  [PASS] Layer 5 validation passed
+=== Layer 5: ILV Extension Completeness ===
+[PASS] Not a v4 ZSTD SPZ, no ILV records expected
+[PASS] Layer 5 ILV extension checks passed
 
-[SUCCESS] All 5 layers validation passed!
+============================================================
+Summary:
+  Layer 1 (GLB Structure): PASSED
+  Layer 2 (Binary Lossless): PASSED
+  Layer 3 (Decoding): PASSED
+  Layer 4 (Metadata): PASSED
+  Layer 5 (ILV Extension): PASSED
+============================================================
+[SUCCESS] All 5 verifications PASSED!
 ```
+
+### JSON Conversion Report
+
+Each successful conversion (CLI `--queue` or Web demo) produces a JSON report with full metadata:
+
+```json
+{
+  "file": "model.spz",
+  "sizeBytes": 15728640,
+  "spz": {
+    "version": 3,
+    "compression": "gzip"
+  },
+  "glb": {
+    "magic": "0x46546C67",
+    "version": 2,
+    "jsonChunkSize": 1024,
+    "binChunkSize": 15728640,
+    "totalSizeBytes": 15730688,
+    "outputSizeBytes": 15729664
+  },
+  "extensionsUsed": [
+    "KHR_gaussian_splatting",
+    "KHR_gaussian_splatting_compression_spz_2"
+  ],
+  "extensionsRequired": [
+    "KHR_gaussian_splatting"
+  ],
+  "KHR_gaussian_splatting": {
+    "kernel": "3D_GAUSSIAN",
+    "colorSpace": "SRGB",
+    "sortingMethod": "SPZ_ORDER"
+  },
+  "KHR_gaussian_splatting_compression_spz_2": {
+    "bufferView": 0,
+    "spzVersion": 3,
+    "compression": "gzip",
+    "coordinateSystem": 1
+  },
+  "coordinateSystem": {
+    "found": true,
+    "extensionId": "0xADBE0003",
+    "value": 1
+  },
+  "timestamp": "2026-07-30T15:00:00+0800",
+  "generator": {
+    "name": "spz2glb",
+    "version": "2.0.4",
+    "license": "MIT",
+    "url": "https://github.com/spz-ecosystem/spz2glb"
+  },
+  "result": "success",
+  "timingMs": 1523
+}
+```
+
+> The report JSON can be validated by `spz_verify --report report.json`. The format is identical between CLI queue and Web demo, enabling cross-end report verification.
 
 ## Automated Verification Script (Recommended)
 
@@ -392,6 +517,17 @@ emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
 **Important**: Keep `spz2glb.js` and `spz2glb.wasm` from the same build output in the same directory and load via HTTP server. If your build also produces side files, deploy them together with the same version set.
 
+### Web Demo Features
+
+The bundled `index.html` provides a full-featured demo:
+- **Single-file conversion**: Upload one `.spz` file, download a single `.glb`
+- **Multi-file queue** (`MAX_PARALLEL = 2`): Drag-drop or multi-select up to 2 files processed concurrently. Each file is converted serially (SPZ→GLB).
+- **Supports v3 and v4**: Gzip-compressed (v3) and ZSTD-compressed (v4) SPZ files.
+- **JSON report export**: Each completed conversion produces a downloadable JSON report with full SPZ/GLB/KHR metadata and timestamp.
+- **CLI compatibility**: Exported JSON reports can be validated by `spz_verify --report <file.json>`.
+- **Runtime performance panel**: Auto-displayed 11-dimension telemetry (WASM version, device info, memory stats, alloc/free/fail counts, recommended file size limit).
+- **Smart memory allocation**: Device-aware tiering automatically adjusts memory budget.
+
 ### JavaScript API
 
 ```javascript
@@ -404,8 +540,15 @@ if (!result) throw new Error('Conversion failed');
 
 const glbBytes = result.bytes;        // Uint8Array view on WASM memory
 const glbBlob = result.toBlob('model/gltf-binary');
+
+// Memory telemetry (also displayed in the built-in performance panel)
 const stats = api.getMemoryStats();
 console.log('Peak MB:', (stats.peakUsageBytes / 1024 / 1024).toFixed(2));
+
+// The web demo also provides:
+// - JSON conversion report with full SPZ/GLB/KHR metadata
+// - Runtime performance stats panel (11 dimensions)
+// - Multi-file queue with drag-drop support and per-file download
 
 result.release(); // Required: release WASM output buffer
 ```
@@ -448,6 +591,7 @@ The WASM build includes:
 - **compat/perf-lite dual profile**: Configurable memory behavior by runtime target
 - **Memory pool**: Bump allocator for fast allocation
 - **Hot object pool**: Fixed-size object reuse
+- **Runtime performance panel**: 11-dimension telemetry (WASM version, device info, peak/current memory, alloc/free/fail counts, hot pool usage, work area stats, recommended file size limit)
 
 > Example: `dunhuang_000000.spz` (24.78 MB) converts successfully in browser in about `506 ms`, with peak memory around `49.56 MB`.
 
@@ -475,7 +619,7 @@ spz2glb/
 ├── LICENSE                     # MIT License
 ├── README.md / README-zh.md    # Documentation
 ├── src/
-│   ├── spz2glb_core.cpp/.h     # Core conversion logic (v2.0.3 unified entry)
+│   ├── spz2glb_core.cpp/.h     # Core conversion logic (v2.0.4 unified entry)
 │   ├── spz2glb_wasm_c_api.cpp/.h  # WASM C API (reserve/release/stats)
 │   ├── memory_pool.cpp/.h      # Memory pool and hot object pool
 │   ├── mapped_file.h           # Cross-platform memory-mapped file reader (RAII)
