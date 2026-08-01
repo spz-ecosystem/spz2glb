@@ -409,6 +409,8 @@
                 processing--;
                 updateQueueBar();
                 renderFileList();
+                // 转换完成后刷新性能面板，留存本次转换的内存/分配统计
+                renderPerfPanel();
                 // 自动推进队列
                 processQueue();
             }

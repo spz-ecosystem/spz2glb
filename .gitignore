@@ -48,6 +48,9 @@ CLAUDE.md
 scripts/configure-branch-protection*.sh
 scripts/verify-branch-protection*.sh
 
+# Local CI status tool (not pushed; available on main working tree without re-creating per branch)
+scripts/ci-status.sh
+
 # Executables
 spz2glb
 spz2glb.exe
