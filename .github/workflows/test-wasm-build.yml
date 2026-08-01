@@ -2,6 +2,9 @@
 
 name: Test WASM Build
 
+# 固定 run 显示名，避免 Actions 从非 ASCII commit message 派生标题时出现问号
+run-name: Test WASM Build - ${{ github.ref_name }}
+
 permissions:
   contents: read
 
