@@ -9,6 +9,7 @@ on:
       - feature/spz2glb-v4-zstd-adaptation
       - clean-pr
       - feature/changelog-gate
+      - feature/spz2glb-perf-panel-fix
     tags:
       - 'v*'
   workflow_dispatch:
