@@ -12,6 +12,15 @@ export async function loadSpz2Glb(wasmUrl, options = {}) {
         locateFile: options.locateFile ?? ((path) => path.endsWith('.wasm') ? wasmUrl + cacheBust : path),
     });
 
+    // wasm 预留输入缓冲区是全局单例：并发 async 转换（分块写入间让出事件循环）会交错写坏数据。
+    // 用 Promise 链把转换串行化——UI 可并行排队，wasm 转换严格串行（安全优先）。
+    let convertChain = Promise.resolve();
+    const withConvertLock = (fn) => {
+        const next = convertChain.then(() => fn(), () => fn());
+        convertChain = next.catch(() => {});
+        return next;
+    };
+
     return {
         validateHeader(buffer) {
             return this.validateGlbHeader(buffer);
@@ -37,25 +46,29 @@ export async function loadSpz2Glb(wasmUrl, options = {}) {
 
         convert(spzBuffer) {
             const size = spzBuffer.byteLength;
-            const inputPtr = reserveInput(module, size);
-            try {
-                getHeap(module).set(new Uint8Array(spzBuffer.buffer, spzBuffer.byteOffset, size), inputPtr);
-                return convertReservedInput(module, size);
-            } finally {
-                releaseReservedInput(module);
-            }
+            return withConvertLock(() => {
+                const inputPtr = reserveInput(module, size);
+                try {
+                    getHeap(module).set(new Uint8Array(spzBuffer.buffer, spzBuffer.byteOffset, size), inputPtr);
+                    return convertReservedInput(module, size);
+                } finally {
+                    releaseReservedInput(module);
+                }
+            });
         },
 
         async convertFile(file, options = {}) {
             const chunkSize = normalizeChunkSize(options.chunkSize ?? 1024 * 1024);
             const onChunk = typeof options.onChunk === 'function' ? options.onChunk : null;
-            const inputPtr = reserveInput(module, file.size);
-            try {
-                await writeFileToReservedInput(module, file, inputPtr, chunkSize, onChunk);
-                return convertReservedInput(module, file.size);
-            } finally {
-                releaseReservedInput(module);
-            }
+            return withConvertLock(async () => {
+                const inputPtr = reserveInput(module, file.size);
+                try {
+                    await writeFileToReservedInput(module, file, inputPtr, chunkSize, onChunk);
+                    return convertReservedInput(module, file.size);
+                } finally {
+                    releaseReservedInput(module);
+                }
+            });
         },
 
         getMemoryStats() {
