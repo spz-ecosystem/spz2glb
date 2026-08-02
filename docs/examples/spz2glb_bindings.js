@@ -361,6 +361,8 @@ export function generateReportJson(opts) {
         result: opts.success ? 'success' : 'failed',
         timingMs: opts.timingMs,
         timingMsDisplay: `${Math.round(opts.timingMs)} ms`,
+        conversionMs: opts.conversionMs ?? null,
+        conversionMsDisplay: opts.conversionMs != null ? `${Math.round(opts.conversionMs)} ms` : null,
     };
 
     // 失败时添加错误信息

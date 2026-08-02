@@ -372,11 +372,14 @@
             let success = false;
             let errorMsg = '';
             let glbInfo = null;
+            let conversionMs = null;   // 纯 WASM 转换耗时（分段计时，定位波动源）
 
             try {
                 showStatus(`<span class="loading-spinner"></span>转换: ${file.name}`, 'loading');
 
+                const tConv = performance.now();
                 glbResult = await spz2glb.convertFile(file);
+                conversionMs = performance.now() - tConv;
 
                 if (!glbResult) {
                     throw new Error('WASM 转换返回空结果');
@@ -399,6 +402,7 @@
                     glbInfo,
                     success: true,
                     timingMs: performance.now() - startTime,
+                    conversionMs,
                 });
 
                 // 保存 GLB 供下载
@@ -424,6 +428,7 @@
                     success: false,
                     errorMsg: err.message,
                     timingMs: performance.now() - startTime,
+                    conversionMs,
                 });
                 showStatus(`❌ ${file.name}: ${err.message}`, 'error');
             } finally {
@@ -434,6 +439,7 @@
                 lastConversion = {
                     name: file.name,
                     timingMs: performance.now() - startTime,
+                    conversionMs,
                     success,
                 };
                 updateQueueBar();
@@ -511,7 +517,9 @@
                     ? new Date(window.spzLoadStamp).toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(window.spzLoadStamp % 1000).padStart(3, '0')
                     : '—' },
                 { label: '最近转换', value: lastConversion ? lastConversion.name : '—' },
-                { label: '转换耗时', value: lastConversion ? `${Math.round(lastConversion.timingMs)} ms` : '—' },
+                { label: 'WASM 转换耗时', value: lastConversion && lastConversion.conversionMs != null ? `${Math.round(lastConversion.conversionMs)} ms` : '—' },
+                { label: '总耗时', value: lastConversion ? `${Math.round(lastConversion.timingMs)} ms` : '—' },
+                { label: 'JS 侧开销', value: lastConversion && lastConversion.conversionMs != null ? `${Math.round(Math.max(0, lastConversion.timingMs - lastConversion.conversionMs))} ms` : '—' },
                 { label: '转换结果', value: lastConversion ? (lastConversion.success ? '成功' : '失败') : '—' },
                 { label: '设备类型', value: `${info.device.type} (${info.device.tier})` },
                 { label: '内存峰值', value: formatSize(stats.peakUsageBytes) },
