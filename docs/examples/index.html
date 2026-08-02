@@ -389,6 +389,12 @@
 
                 success = true;
                 showStatus(`✅ ${file.name} 转换成功`, 'success');
+
+                // 打包完成自动下载：GLB + JSON 报告
+                // （浏览器可能拦截无手势自动下载，需在设置中允许自动下载）
+                const glbName = file.name.replace(/\.spz$/i, '.glb');
+                downloadFile(item.glbBlob, glbName);
+                downloadFile(new Blob([item.reportJson], { type: 'application/json' }), glbName + '.report.json');
             } catch (err) {
                 errorMsg = err.message;
                 item.reportJson = generateReportJson({
@@ -407,6 +413,8 @@
                 if (glbResult) glbResult.release();
                 item.status = success ? 'done' : 'failed';
                 processing--;
+                // 自动清理已完成项（GLB/报告已自动下载），释放 file/glbBlob 大引用（搞定自动释放）
+                queue = queue.filter(i => i.status === 'queued' || i.status === 'processing');
                 updateQueueBar();
                 renderFileList();
                 // 转换完成后刷新性能面板，留存本次转换的内存/分配统计
