@@ -6,7 +6,9 @@ name: Pages
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - feature/spz2glb-perf-panel-fix
   workflow_dispatch:
 
 permissions:
