@@ -465,6 +465,9 @@
 
             const rows = [
                 { label: 'WASM 版本', value: version },
+                { label: '加载时间戳', value: window.spzLoadStamp
+                    ? new Date(window.spzLoadStamp).toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(window.spzLoadStamp % 1000).padStart(3, '0')
+                    : '—' },
                 { label: '设备类型', value: `${info.device.type} (${info.device.tier})` },
                 { label: '内存峰值', value: formatSize(stats.peakUsageBytes) },
                 { label: '当前内存', value: formatSize(stats.currentUsageBytes) },
