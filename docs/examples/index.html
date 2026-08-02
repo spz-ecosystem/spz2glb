@@ -257,11 +257,17 @@
         }
 
         function updateQueueBar() {
-            const counts = { pending: 0, processing: 0, done: 0, failed: 0 };
+            if (queue.length === 0) {
+                // 队列清空时隐藏状态条（避免残留 0/0/0/0 空条）
+                document.getElementById('queueBar').style.display = 'none';
+                return;
+            }
+            const counts = { queued: 0, processing: 0, done: 0, failed: 0 };
             for (const item of queue) {
                 counts[item.status]++;
             }
-            document.getElementById('qPending').querySelector('.count').textContent = counts.pending;
+            // 注意：状态名是 'queued'（不是 'pending'），需映射到"待处理"计数
+            document.getElementById('qPending').querySelector('.count').textContent = counts.queued;
             document.getElementById('qProcessing').querySelector('.count').textContent = counts.processing;
             document.getElementById('qDone').querySelector('.count').textContent = counts.done;
             document.getElementById('qFailed').querySelector('.count').textContent = counts.failed;
