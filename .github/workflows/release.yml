@@ -76,6 +76,8 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+          # 全量历史 + tags：CMake 用 git describe --tags 同步 wasm 版本号（默认浅克隆无 tag → fallback 2.0.3）
+          fetch-depth: 0
 
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -183,6 +185,8 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+          # 全量历史 + tags：CMake 用 git describe --tags 同步 wasm 版本号（默认浅克隆无 tag → fallback 2.0.3）
+          fetch-depth: 0
 
       - name: Setup Emscripten SDK
         run: |
@@ -250,6 +254,8 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+          # 全量历史 + tags：CMake 用 git describe --tags 同步 wasm 版本号（默认浅克隆无 tag → fallback 2.0.3）
+          fetch-depth: 0
 
       - name: Install dependencies
         run: |
