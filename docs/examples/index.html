@@ -158,6 +158,15 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* 队列完成项滑出动画（自动清理的前奏，对齐门卫 queue-exit） */
+        @keyframes slideOut {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(30px); }
+        }
+        .queue-exit { animation: slideOut 0.5s ease forwards; }
+        /* 队列状态数字跳变 */
+        .queue-stat .count { transition: all 0.25s ease; }
+
         button:disabled { background: #d1d5db; cursor: not-allowed; }
 
         /* 性能面板 */
@@ -279,7 +288,7 @@
             list.innerHTML = '';
             for (const item of queue) {
                 const div = document.createElement('div');
-                div.className = 'file-item';
+                div.className = 'file-item' + (item.status === 'done' || item.status === 'failed' ? ' queue-exit' : '');
                 div.id = 'fi-' + item.id;
 
                 const nameSpan = document.createElement('span');
@@ -427,14 +436,19 @@
                     timingMs: performance.now() - startTime,
                     success,
                 };
-                // 自动清理已完成项（GLB/报告已自动下载），释放 file/glbBlob 大引用（搞定自动释放）
-                queue = queue.filter(i => i.status === 'queued' || i.status === 'processing');
                 updateQueueBar();
                 renderFileList();
                 // 转换完成后刷新性能面板，留存本次转换的内存/分配统计
                 renderPerfPanel();
-                // 自动推进队列
+                // 自动推进队列（不依赖完成项移除）
                 processQueue();
+                // 滑出动画（0.5s）结束后自动清理完成项，释放 file/glbBlob 大引用（搞定自动释放）
+                clearTimeout(item._cleanupTimer);
+                item._cleanupTimer = setTimeout(() => {
+                    queue = queue.filter(i => i.status === 'queued' || i.status === 'processing');
+                    updateQueueBar();
+                    renderFileList();
+                }, 1500);
             }
         }
 
