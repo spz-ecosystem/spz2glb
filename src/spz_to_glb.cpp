@@ -271,7 +271,8 @@ int main(int argc, char** argv) {
 
     if (queueMode) {
         spz2glb::Queue q;
-        return q.run(2, doVerify) ? 0 : 1;
+        // 当前串行（maxParallel 参数保留仅为 API 兼容）
+        return q.run(1, doVerify) ? 0 : 1;
     }
 
     if (queueStatusMode) {

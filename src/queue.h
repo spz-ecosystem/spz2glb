@@ -66,6 +66,8 @@ public:
     bool add(const std::vector<std::string>& files);
 
     /// 启动队列处理 daemon 循环
+    /// 注意：当前实现为单线程串行（与前端 wasm 串行语义一致，wasm 全局缓冲区单例要求串行）。
+    /// maxParallel 参数保留仅为 API 兼容，未实现并行。
     bool run(int maxParallel = 2, bool verifyOnConvert = true);
 
     /// 打印队列状态到 stdout
