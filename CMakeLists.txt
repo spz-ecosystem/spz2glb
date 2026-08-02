@@ -196,6 +196,32 @@ if(SPZ2GLB_BUILD_WASM)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/spz2glb_wasm_c_api.cpp
   )
 
+  # 版本号与 Git tag 同步：优先 -DSPZ2GLB_VERSION= 传入，否则 git describe --tags，fallback 2.0.3
+  if(NOT DEFINED SPZ2GLB_VERSION)
+    execute_process(
+      COMMAND git describe --tags --abbrev=0
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      OUTPUT_VARIABLE _spz2glb_git_tag
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    if(_spz2glb_git_tag MATCHES "^v?([0-9]+)\\.([0-9]+)\\.([0-9]+)")
+      # 支持 vX.Y.Z / vX.Y.Z.W（取前 3 段）/ vX.Y.Za（忽略后缀）
+      set(SPZ2GLB_VERSION "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}.${CMAKE_MATCH_3}")
+    else()
+      set(SPZ2GLB_VERSION "2.0.3")
+    endif()
+  endif()
+  string(REGEX MATCH "^([0-9]+)" SPZ2GLB_VERSION_MAJOR "${SPZ2GLB_VERSION}")
+  string(REGEX REPLACE "^[0-9]+\\.([0-9]+).*" "\\1" SPZ2GLB_VERSION_MINOR "${SPZ2GLB_VERSION}")
+  string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.([0-9]+).*" "\\1" SPZ2GLB_VERSION_PATCH "${SPZ2GLB_VERSION}")
+  message(STATUS "spz2glb wasm version: ${SPZ2GLB_VERSION} (${SPZ2GLB_VERSION_MAJOR}.${SPZ2GLB_VERSION_MINOR}.${SPZ2GLB_VERSION_PATCH})")
+  target_compile_definitions(spz2glb-wasm PRIVATE
+    SPZ2GLB_VERSION_MAJOR=${SPZ2GLB_VERSION_MAJOR}
+    SPZ2GLB_VERSION_MINOR=${SPZ2GLB_VERSION_MINOR}
+    SPZ2GLB_VERSION_PATCH=${SPZ2GLB_VERSION_PATCH}
+  )
+
   target_link_libraries(spz2glb-wasm PRIVATE spz2glb_core fastgltf)
 
   # Emscripten ZLIB: compile and link with the zlib port so headers stay visible in CI.

@@ -238,6 +238,8 @@
         let spz2glb = null;
         let memManager = null;
         let queue = [];
+        // 最近一次转换的结果（供性能面板显示，每次转换完成后刷新）
+        let lastConversion = null;
         let processing = 0;
         const MAX_PARALLEL = 2;
 
@@ -413,6 +415,12 @@
                 if (glbResult) glbResult.release();
                 item.status = success ? 'done' : 'failed';
                 processing--;
+                // 记录最近一次转换（面板显示，带 ms 单位）
+                lastConversion = {
+                    name: file.name,
+                    timingMs: performance.now() - startTime,
+                    success,
+                };
                 // 自动清理已完成项（GLB/报告已自动下载），释放 file/glbBlob 大引用（搞定自动释放）
                 queue = queue.filter(i => i.status === 'queued' || i.status === 'processing');
                 updateQueueBar();
@@ -482,6 +490,9 @@
                 { label: '加载时间戳', value: window.spzLoadStamp
                     ? new Date(window.spzLoadStamp).toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(window.spzLoadStamp % 1000).padStart(3, '0')
                     : '—' },
+                { label: '最近转换', value: lastConversion ? lastConversion.name : '—' },
+                { label: '转换耗时', value: lastConversion ? `${Math.round(lastConversion.timingMs)} ms` : '—' },
+                { label: '转换结果', value: lastConversion ? (lastConversion.success ? '成功' : '失败') : '—' },
                 { label: '设备类型', value: `${info.device.type} (${info.device.tier})` },
                 { label: '内存峰值', value: formatSize(stats.peakUsageBytes) },
                 { label: '当前内存', value: formatSize(stats.currentUsageBytes) },

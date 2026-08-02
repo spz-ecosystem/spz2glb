@@ -5,6 +5,14 @@
 #define SPZ2GLB_DISABLE_EMBIND 1
 #define SPZ2GLB_NO_CLI_MAIN 1
 
+// 版本号由 CMake 注入（与 Git tag 同步，SPZ2GLB_VERSION_MAJOR/MINOR/PATCH），
+// 未定义时回退默认 2.0.3（本地直编 / 无 tag 场景）。
+#ifndef SPZ2GLB_VERSION_MAJOR
+#define SPZ2GLB_VERSION_MAJOR 2
+#define SPZ2GLB_VERSION_MINOR 0
+#define SPZ2GLB_VERSION_PATCH 3
+#endif
+
 #include "spz2glb_wasm_c_api.h"
 #include "spz2glb_core.h"
 #include "memory_pool.h"
@@ -270,13 +278,13 @@ bool spz2glb_validate_header(const uint8_t* data, size_t size) {
 
 void spz2glb_get_version(int* major, int* minor, int* patch) {
     if (major != nullptr) {
-        *major = 2;
+        *major = SPZ2GLB_VERSION_MAJOR;
     }
     if (minor != nullptr) {
-        *minor = 0;
+        *minor = SPZ2GLB_VERSION_MINOR;
     }
     if (patch != nullptr) {
-        *patch = 3;
+        *patch = SPZ2GLB_VERSION_PATCH;
     }
 }
 
