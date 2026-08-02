@@ -1,12 +1,15 @@
 export async function loadSpz2Glb(wasmUrl, options = {}) {
+    // 缓存破坏：glue JS 与 wasm 二进制都带时间戳 query，避免浏览器 HTTP 缓存命中旧版本。
+    // 与门卫 spz_gatekeeper.js 的 maybeLoadRuntime 同构——否则部署新 wasm 后强刷仍加载旧二进制。
+    const cacheBust = '?v=' + Date.now();
     const moduleUrl = wasmUrl.replace(/\.wasm($|[?#])/, '.js$1');
-    const { default: createModule } = await import(moduleUrl);
+    const { default: createModule } = await import(moduleUrl + cacheBust);
 
     const module = await createModule({
         ...options,
         print: options.print ?? ((text) => console.log('[WASM]', text)),
         printErr: options.printErr ?? ((text) => console.error('[WASM]', text)),
-        locateFile: options.locateFile ?? ((path) => path.endsWith('.wasm') ? wasmUrl : path),
+        locateFile: options.locateFile ?? ((path) => path.endsWith('.wasm') ? wasmUrl + cacheBust : path),
     });
 
     return {

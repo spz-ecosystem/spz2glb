@@ -494,9 +494,12 @@
 
             try {
                 const memConfig = memManager.getWasmMemoryConfig();
+                // wasmLoadStamp 用于在状态栏显示本次实际加载的 wasm 加载时间戳，
+                // 便于确认浏览器没有命中旧 wasm 缓存（对比值变化即已刷新）。
+                window.spzLoadStamp = Date.now();
                 spz2glb = await loadSpz2Glb('./spz2glb.wasm', { memory: memConfig.memory });
                 renderPerfPanel();
-                showStatus(`✅ WASM 加载成功！版本: ${spz2glb.getVersion()}<br>
+                showStatus(`✅ WASM 加载成功！版本: ${spz2glb.getVersion()} · wasm@${window.spzLoadStamp}<br>
                     <small style="opacity:0.7">最大并行: ${MAX_PARALLEL} | 建议文件 ≤ ${info.recommendedMaxFileSize}MB</small>`, 'success');
                 setTimeout(() => {
                     if (queue.every(item => item.status !== 'queued' && item.status !== 'processing')) {
