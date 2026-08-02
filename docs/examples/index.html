@@ -250,7 +250,9 @@
         // 最近一次转换的结果（供性能面板显示，每次转换完成后刷新）
         let lastConversion = null;
         let processing = 0;
-        const MAX_PARALLEL = 2;
+        // wasm 预留缓冲区单例 + bindings 互斥锁 → 转换必须串行。
+        // MAX_PARALLEL=1：第二个文件保持 queued 排队等待（显示准确、计时不含等待时间）。
+        const MAX_PARALLEL = 1;
 
         function showStatus(msg, type) {
             const el = document.getElementById('statusBox');
