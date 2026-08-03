@@ -299,6 +299,12 @@ jobs:
                       if (i === SAMPLES - 1) lastHandle = h; else h.release();
                     }
 
+                    // 先算统计量（generateReportJson 引用 median，需提前声明避免 TDZ）
+                    const sorted = [...times].sort((a, b) => a - b);
+                    const median = sorted[Math.floor(SAMPLES / 2)];
+                    const mean = times.reduce((a, b) => a + b, 0) / times.length;
+                    const sigma = Math.round(Math.sqrt(times.reduce((a, b) => a + (b - mean) ** 2, 0) / times.length) * 10) / 10;
+
                     // 用最后一次转换的输出提取 hash + GLB 结构，并测量"完整打包"总耗时
                     // （镜像 index.html processItem：parse + generateReportJson + toBlob，即用户感知的完整转换时间）
                     const tPack = performance.now();
@@ -324,10 +330,6 @@ jobs:
                     const packMs = Math.round((performance.now() - tPack) * 10) / 10;
 
                     const hash = await sha256Hex(output.buffer);
-                    const sorted = [...times].sort((a, b) => a - b);
-                    const median = sorted[Math.floor(SAMPLES / 2)];
-                    const mean = times.reduce((a, b) => a + b, 0) / times.length;
-                    const sigma = Math.round(Math.sqrt(times.reduce((a, b) => a + (b - mean) ** 2, 0) / times.length) * 10) / 10;
                     rows.push({
                       name: fixture.name,
                       hash,
