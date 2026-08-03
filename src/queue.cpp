@@ -205,7 +205,7 @@ std::string ConversionResult::toJson() const {
     // 生成工具信息
     j << "  \"generator\": {\n";
     j << "    \"name\": \"spz2glb\",\n";
-    j << "    \"version\": \"2.0.4\",\n";
+    j << "    \"version\": \"2.0.5\",\n";
     j << "    \"license\": \"MIT\",\n";
     j << "    \"url\": \"https://github.com/spz-ecosystem/spz2glb\"\n";
     j << "  },\n";
@@ -536,8 +536,8 @@ bool Queue::run(int maxParallel, bool verifyOnConvert) {
         pending = processing; // 恢复上次中断的任务
     }
 
-    std::cout << "[QUEUE] maxParallel=" << maxParallel
-              << ", " << pending << " file(s) pending"
+    // 注意：当前实现为单线程串行（maxParallel 参数保留仅为 API 兼容，未实现并行）。
+    std::cout << "[QUEUE] mode=serial, " << pending << " file(s) pending"
               << std::endl;
 
     // 处理所有文件

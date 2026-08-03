@@ -6,7 +6,9 @@ name: Pages
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - feature/spz2glb-perf-panel-fix
   workflow_dispatch:
 
 permissions:
@@ -32,6 +34,8 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+          # 全量历史 + tags：CMake 用 git describe --tags 同步 wasm 版本号（默认浅克隆无 tag → fallback 2.0.3）
+          fetch-depth: 0
 
       - name: Setup Emscripten SDK
         run: |
@@ -83,6 +87,13 @@ jobs:
       - name: Generate SHA256 artifact manifest
         run: |
           cd site && sha256sum index.html spz2glb_bindings.js smart_memory.js spz2glb.wasm spz2glb.js > pages-artifact-sha256.txt && cat pages-artifact-sha256.txt
+
+      - name: Inject build time into index.html
+        run: |
+          BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          sed -i "s/__BUILD_TIME__/${BUILD_TIME}/g" site/index.html
+          echo "Injected build time: ${BUILD_TIME}"
+          grep -o '构建时间.*' site/index.html | head -1 || true
 
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

@@ -184,7 +184,7 @@ bool convertSingleFile(const std::string& inputPath, const std::string& outputPa
 }
 
 void printUsage(const char* progName) {
-    std::cout << "SPZ to GLB Converter v2.0.4\n";
+    std::cout << "SPZ to GLB Converter v2.0.5\n";
     std::cout << "Usage:\n";
     std::cout << "  " << progName << " <input.spz> <output.glb> [--verify]\n";
     std::cout << "  " << progName << " --batch EXT [--verify]\n";
@@ -271,7 +271,8 @@ int main(int argc, char** argv) {
 
     if (queueMode) {
         spz2glb::Queue q;
-        return q.run(2, doVerify) ? 0 : 1;
+        // 当前串行（maxParallel 参数保留仅为 API 兼容）
+        return q.run(1, doVerify) ? 0 : 1;
     }
 
     if (queueStatusMode) {

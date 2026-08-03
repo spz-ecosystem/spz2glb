@@ -1,13 +1,25 @@
 export async function loadSpz2Glb(wasmUrl, options = {}) {
+    // 缓存破坏：glue JS 与 wasm 二进制都带时间戳 query，避免浏览器 HTTP 缓存命中旧版本。
+    // 与门卫 spz_gatekeeper.js 的 maybeLoadRuntime 同构——否则部署新 wasm 后强刷仍加载旧二进制。
+    const cacheBust = '?v=' + Date.now();
     const moduleUrl = wasmUrl.replace(/\.wasm($|[?#])/, '.js$1');
-    const { default: createModule } = await import(moduleUrl);
+    const { default: createModule } = await import(moduleUrl + cacheBust);
 
     const module = await createModule({
         ...options,
         print: options.print ?? ((text) => console.log('[WASM]', text)),
         printErr: options.printErr ?? ((text) => console.error('[WASM]', text)),
-        locateFile: options.locateFile ?? ((path) => path.endsWith('.wasm') ? wasmUrl : path),
+        locateFile: options.locateFile ?? ((path) => path.endsWith('.wasm') ? wasmUrl + cacheBust : path),
     });
+
+    // wasm 预留输入缓冲区是全局单例：并发 async 转换（分块写入间让出事件循环）会交错写坏数据。
+    // 用 Promise 链把转换串行化——UI 可并行排队，wasm 转换严格串行（安全优先）。
+    let convertChain = Promise.resolve();
+    const withConvertLock = (fn) => {
+        const next = convertChain.then(() => fn(), () => fn());
+        convertChain = next.catch(() => {});
+        return next;
+    };
 
     return {
         validateHeader(buffer) {
@@ -34,25 +46,29 @@ export async function loadSpz2Glb(wasmUrl, options = {}) {
 
         convert(spzBuffer) {
             const size = spzBuffer.byteLength;
-            const inputPtr = reserveInput(module, size);
-            try {
-                getHeap(module).set(new Uint8Array(spzBuffer.buffer, spzBuffer.byteOffset, size), inputPtr);
-                return convertReservedInput(module, size);
-            } finally {
-                releaseReservedInput(module);
-            }
+            return withConvertLock(() => {
+                const inputPtr = reserveInput(module, size);
+                try {
+                    getHeap(module).set(new Uint8Array(spzBuffer.buffer, spzBuffer.byteOffset, size), inputPtr);
+                    return convertReservedInput(module, size);
+                } finally {
+                    releaseReservedInput(module);
+                }
+            });
         },
 
         async convertFile(file, options = {}) {
             const chunkSize = normalizeChunkSize(options.chunkSize ?? 1024 * 1024);
             const onChunk = typeof options.onChunk === 'function' ? options.onChunk : null;
-            const inputPtr = reserveInput(module, file.size);
-            try {
-                await writeFileToReservedInput(module, file, inputPtr, chunkSize, onChunk);
-                return convertReservedInput(module, file.size);
-            } finally {
-                releaseReservedInput(module);
-            }
+            return withConvertLock(async () => {
+                const inputPtr = reserveInput(module, file.size);
+                try {
+                    await writeFileToReservedInput(module, file, inputPtr, chunkSize, onChunk);
+                    return convertReservedInput(module, file.size);
+                } finally {
+                    releaseReservedInput(module);
+                }
+            });
         },
 
         getMemoryStats() {
@@ -351,12 +367,15 @@ export function generateReportJson(opts) {
         timestamp,
         generator: {
             name: 'spz2glb',
-            version: '2.0.4',
+            version: '2.0.5',
             license: 'MIT',
             url: 'https://github.com/spz-ecosystem/spz2glb',
         },
         result: opts.success ? 'success' : 'failed',
         timingMs: opts.timingMs,
+        timingMsDisplay: `${Math.round(opts.timingMs)} ms`,
+        conversionMs: opts.conversionMs ?? null,
+        conversionMsDisplay: opts.conversionMs != null ? `${Math.round(opts.conversionMs)} ms` : null,
     };
 
     // 失败时添加错误信息
@@ -365,5 +384,40 @@ export function generateReportJson(opts) {
     }
 
     return JSON.stringify(report, null, 2);
+}
+
+/**
+ * SPZ 版本检测：从文件头识别 SPZ v3 (gzip) / v4 (zstd) / 未知。
+ * 纯函数，node 与浏览器共用（照搬门卫 InspectSpzBlob 逻辑）。
+ * @param {Uint8Array|Buffer} buffer - SPZ 文件头字节
+ * @returns {{version: number, compression: string}}
+ */
+export function detectSpzVersion(buffer) {
+    if (buffer.byteLength >= 4 &&
+        buffer[0] === 0x4E && buffer[1] === 0x47 &&
+        buffer[2] === 0x53 && buffer[3] === 0x50) {
+        return { version: 4, compression: 'zstd' };
+    }
+    if (buffer.byteLength >= 2 && buffer[0] === 0x1F && buffer[1] === 0x8B) {
+        return { version: 3, compression: 'gzip' };
+    }
+    return { version: 0, compression: 'unknown' };
+}
+
+/**
+ * 队列状态统计：按状态计数（只统计白名单状态，未知状态被忽略——避免产生 NaN 键）。
+ * 历史教训：'pending' vs 'queued' 键名不匹配曾导致队列条显示 NaN。
+ * 纯函数，index.html 与单测共用——CI 直接验证队列状态机不依赖 DOM。
+ * @param {Array<{status: string}>} queue - 队列项列表
+ * @returns {{queued: number, processing: number, done: number, failed: number}}
+ */
+export function queueCounts(queue) {
+    const counts = { queued: 0, processing: 0, done: 0, failed: 0 };
+    for (const item of queue) {
+        if (Object.prototype.hasOwnProperty.call(counts, item.status)) {
+            counts[item.status]++;
+        }
+    }
+    return counts;
 }
 

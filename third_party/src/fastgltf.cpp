@@ -6137,7 +6137,9 @@ void fg::Exporter::writeMeshes(const Asset& asset, std::string& json) {
 						json += R"(,"projection":")" + itp->gaussianSplat->projection + '"';
 					
 					if (itp->gaussianSplat->spzCompression) {
-						json += R"("extensions":{)";
+						// 前置逗号：colorSpace 之后直接拼 extensions 缺逗号 → JSON 非法
+						// （parseGlbJson 全量 JSON.parse 失败 → 前端 GLB 结构字段丢失）
+						json += R"(,"extensions":{)";
 						json += R"("KHR_gaussian_splatting_compression_spz_2":{)";
 						json += R"("bufferView":)" + std::to_string(itp->gaussianSplat->spzCompression->bufferView);
 						if (itp->gaussianSplat->spzCompression->spzVersion > 0) {
