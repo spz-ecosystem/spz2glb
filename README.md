@@ -600,10 +600,6 @@ The WASM build includes:
 - **Hot object pool**: Fixed-size object reuse
 - **Runtime performance panel**: 11-dimension telemetry (WASM version, device info, peak/current memory, alloc/free/fail counts, hot pool usage, work area stats, recommended file size limit)
 
-> Example: `dunhuang_000000.spz` (24.78 MB) converts successfully in browser in about `506 ms`, with peak memory around `49.56 MB`.
-
-![Browser conversion success screenshot](./docs/examples/images/dunhuang_000000_spz_web_success.png)
-
 ## Dependencies
 
 - CMake 3.15+
