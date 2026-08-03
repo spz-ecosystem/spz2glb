@@ -598,7 +598,10 @@ The WASM build includes:
 - **compat/perf-lite dual profile**: Configurable memory behavior by runtime target
 - **Memory pool**: Bump allocator for fast allocation
 - **Hot object pool**: Fixed-size object reuse
-- **Runtime performance panel**: 11-dimension telemetry (WASM version, device info, peak/current memory, alloc/free/fail counts, hot pool usage, work area stats, recommended file size limit)
+- **Zero-copy output handling** (v2.0.5): `parseGlbJson` reads the WASM output handle's byte view directly and `toBlob()` creates the Blob from that view — removing a 26.6MB JS big-object copy that was a Major-GC timing jitter source.
+- **Segmented timing** (v2.0.5): conversion time is split into WASM conversion vs JS-side overhead, so you can see where time actually goes.
+- **Explicit serial queue** (v2.0.5): `MAX_PARALLEL=1` (the WASM converter is single-instance); queued files' waiting time is excluded from their conversion timing.
+- **Runtime performance panel**: 19-row telemetry — WASM version, build time, load timestamp, last-conversion file, SPZ version (v3 gzip / v4 zstd), WASM conversion ms, total ms, JS-side overhead, conversion result, device tier, peak/current memory, alloc/free/fail counts, hot pool available, work area used/peak, recommended file size limit — plus a cold-start note and a max-parallel / recommended-file-size hint.
 
 ## Dependencies
 
