@@ -27,6 +27,7 @@ on:
     paths:
       - 'CMakeLists.txt'
       - 'src/**'
+      - 'third_party/**'
       - 'docs/examples/**'
       - 'tests/**'
       - 'scripts/**'

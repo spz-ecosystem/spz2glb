@@ -51,12 +51,12 @@ function buildV4Header(numPoints, numStreams = 0, shDegree = 0, fractionalBits =
 
 // ---------- Minimal Gaussian point data ----------
 // v3+ per-point layout (from SPZ spec):
-//   positions:  9 bytes (3 × float32 LE)
+//   positions:  12 bytes (3 × float32 LE)
 //   scale:      1 byte  (log scale, quantized)
 //   color:      3 bytes (SH DC RGB, normalized)
 //   rotation:   4 bytes (smallest three quat)
-//   total:     17 bytes per point
-const POINT_STRIDE = 17;
+//   total:     20 bytes per point
+const POINT_STRIDE = 20;
 
 function buildGaussianPoint(seed) {
   const buf = Buffer.alloc(POINT_STRIDE);
