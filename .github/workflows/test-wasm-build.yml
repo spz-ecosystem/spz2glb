@@ -243,7 +243,7 @@ jobs:
           console.log('hash_fixtures.json: ' + hf.length + ' entries (excl v4_header_only)');
           "
 
-      - name: Validate WASM hash matrix
+      - name: Validate WASM hash matrix (3 browsers)
         run: |
           set -euo pipefail
           echo "=== Validate WASM hash matrix ==="
@@ -324,18 +324,14 @@ jobs:
           </html>
           FIXEOF
 
+          # http.server + playwright 必须与 node 脚本同一步骤：
+          # 历史教训——分开步骤时 trap EXIT 会在生成步骤结束时 kill server，
+          # 且 npm audit 无 lockfile 报 ENOLOCK 提前终止，导致 hash matrix 从未真正执行。
           python3 -m http.server 8001 > hash_server.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
 
           npm install --no-save playwright@1.62.0
-
-      - name: npm audit (supply chain)
-        shell: bash
-        continue-on-error: true
-        run: |
-          npm audit --audit-level=high
-
           npx playwright install --with-deps chromium firefox webkit
           node << 'EOF' | tee wasm_hash_matrix.log
           const { writeFileSync } = require('node:fs');
@@ -389,7 +385,7 @@ jobs:
           });
           EOF
 
-      - name: Test browser glue loading
+      - name: Test browser glue loading (3 browsers)
         run: |
           set -euo pipefail
           echo "=== Testing browser glue loading ==="
@@ -439,18 +435,13 @@ jobs:
           </html>
           EOF
 
+          # 与 hash matrix 同理：http.server + playwright + node 必须同一步骤
+          # （分步时 trap EXIT 提前 kill server + npm audit ENOLOCK 终止 → 从未真正执行）
           python3 -m http.server 8000 > browser_server.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID"' EXIT
 
           npm install --no-save playwright@1.62.0
-
-      - name: npm audit (supply chain)
-        shell: bash
-        continue-on-error: true
-        run: |
-          npm audit --audit-level=high
-
           npx playwright install --with-deps chromium firefox webkit
           node << 'EOF' | tee browser_smoke.log
           const { chromium, firefox, webkit } = require('playwright');
