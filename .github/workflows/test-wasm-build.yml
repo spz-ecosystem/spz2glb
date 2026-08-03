@@ -59,6 +59,11 @@ jobs:
           # 全量历史 + tags：CMake 用 git describe --tags 同步 wasm 版本号（默认浅克隆无 tag → fallback 2.0.3）
           fetch-depth: 0
 
+      - name: Setup Node.js 24
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24'
+
       - name: Cache Emscripten SDK
         uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.3
         with:
@@ -206,6 +211,17 @@ jobs:
           echo "=== Generate synthetic SPZ fixtures ==="
           node tests/gen_fixture.mjs --out tests/data/fixtures 2>&1 | tee gen_fixture.log
 
+      - name: Run JS logic unit tests (JSON report)
+        run: |
+          set -euo pipefail
+          echo "=== Frontend JS logic unit tests (parseGlbJson/report/detect/queue) ==="
+          node --test --test-reporter=./tests/json_reporter.mjs tests/logic.test.mjs > logic-tests.json 2>logic-tests.err
+          node -e "
+          const r = JSON.parse(require('fs').readFileSync('logic-tests.json','utf8'));
+          console.log('pass:' + r.totals.pass + ' fail:' + r.totals.fail + ' skip:' + r.totals.skip);
+          if (r.totals.fail > 0) { console.error(r.cases.filter(c => c.status !== 'pass')); process.exit(1); }
+          "
+
       - name: Prepare fixture list for hash matrix
         run: |
           # Build fixtures.json + hash_fixtures.json for JS fetch
@@ -240,7 +256,7 @@ jobs:
           <html>
             <body>
               <script type="module">
-                import { loadSpz2Glb } from './docs/examples/spz2glb_bindings.js';
+                import { loadSpz2Glb, parseGlbJson } from './docs/examples/spz2glb_bindings.js';
 
                 const toHex = (bytes) => Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
                 const sha256Hex = async (bytes) => {
@@ -265,24 +281,35 @@ jobs:
                     const fres = await fetch(fixture.path);
                     if (!fres.ok) throw new Error(`failed to fetch ${fixture.name}: ${fixture.path}`);
                     const input = await fres.arrayBuffer();
+
+                    const t0 = performance.now();
                     const handle = api.convert(input);
+                    const conversionMs = performance.now() - t0;
                     if (!handle) throw new Error(`WASM convert failed: ${fixture.name}`);
 
-                    let output;
+                    let output, glbInfo;
                     try {
+                      // 直接用 WASM 视图解析（与 index.html 同构），避免 JS 大对象拷贝
+                      glbInfo = parseGlbJson(handle.getBytesView());
                       output = handle.getBytesView().slice();
                     } finally {
                       handle.release();
                     }
 
                     const hash = await sha256Hex(output.buffer);
-                    rows.push(`${hash}  ${fixture.name}.glb`);
+                    rows.push({
+                      name: fixture.name,
+                      hash,
+                      byteLength: output.byteLength,
+                      conversionMs: Math.round(conversionMs * 10) / 10,
+                      glb: glbInfo,
+                    });
                     if (output.byteLength === 0) {
                       throw new Error(`empty output for ${fixture.name}`);
                     }
                   }
 
-                  rows.sort((a, b) => a.localeCompare(b));
+                  rows.sort((a, b) => a.name.localeCompare(b.name));
                   window.__hashResult = { status: 'ok', rows };
                 } catch (error) {
                   window.__hashResult = {
@@ -344,7 +371,16 @@ jobs:
                 process.exit(1);
               }
 
-              writeFileSync('wasm_hashes.txt', `${result.rows.join('\n')}\n`);
+              // 保持 hash 文本兼容（跨浏览器比对基准）
+              const hashLines = result.rows.map((r) => `${r.hash}  ${r.name}.glb`).sort();
+              writeFileSync('wasm_hashes.txt', `${hashLines.join('\n')}\n`);
+
+              // 结构化报告：每 fixture 转换耗时 + GLB 结构字段（下载即看，无需开网页）
+              writeFileSync('wasm_hash_report.json', JSON.stringify({
+                browser: name,
+                generatedAt: new Date().toISOString(),
+                fixtures: result.rows,
+              }, null, 2));
               console.log(`[PASS] ${name}\n`);
             }
           })().catch((error) => {
@@ -465,7 +501,10 @@ jobs:
             wasm_analysis.txt
             wasm_hash_matrix.log
             wasm_hashes.txt
+            wasm_hash_report.json
             wasm-pre-check.log
+            logic-tests.json
+            logic-tests.err
             smoke.html
             browser_server.log
             browser_smoke.log

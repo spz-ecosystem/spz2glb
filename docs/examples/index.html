@@ -241,7 +241,7 @@
     </div>
 
     <script type="module">
-        import { loadSpz2Glb, parseGlbJson, generateReportJson } from './spz2glb_bindings.js';
+        import { loadSpz2Glb, parseGlbJson, generateReportJson, detectSpzVersion, queueCounts } from './spz2glb_bindings.js';
         import SmartMemoryManager from './smart_memory.js';
 
         let spz2glb = null;
@@ -273,10 +273,8 @@
                 document.getElementById('queueBar').style.display = 'none';
                 return;
             }
-            const counts = { queued: 0, processing: 0, done: 0, failed: 0 };
-            for (const item of queue) {
-                counts[item.status]++;
-            }
+            // 纯函数统计（bindings.js 导出，CI 单测覆盖队列状态机）
+            const counts = queueCounts(queue);
             // 注意：状态名是 'queued'（不是 'pending'），需映射到"待处理"计数
             document.getElementById('qPending').querySelector('.count').textContent = counts.queued;
             document.getElementById('qProcessing').querySelector('.count').textContent = counts.processing;
@@ -347,19 +345,6 @@
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        }
-
-        function detectSpzVersion(buffer) {
-            // 照搬门卫 InspectSpzBlob 的逻辑
-            if (buffer.byteLength >= 4 &&
-                buffer[0] === 0x4E && buffer[1] === 0x47 &&
-                buffer[2] === 0x53 && buffer[3] === 0x50) {
-                return { version: 4, compression: 'zstd' };
-            }
-            if (buffer.byteLength >= 2 && buffer[0] === 0x1F && buffer[1] === 0x8B) {
-                return { version: 3, compression: 'gzip' };
-            }
-            return { version: 0, compression: 'unknown' };
         }
 
         async function processItem(item) {

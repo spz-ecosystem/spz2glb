@@ -386,3 +386,38 @@ export function generateReportJson(opts) {
     return JSON.stringify(report, null, 2);
 }
 
+/**
+ * SPZ 版本检测：从文件头识别 SPZ v3 (gzip) / v4 (zstd) / 未知。
+ * 纯函数，node 与浏览器共用（照搬门卫 InspectSpzBlob 逻辑）。
+ * @param {Uint8Array|Buffer} buffer - SPZ 文件头字节
+ * @returns {{version: number, compression: string}}
+ */
+export function detectSpzVersion(buffer) {
+    if (buffer.byteLength >= 4 &&
+        buffer[0] === 0x4E && buffer[1] === 0x47 &&
+        buffer[2] === 0x53 && buffer[3] === 0x50) {
+        return { version: 4, compression: 'zstd' };
+    }
+    if (buffer.byteLength >= 2 && buffer[0] === 0x1F && buffer[1] === 0x8B) {
+        return { version: 3, compression: 'gzip' };
+    }
+    return { version: 0, compression: 'unknown' };
+}
+
+/**
+ * 队列状态统计：按状态计数（只统计白名单状态，未知状态被忽略——避免产生 NaN 键）。
+ * 历史教训：'pending' vs 'queued' 键名不匹配曾导致队列条显示 NaN。
+ * 纯函数，index.html 与单测共用——CI 直接验证队列状态机不依赖 DOM。
+ * @param {Array<{status: string}>} queue - 队列项列表
+ * @returns {{queued: number, processing: number, done: number, failed: number}}
+ */
+export function queueCounts(queue) {
+    const counts = { queued: 0, processing: 0, done: 0, failed: 0 };
+    for (const item of queue) {
+        if (Object.prototype.hasOwnProperty.call(counts, item.status)) {
+            counts[item.status]++;
+        }
+    }
+    return counts;
+}
+
