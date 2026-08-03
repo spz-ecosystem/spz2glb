@@ -283,8 +283,9 @@ jobs:
                     const input = await fres.arrayBuffer();
 
                     const t0 = performance.now();
-                    // convert() 经 withConvertLock 返回 Promise，必须 await
-                    const handle = await api.convert(input);
+                    // convert() 经 withConvertLock 返回 Promise，必须 await；
+                    // 且入参需 Uint8Array（内部用 .buffer/.byteOffset，ArrayBuffer 无这些属性 → 空写入 → magic 0x0）
+                    const handle = await api.convert(new Uint8Array(input));
                     const conversionMs = performance.now() - t0;
                     if (!handle) throw new Error(`WASM convert failed: ${fixture.name}`);
 
