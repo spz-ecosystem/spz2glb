@@ -281,30 +281,49 @@ jobs:
                   for (const fixture of fixtures) {
                     const fres = await fetch(fixture.path);
                     if (!fres.ok) throw new Error(`failed to fetch ${fixture.name}: ${fixture.path}`);
-                    const input = await fres.arrayBuffer();
+                    const input = new Uint8Array(await fres.arrayBuffer());
 
-                    const t0 = performance.now();
-                    // convert() 经 withConvertLock 返回 Promise，必须 await；
-                    // 且入参需 Uint8Array（内部用 .buffer/.byteOffset，ArrayBuffer 无这些属性 → 空写入 → magic 0x0）
-                    const handle = await api.convert(new Uint8Array(input));
-                    const conversionMs = performance.now() - t0;
-                    if (!handle) throw new Error(`WASM convert failed: ${fixture.name}`);
+                    // 波动测量：每 fixture 重复转换 5 次，统计 min/median/max/σ。
+                    // 目的：量化 glbCopy 消除后的 JS GC 波动是否收窄（曾观测 213-305ms ±20%），
+                    // 下载 wasm_hash_report.json 即看，无需开网页。
+                    const SAMPLES = 5;
+                    const times = [];
+                    let lastHandle = null;
+                    for (let i = 0; i < SAMPLES; i++) {
+                      const t0 = performance.now();
+                      // convert() 经 withConvertLock 返回 Promise，必须 await；
+                      // 入参需 Uint8Array（内部用 .buffer/.byteOffset，ArrayBuffer 无 → 空写入 → magic 0x0）
+                      const h = await api.convert(input);
+                      if (!h) throw new Error(`WASM convert failed: ${fixture.name}`);
+                      times.push(Math.round((performance.now() - t0) * 10) / 10);
+                      if (i === SAMPLES - 1) lastHandle = h; else h.release();
+                    }
 
+                    // 用最后一次转换的输出提取 hash + GLB 结构
                     let output, glbInfo;
                     try {
-                      // 直接用 WASM 视图解析（与 index.html 同构），避免 JS 大对象拷贝
-                      glbInfo = parseGlbJson(handle.getBytesView());
-                      output = handle.getBytesView().slice();
+                      glbInfo = parseGlbJson(lastHandle.getBytesView());
+                      output = lastHandle.getBytesView().slice();
                     } finally {
-                      handle.release();
+                      lastHandle.release();
                     }
 
                     const hash = await sha256Hex(output.buffer);
+                    const sorted = [...times].sort((a, b) => a - b);
+                    const median = sorted[Math.floor(SAMPLES / 2)];
+                    const mean = times.reduce((a, b) => a + b, 0) / times.length;
+                    const sigma = Math.round(Math.sqrt(times.reduce((a, b) => a + (b - mean) ** 2, 0) / times.length) * 10) / 10;
                     rows.push({
                       name: fixture.name,
                       hash,
                       byteLength: output.byteLength,
-                      conversionMs: Math.round(conversionMs * 10) / 10,
+                      conversionMs: {
+                        samples: times,
+                        min: sorted[0],
+                        median,
+                        max: sorted[SAMPLES - 1],
+                        sigma,
+                      },
                       glb: glbInfo,
                     });
                     if (output.byteLength === 0) {
