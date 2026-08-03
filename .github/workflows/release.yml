@@ -332,6 +332,24 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
+      - name: Checkout (release notes)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Extract v2.0.5 release notes for release body
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(sed -n '/^# spz2glb v2.0.5 Release Notes/,/^## Upgrade Path/p' RELEASE-NOTES.md)"
+          {
+            echo "body<<RELEASE_BODY_EOF"
+            echo "$body"
+            echo "RELEASE_BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Download release artifacts (CLI)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -376,7 +394,7 @@ jobs:
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: artifacts/*
-          generate_release_notes: true
+          body: ${{ steps.notes.outputs.body }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
