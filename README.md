@@ -25,7 +25,7 @@
 - **KHR Extension Compliance**: Full `KHR_gaussian_splatting` field serialization (`kernel`, `colorSpace`, `sortingMethod`, `projection`); nested `KHR_gaussian_splatting_compression_spz_2` with complete metadata (`spzVersion`, `compression`, `coordinateSystem`)
 - **CLI Queue Processing**: Built-in file-system queue (`--queue-add`/`--queue`/`--queue-status`/`--queue-clear`) with pending/processing/done/failed state management
 - **JSON Conversion Report**: Auto-generated JSON report per conversion with full SPZ/GLB/KHR metadata and timestamp
-- **WASM Enhancements**: Reserved input, explicit output release, memory stats, compat/perf-lite dual profile + runtime performance panel (11-dimension telemetry)
+- **WASM Enhancements**: Reserved input, explicit output release, memory stats, compat/perf-lite dual profile + runtime performance panel (19-row telemetry)
 - **Dual-End Collaboration (scenario split)**: lightweight web interaction and fast feedback on browser side; batch, queue, large-file, and heavy verification workflows on local CLI side
 - **Five-Layer Verification**: Structure validation / lossless validation / decoding consistency / metadata consistency / ILV extension integrity + optional `--report` JSON report validation
 - **Cross-Platform**: Windows, Linux, macOS (x64 + ARM)
@@ -541,7 +541,7 @@ The bundled `index.html` provides a full-featured demo:
 import { loadSpz2Glb } from './spz2glb_bindings.js';
 
 const api = await loadSpz2Glb('./spz2glb.wasm');
-const result = api.convert(spzUint8Array);
+const result = await api.convert(spzUint8Array);
 
 if (!result) throw new Error('Conversion failed');
 
@@ -554,7 +554,9 @@ console.log('Peak MB:', (stats.peakUsageBytes / 1024 / 1024).toFixed(2));
 
 // The web demo also provides:
 // - JSON conversion report with full SPZ/GLB/KHR metadata
-// - Runtime performance stats panel (11 dimensions)
+// - Runtime performance stats panel (19 rows: WASM version, build/load timestamps,
+//   SPZ version, segmented WASM vs JS timing, device tier, memory stats, hot pool, ...)
+// - SPZ header pre-check (detectSpzVersion) + zh/en toggle + light/dark theme
 // - Multi-file queue with drag-drop support and per-file download
 
 result.release(); // Required: release WASM output buffer
@@ -598,11 +600,10 @@ The WASM build includes:
 - **compat/perf-lite dual profile**: Configurable memory behavior by runtime target
 - **Memory pool**: Bump allocator for fast allocation
 - **Hot object pool**: Fixed-size object reuse
-- **Runtime performance panel**: 11-dimension telemetry (WASM version, device info, peak/current memory, alloc/free/fail counts, hot pool usage, work area stats, recommended file size limit)
-
-> Example: `dunhuang_000000.spz` (24.78 MB) converts successfully in browser in about `506 ms`, with peak memory around `49.56 MB`.
-
-![Browser conversion success screenshot](./docs/examples/images/dunhuang_000000_spz_web_success.png)
+- **Zero-copy output handling** (v2.0.5): `parseGlbJson` reads the WASM output handle's byte view directly and `toBlob()` creates the Blob from that view — removing a 26.6MB JS big-object copy that was a Major-GC timing jitter source.
+- **Segmented timing** (v2.0.5): conversion time is split into WASM conversion vs JS-side overhead, so you can see where time actually goes.
+- **Explicit serial queue** (v2.0.5): `MAX_PARALLEL=1` (the WASM converter is single-instance); queued files' waiting time is excluded from their conversion timing.
+- **Runtime performance panel**: 19-row telemetry — WASM version, build time, load timestamp, last-conversion file, SPZ version (v3 gzip / v4 zstd), WASM conversion ms, total ms, JS-side overhead, conversion result, device tier, peak/current memory, alloc/free/fail counts, hot pool available, work area used/peak, recommended file size limit — plus a cold-start note and a max-parallel / recommended-file-size hint.
 
 ## Dependencies
 
