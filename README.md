@@ -713,7 +713,7 @@ This project depends on the following public technical specifications:
 
 This project is not affiliated with, endorsed by, or connected to Niantic, Inc. or its affiliates.
 
-**DOI**: [10.5281/zenodo.20849112](https://doi.org/10.5281/zenodo.20849112)
+**DOI**: [10.5281/zenodo.20849134](https://doi.org/10.5281/zenodo.20849134)
 
 ## Citation
 

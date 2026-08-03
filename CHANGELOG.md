@@ -160,7 +160,7 @@ Changes since v2.0.3 tag (`1e131a6`). Merged PRs: [#15](https://github.com/spz-e
 - **Test Data section**: New section covering synthetic fixtures and benchmark dataset
 - **Ecosystem**: Add spz-anime-text2scene-bench to related projects
 - **SPZ v4 support**: Document v4 header-only synthetic fixture and ZSTD-based SPZ v4 format support
-- **Zenodo DOI**: Add DOI: 10.5281/zenodo.20849112
+- **Zenodo DOI**: Add DOI: 10.5281/zenodo.20849134
 
 ### Fixes
 
