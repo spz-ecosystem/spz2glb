@@ -364,6 +364,15 @@
             try {
                 showStatus(`<span class="loading-spinner"></span>转换: ${file.name}`, 'loading');
 
+                // SPZ 头部预检（转换前）：读文件头 64B，detectSpzVersion 按魔数识别
+                // v3 gzip (1F8B) / v4 zstd (NGSP)。非法文件提前报错，避免进入 WASM 转换。
+                // 注：不用 WASM validateSpzHeader——它对 gzip 需完整解压才能读 header，64B 头部会误拒。
+                const spzHead = new Uint8Array(await file.slice(0, Math.min(64, file.size)).arrayBuffer());
+                item.spzDetect = detectSpzVersion(spzHead);
+                if (item.spzDetect.version === 0) {
+                    throw new Error('无法识别 SPZ 文件头（既非 v3 gzip 也非 v4 zstd/NGSP）');
+                }
+
                 const tConv = performance.now();
                 glbResult = await spz2glb.convertFile(file);
                 conversionMs = performance.now() - tConv;
@@ -377,14 +386,12 @@
                 const glbBytes = glbResult.getBytesView();
                 glbInfo = parseGlbJson(glbBytes);
 
-                // 构建报告
-                const spzDetect = detectSpzVersion(new Uint8Array(await file.slice(0, Math.min(64, file.size)).arrayBuffer()));
-
+                // 构建报告（复用转换前的头部预检结果）
                 item.reportJson = generateReportJson({
                     fileName: file.name,
                     spzSizeBytes: file.size,
-                    spzVersion: spzDetect.version,
-                    compression: spzDetect.compression,
+                    spzVersion: item.spzDetect.version,
+                    compression: item.spzDetect.compression,
                     glbSizeBytes: glbResult.size,
                     glbInfo,
                     success: true,
@@ -422,12 +429,15 @@
                 if (glbResult) glbResult.release();
                 item.status = success ? 'done' : 'failed';
                 processing--;
-                // 记录最近一次转换（面板显示，带 ms 单位）
+                // 记录最近一次转换（面板显示，带 ms 单位 + SPZ 版本/压缩格式）
                 lastConversion = {
                     name: file.name,
                     timingMs: performance.now() - startTime,
                     conversionMs,
                     success,
+                    // 文件头部预检结果（v3 gzip / v4 zstd / 未知）
+                    spzVersion: item.spzDetect ? item.spzDetect.version : null,
+                    compression: item.spzDetect ? item.spzDetect.compression : null,
                 };
                 updateQueueBar();
                 renderFileList();
@@ -504,6 +514,7 @@
                     ? new Date(window.spzLoadStamp).toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(window.spzLoadStamp % 1000).padStart(3, '0')
                     : '—' },
                 { label: '最近转换', value: lastConversion ? lastConversion.name : '—' },
+                { label: 'SPZ 版本', value: lastConversion && lastConversion.spzVersion ? `v${lastConversion.spzVersion} (${lastConversion.compression})` : '—' },
                 { label: 'WASM 转换耗时', value: lastConversion && lastConversion.conversionMs != null ? `${Math.round(lastConversion.conversionMs)} ms` : '—' },
                 { label: '总耗时', value: lastConversion ? `${Math.round(lastConversion.timingMs)} ms` : '—' },
                 { label: 'JS 侧开销', value: lastConversion && lastConversion.conversionMs != null ? `${Math.round(Math.max(0, lastConversion.timingMs - lastConversion.conversionMs))} ms` : '—' },
