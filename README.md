@@ -56,7 +56,7 @@
 
 > Note: this section describes **tool positioning differences**, not an absolute quality ranking.
 
-| Dimension | `spz2glb` (v2.0.4) | `splat-transform` (v3.1.7) |
+| Dimension | `spz2glb` (v2.0.5) | `splat-transform` (v3.1.7) |
 |-----------|-------------------|-----------------------------|
 | **Developer** | Independent (Pu Junhan) | PlayCanvas |
 | **Core positioning** | **Lossless SPZ→GLB packaging** (SPZ compressed stream preserved as-is) | **Multi-format splat conversion & editing** (decompress-rebuild pipeline) |
@@ -398,7 +398,7 @@ Each successful conversion (CLI `--queue` or Web demo) produces a JSON report wi
   "timestamp": "2026-07-30T15:00:00+0800",
   "generator": {
     "name": "spz2glb",
-    "version": "2.0.4",
+    "version": "2.0.5",
     "license": "MIT",
     "url": "https://github.com/spz-ecosystem/spz2glb"
   },
@@ -522,7 +522,7 @@ emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
 The bundled `index.html` provides a full-featured demo:
 - **Single-file conversion**: Upload one `.spz` file, download a single `.glb`
-- **Multi-file queue** (`MAX_PARALLEL = 2`): Drag-drop or multi-select up to 2 files processed concurrently. Each file is converted serially (SPZ→GLB).
+- **Multi-file queue** (`MAX_PARALLEL = 1`): Drag-drop or multi-select any number of files; they are queued and processed serially (SPZ→GLB). The WASM converter is single-instance (reserved input buffer + mutex), so concurrency is capped at 1; queued files wait without contaminating their conversion timing.
 - **Supports v3 and v4**: Gzip-compressed (v3) and ZSTD-compressed (v4) SPZ files.
 - **JSON report export**: Each completed conversion produces a downloadable JSON report with full SPZ/GLB/KHR metadata and timestamp.
 - **CLI compatibility**: Exported JSON reports can be validated by `spz_verify --report <file.json>`.

@@ -207,7 +207,7 @@ test('generateReportJson: 成功报告字段完整 + 单位展示', () => {
     assert.equal(report.coordinateSystem.found, true);
     assert.equal(report.coordinateSystem.value, 1);
     assert.equal(report.generator.name, 'spz2glb');
-    assert.equal(report.generator.version, '2.0.4');
+    assert.equal(report.generator.version, '2.0.5');
     assert.equal(report.extensionsUsed[0], 'KHR_gaussian_splatting');
     assert.equal(report.KHR_gaussian_splatting.kernel, 'GAUSSIAN_KERNEL_1_1');
     assert.equal(report.KHR_gaussian_splatting_compression_spz_2.compression, 'zstd');

@@ -1,5 +1,37 @@
 # Changelog
 
+## v2.0.5 (2026-08-03)
+
+Changes since v2.0.4.1 tag (`0040e90`). Merged PR: [#27](https://github.com/spz-ecosystem/spz2glb/pull/27).
+
+### Web 性能优化
+
+- **消灭 JS 大对象拷贝** (`d0f47df` / `bc028f6`): 消除转换时 26.6MB `glbCopy`（V8 大对象，Major GC 波动源）。`parseGlbJson` 直接解析 WASM 输出句柄的字节视图（`release()` 前有效），`toBlob()` 从视图创建 Blob（独立持有副本）。
+- **分段计时** (`22762a7`): 性能面板区分 WASM 转换耗时 vs JS 侧开销，定位耗时波动源。
+- **串行语义明确化** (`d045d09` / `2843856` / `29c1976`): WASM 转换器单实例（全局预留输入缓冲区 + 互斥锁），前端 `MAX_PARALLEL=1`——第二个文件保持 `queued` 排队，转换计时不含等待时间（修 700ms 虚高）。CLI `Queue::run` 的 `maxParallel` 标注为 API 兼容假参数（实际单线程串行），与前端统一。
+- **版本号与 Git tag 同步** (`30a0802` / `34ff214`): CMake 从 `git describe --tags` 提取版本注入 WASM 运行时；CI 修正 `fetch-depth: 0`，浅克隆也能读到 tag（修 fallback 2.0.3）。
+
+### Web UI 增强
+
+- **性能面板增强** (`8c4b047` / `39195a5` / `0d9d4eb`): 转换完成立即刷新留存本次统计；显示构建时间（CI 注入）、加载时间戳、最近转换记录、SPZ 版本（v3 gzip / v4 zstd）。
+- **SPZ 头部预检** (`0d9d4eb`): 转换前 JS 侧 `detectSpzVersion` 魔数识别（v3 `1F8B` / v4 `NGSP`），非法文件提前报错不进入 WASM。刻意不用 WASM `validateSpzHeader`——其对 gzip 需完整解压才能读 header，64B 头部会误拒 v3 文件。
+- **双语切换 + 日夜主题** (`a02997f`): 顶部工具栏中/EN 切换（I18N 字典 + `data-i18n` + `t()`，localStorage 持久化）+ 日夜主题（`[data-theme="dark"]` CSS 变量覆盖）。配色与门卫统一：品牌紫 `#6666ff` + 浅蓝白渐变、白卡片圆角 20px、紫影；状态徽章/状态条改半透明语义色（亮暗主题通吃）。
+- **冷启动提示** (`a02997f` / `75dbea8`): 面板提示「⚠ 首次转换含冷启动，之后会更快」（v3 gzip 首次转换含 zlib 解压初始化），表述去除歧义。
+- **队列交互** (`e806933` / `e8200b2` / `a572b5f`): 转换完成自动下载 GLB + JSON 报告并延迟自动清理队列；完成项滑出动画（对齐门卫 `queue-exit`）；修复 `queued` 计数映射（待处理恒 0）与空队列隐藏。
+- **缓存防呆** (`0581fae` / `c01435e`): WASM 加载 cache-busting + 加载时间戳显示，防浏览器命中旧二进制缓存。
+
+### CI 测试强化
+
+- **JS 逻辑单测 + JSON 报告 artifact** (`992b4e0`): CI 跑完直接下载 `logic-tests.json` / `wasm_hash_report.json` 查看结果，无需打开网页。
+- **假绿修复** (`38a0c06`): hash matrix / browser smoke 合并单 step、移除 `continue-on-error`——此前 npm audit ENOLOCK 使 `bash -e` 提前终止，playwright/node 测试从未真正执行。
+- **hash matrix 真实执行修复** (`c655f37` / `cc5c7c0` / `a7800ef`): `convert()` 未 await（handle 实为 Promise）、入参需 Uint8Array（ArrayBuffer 无 `.buffer/.byteOffset` 导致空写入）、fastgltf JSON 缺逗号、gen_fixture stride 越界（`POINT_STRIDE=17` vs 实际 20B 布局）——synthetic fixtures 从此真实生成。
+- **波动测量** (`1c02a7b` / `c6a126f` / `d2a3956`): 每 fixture 5 次转换输出 min/median/max/σ；新增完整打包总耗时 `packMs`（parse + 报告 + Blob 全流程计时），统计量提前声明修 TDZ。
+- **workflow 触发** (`b6ba22f` / `cb5cac7` / `6760fae`): 注册 `feature/spz2glb-perf-panel-fix` 到 push / pages 部署触发器；固定 run-name 避免非 ASCII commit 标题显示问号。
+
+### 版本号
+
+- **Version 2.0.4.1 → 2.0.5**: Update version strings across `CMakeLists.txt` (project VERSION), `src/queue.cpp` (JSON report `generator.version`), `src/spz_to_glb.cpp` (CLI banner), `docs/examples/spz2glb_bindings.js` (WASM demo), `tests/logic.test.mjs` (逻辑单测断言)。
+
 ## v2.0.4.1 (2026-07-31)
 
 Changes since v2.0.4 tag (`3a134b4`). Merged PRs: [#23](https://github.com/spz-ecosystem/spz2glb/pull/23), [#24](https://github.com/spz-ecosystem/spz2glb/pull/24), [#25](https://github.com/spz-ecosystem/spz2glb/pull/25), [#26](https://github.com/spz-ecosystem/spz2glb/pull/26).

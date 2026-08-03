@@ -184,7 +184,7 @@ bool convertSingleFile(const std::string& inputPath, const std::string& outputPa
 }
 
 void printUsage(const char* progName) {
-    std::cout << "SPZ to GLB Converter v2.0.4\n";
+    std::cout << "SPZ to GLB Converter v2.0.5\n";
     std::cout << "Usage:\n";
     std::cout << "  " << progName << " <input.spz> <output.glb> [--verify]\n";
     std::cout << "  " << progName << " --batch EXT [--verify]\n";

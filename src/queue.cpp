@@ -205,7 +205,7 @@ std::string ConversionResult::toJson() const {
     // 生成工具信息
     j << "  \"generator\": {\n";
     j << "    \"name\": \"spz2glb\",\n";
-    j << "    \"version\": \"2.0.4\",\n";
+    j << "    \"version\": \"2.0.5\",\n";
     j << "    \"license\": \"MIT\",\n";
     j << "    \"url\": \"https://github.com/spz-ecosystem/spz2glb\"\n";
     j << "  },\n";

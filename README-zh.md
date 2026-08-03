@@ -56,7 +56,7 @@
 
 > 说明：这里强调的是**工具定位差异**，不是绝对优劣判断。
 
-| 维度 | `spz2glb` (v2.0.4) | `splat-transform` (v3.1.7) |
+| 维度 | `spz2glb` (v2.0.5) | `splat-transform` (v3.1.7) |
 |------|-------------------|-----------------------------|
 | **开发者** | 独立开发者（Pu Junhan） | PlayCanvas |
 | **核心定位** | **无损 SPZ→GLB 打包**（SPZ 压缩流原封不动存入 GLB） | **多格式 splat 转换与编辑**（解压-重建管线） |
@@ -398,7 +398,7 @@ Summary:
   "timestamp": "2026-07-30T15:00:00+0800",
   "generator": {
     "name": "spz2glb",
-    "version": "2.0.4",
+    "version": "2.0.5",
     "license": "MIT",
     "url": "https://github.com/spz-ecosystem/spz2glb"
   },
@@ -522,7 +522,7 @@ emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 
 附带的 `index.html` 提供完整功能演示：
 - **单文件转换**: 上传一个 `.spz` 文件，下载单个 `.glb`
-- **多文件队列**（`MAX_PARALLEL = 2`）: 拖拽或多选文件，最多 2 个并发处理。每个文件串行转换（SPZ→GLB）。
+- **多文件队列**（`MAX_PARALLEL = 1`）: 拖拽或多选任意数量文件排队，串行转换（SPZ→GLB）。WASM 转换器为单实例（预留输入缓冲区 + 互斥锁），并发上限为 1；排队等待不计入转换计时。
 - **支持 v3 和 v4**: gzip 压缩（v3）和 ZSTD 压缩（v4）SPZ 文件均可处理。
 - **JSON 报告导出**: 每个完成的转换可下载 JSON 报告，包含 SPZ/GLB/KHR 完整元数据和时间戳。
 - **CLI 兼容**: 导出的 JSON 报告可通过 `spz_verify --report <file.json>` 在 CLI 端验证。
