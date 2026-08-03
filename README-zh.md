@@ -25,7 +25,7 @@
 - **KHR 扩展合规**: 完整 `KHR_gaussian_splatting` 字段序列化（`kernel`、`colorSpace`、`sortingMethod`、`projection`）；嵌套 `KHR_gaussian_splatting_compression_spz_2` 携带完整元数据（`spzVersion`、`compression`、`coordinateSystem`）
 - **CLI 队列处理**: 内置文件系统队列（`--queue-add`/`--queue`/`--queue-status`/`--queue-clear`），支持 pending/processing/done/failed 四态管理
 - **JSON 转换报告**: 每次转换自动生成 JSON 报告，包含 SPZ/GLB/KHR 完整元数据与时间戳
-- **WASM 增强**: 预分配输入、显式输出释放、内存统计、compat/perf-lite 双档 + 运行时性能面板（11 维统计）
+- **WASM 增强**: 预分配输入、显式输出释放、内存统计、compat/perf-lite 双档 + 运行时性能面板（19 行统计）
 - **双端协同（双场景分工）**: 网页侧轻量交互与快速反馈；本地 CLI 侧重批处理、队列、大文件与重验证
 - **五层验证**: 结构验证 / 无损验证 / 解码一致性验证 / 元数据一致性验证 / ILV 扩展完整性验证 + 可选 `--report` JSON 报告校验
 - **跨平台**: Windows、Linux、macOS (x64 + ARM)
@@ -541,7 +541,7 @@ emmake cmake --build build_wasm --config Release --target spz_verify-wasm
 import { loadSpz2Glb } from './spz2glb_bindings.js';
 
 const api = await loadSpz2Glb('./spz2glb.wasm');
-const result = api.convert(spzUint8Array);
+const result = await api.convert(spzUint8Array);
 
 if (!result) throw new Error('转换失败');
 
@@ -554,7 +554,8 @@ console.log('峰值内存(MB):', (stats.peakUsageBytes / 1024 / 1024).toFixed(2)
 
 // 网页 Demo 还提供：
 // - JSON 转换报告：SPZ/GLB/KHR 完整元数据
-// - 运行时性能面板：11 维度统计
+// - 运行时性能面板：19 行统计（WASM 版本、构建/加载时间戳、SPZ 版本、分段计时、设备分档、内存统计、热池等）
+// - SPZ 头部预检（detectSpzVersion）+ 中英切换 + 日夜主题
 // - 多文件队列：支持拖拽选择和逐一下载
 
 result.release(); // 必须释放 WASM 输出缓冲
