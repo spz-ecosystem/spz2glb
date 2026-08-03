@@ -387,8 +387,8 @@
                     throw new Error('WASM 转换返回空结果');
                 }
 
-                // 直接用 WASM 内存视图（parse 只读 + Blob 构造同步复制，均在 release() 前完成）。
-                // 消灭 glbCopy 26.6MB JS 大对象拷贝 → V8 GC 压力减半，转换耗时波动收窄。
+                // 解析 GLB JSON（直接用 WASM 视图，避免 26MB JS 大对象拷贝；
+                // parseGlbJson 同步执行且只读复制，release() 前完成即可）
                 const glbBytes = glbResult.getBytesView();
                 glbInfo = parseGlbJson(glbBytes);
 
@@ -407,8 +407,8 @@
                     conversionMs,
                 });
 
-                // 保存 GLB 供下载（Blob 构造时同步复制数据，release() 后仍有效）
-                item.glbBlob = new Blob([glbBytes], { type: 'application/octet-stream' });
+                // 保存 GLB 供下载（toBlob 在 release 前同步复制，Blob 独立持有副本）
+                item.glbBlob = glbResult.toBlob('application/octet-stream');
 
                 success = true;
                 showStatus(`✅ ${file.name} 转换成功`, 'success');
