@@ -8,18 +8,38 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* 配色与门卫 (spz_gatekeeper) 统一：品牌紫 #6666ff + 浅蓝白渐变、白卡片、紫影 */
         :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
+            --primary: #6666ff;
+            --primary-dark: #5555ee;
             --success: #10b981;
             --error: #ef4444;
             --warning: #f59e0b;
-            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --card-bg: rgba(255, 255, 255, 0.95);
-            --text-primary: #1f2937;
-            --text-secondary: #6b7280;
-            --border-radius: 16px;
-            --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            --bg-gradient: linear-gradient(180deg, #f0f4ff 0%, #f8fafc 100%);
+            --card-bg: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --surface: #f8fafc;
+            --surface-2: #ffffff;
+            --border-soft: rgba(148, 163, 184, 0.2);
+            --border-line: rgba(148, 163, 184, 0.2);
+            --border-radius: 20px;
+            --shadow: 0 8px 32px rgba(102, 102, 255, 0.12);
+            --shadow-hover: 0 12px 40px rgba(102, 102, 255, 0.18);
+        }
+        /* 黑夜主题：覆盖 CSS 变量，UI 全部走 var() 自动跟随 */
+        [data-theme="dark"] {
+            --primary: #818cf8;
+            --primary-dark: #6666ff;
+            --bg-gradient: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            --card-bg: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --surface: #1e293b;
+            --surface-2: #0f172a;
+            --border-soft: rgba(148, 163, 184, 0.3);
+            --border-line: rgba(148, 163, 184, 0.3);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -39,6 +59,25 @@
             padding: 48px 40px;
         }
         .header { text-align: center; margin-bottom: 32px; }
+        /* 顶部工具栏：双语切换 + 日夜切换 */
+        .topbar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .icon-btn, .lang-btn {
+            border: 1px solid var(--border-soft);
+            background: var(--surface);
+            color: var(--text-primary);
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .icon-btn:hover, .lang-btn:hover { opacity: 0.8; }
         .header h1 {
             font-size: 32px;
             font-weight: 700;
@@ -48,14 +87,14 @@
         .header p { color: var(--text-secondary); font-size: 16px; }
 
         .drop-zone {
-            border: 2px dashed #d1d5db;
+            border: 2px dashed var(--border-soft);
             border-radius: 12px;
             padding: 32px;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s;
         }
-        .drop-zone:hover { border-color: var(--primary); background: rgba(99, 102, 241, 0.05); }
+        .drop-zone:hover { border-color: var(--primary); background: rgba(102, 102, 255, 0.05); }
         .drop-zone input { display: none; }
         .drop-icon { font-size: 48px; margin-bottom: 16px; }
         .drop-text { font-size: 16px; color: var(--text-primary); margin-bottom: 4px; }
@@ -74,7 +113,7 @@
             border-radius: 8px;
             text-align: center;
             font-size: 12px;
-            background: #f3f4f6;
+            background: var(--surface);
         }
         .queue-stat .count { font-size: 18px; font-weight: 700; }
         .queue-stat.pending .count { color: var(--warning); }
@@ -89,7 +128,7 @@
             align-items: center;
             justify-content: space-between;
             padding: 10px 12px;
-            background: #f9fafb;
+            background: var(--surface);
             border-radius: 8px;
             margin-bottom: 8px;
             font-size: 13px;
@@ -108,10 +147,11 @@
             margin-left: 8px;
             white-space: nowrap;
         }
-        .file-item .status-badge.queued { background: #fef3c7; color: #92400e; }
-        .file-item .status-badge.processing { background: #dbeafe; color: #1e40af; }
-        .file-item .status-badge.done { background: #d1fae5; color: #065f46; }
-        .file-item .status-badge.failed { background: #fee2e2; color: #991b1b; }
+        /* 状态徽章：半透明语义色，亮暗主题通吃（对齐门卫配色语义） */
+        .file-item .status-badge.queued { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+        .file-item .status-badge.processing { background: rgba(102, 102, 255, 0.15); color: var(--primary); }
+        .file-item .status-badge.done { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+        .file-item .status-badge.failed { background: rgba(239, 68, 68, 0.15); color: var(--error); }
 
         .file-item .actions {
             display: flex;
@@ -142,9 +182,9 @@
             margin-top: 12px;
             display: none;
         }
-        .status.loading { background: #fef3c7; color: var(--warning); }
-        .status.success { background: #d1fae5; color: var(--success); }
-        .status.error { background: #fee2e2; color: var(--error); }
+        .status.loading { background: rgba(245, 158, 11, 0.12); color: var(--warning); }
+        .status.success { background: rgba(16, 185, 129, 0.12); color: var(--success); }
+        .status.error { background: rgba(239, 68, 68, 0.12); color: var(--error); }
         .loading-spinner {
             display: inline-block;
             width: 14px;
@@ -172,8 +212,8 @@
         /* 性能面板 */
         .perf-panel {
             margin-top: 16px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: var(--surface);
+            border: 1px solid var(--border-line);
             border-radius: 10px;
             overflow: hidden;
             font-size: 12px;
@@ -185,46 +225,59 @@
             color: var(--text-secondary);
             user-select: none;
         }
-        .perf-panel summary:hover { background: #f1f5f9; }
+        .perf-panel summary:hover { background: var(--surface); }
         .perf-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1px;
-            background: #e2e8f0;
+            background: var(--border-line);
         }
         .perf-item {
             display: flex;
             justify-content: space-between;
             padding: 6px 14px;
-            background: #fff;
+            background: var(--surface-2);
         }
         .perf-item .label { color: var(--text-secondary); }
         .perf-item .value { font-weight: 600; color: var(--text-primary); font-family: monospace; }
         .perf-item.warn .value { color: var(--warning); }
         .perf-item.error .value { color: var(--error); }
+        /* 冷启动提示：v3 gzip 首次转换含 zlib 解压初始化，比后续转换慢 */
+        .coldstart-note {
+            margin: 0;
+            padding: 6px 14px;
+            background: rgba(245, 158, 11, 0.08);
+            border-top: 1px solid var(--border-line);
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
+            <div class="topbar">
+                <button id="themeToggle" class="icon-btn" title="切换主题 / Toggle theme">🌙</button>
+                <button id="langToggle" class="lang-btn">EN</button>
+            </div>
             <div class="header">
                 <h1>🌀 SPZ → GLB</h1>
-                <p>高性能 WebAssembly 在线转换 · 支持多文件队列</p>
+                <p data-i18n="subtitle">高性能 WebAssembly 在线转换 · 支持多文件队列</p>
             </div>
 
             <div class="drop-zone" id="dropZone">
                 <input type="file" id="fileInput" accept=".spz" multiple>
                 <div class="drop-icon">📁</div>
-                <div class="drop-text">点击或拖拽选择 SPZ 文件</div>
-                <div class="drop-hint">支持多文件批量选择</div>
+                <div class="drop-text" data-i18n="dropText">点击或拖拽选择 SPZ 文件</div>
+                <div class="drop-hint" data-i18n="dropHint">支持多文件批量选择</div>
             </div>
 
             <!-- 队列状态条 -->
             <div class="queue-bar" id="queueBar" style="display:none;">
-                <div class="queue-stat pending" id="qPending"><div class="count">0</div>待处理</div>
-                <div class="queue-stat processing" id="qProcessing"><div class="count">0</div>处理中</div>
-                <div class="queue-stat done" id="qDone"><div class="count">0</div>已完成</div>
-                <div class="queue-stat failed" id="qFailed"><div class="count">0</div>失败</div>
+                <div class="queue-stat pending" id="qPending"><div class="count">0</div><span data-i18n="qPending">待处理</span></div>
+                <div class="queue-stat processing" id="qProcessing"><div class="count">0</div><span data-i18n="qProcessing">处理中</span></div>
+                <div class="queue-stat done" id="qDone"><div class="count">0</div><span data-i18n="qDone">已完成</span></div>
+                <div class="queue-stat failed" id="qFailed"><div class="count">0</div><span data-i18n="qFailed">失败</span></div>
             </div>
 
             <!-- 文件列表 -->
@@ -234,8 +287,9 @@
 
             <!-- 性能面板 -->
             <details class="perf-panel" id="perfPanel" style="display:none">
-                <summary>📊 运行时状态</summary>
+                <summary data-i18n="perfTitle">📊 运行时状态</summary>
                 <div class="perf-grid" id="perfGrid"></div>
+                <div class="coldstart-note" data-i18n="coldStart">⚠ 首次转换含冷启动（gzip 解压初始化），之后会更快</div>
             </details>
         </div>
     </div>
@@ -243,6 +297,72 @@
     <script type="module">
         import { loadSpz2Glb, parseGlbJson, generateReportJson, detectSpzVersion, queueCounts } from './spz2glb_bindings.js';
         import SmartMemoryManager from './smart_memory.js';
+
+        // ── 双语 (i18n) + 日夜主题 ──
+        const I18N = {
+            zh: {
+                subtitle: '高性能 WebAssembly 在线转换 · 支持多文件队列',
+                dropText: '点击或拖拽选择 SPZ 文件',
+                dropHint: '支持多文件批量选择',
+                qPending: '待处理', qProcessing: '处理中', qDone: '已完成', qFailed: '失败',
+                perfTitle: '📊 运行时状态',
+                coldStart: '⚠ 首次转换含冷启动（gzip 解压初始化），之后会更快',
+                badge: { queued: '排队中', processing: '转换中', done: '已完成', failed: '失败' },
+                dlGlb: 'GLB', report: '📋 报告',
+                wasmVersion: 'WASM 版本', buildTime: '构建时间', loadStamp: '加载时间戳',
+                lastConversion: '最近转换', spzVersion: 'SPZ 版本',
+                wasmConvMs: 'WASM 转换耗时', totalMs: '总耗时', jsOverhead: 'JS 侧开销', result: '转换结果',
+                device: '设备类型', memPeak: '内存峰值', memCurrent: '当前内存',
+                allocCount: '分配次数', freeCount: '释放次数', allocFailed: '分配失败',
+                hotPool: '热池可用', workUsed: '工作区已用', workPeak: '工作区峰值', recLimit: '推荐上限',
+                tier: { low: '低端', medium: '中端', high: '高端' },
+                ok: '成功', fail: '失败',
+                loading: '正在加载 WASM 模块...',
+                loadOk: 'WASM 加载成功！',
+                loadFail: 'WASM 加载失败',
+                converting: '转换:', convertOk: '转换成功',
+                errNoHeader: '无法识别 SPZ 文件头（既非 v3 gzip 也非 v4 zstd/NGSP）',
+                errEmptyResult: 'WASM 转换返回空结果',
+                maxParallel: '最大并行', recFile: '建议文件',
+            },
+            en: {
+                subtitle: 'High-performance WebAssembly converter · Multi-file queue',
+                dropText: 'Click or drag to select SPZ files',
+                dropHint: 'Supports multi-file batch selection',
+                qPending: 'Queued', qProcessing: 'Processing', qDone: 'Done', qFailed: 'Failed',
+                perfTitle: '📊 Runtime status',
+                coldStart: '⚠ First conversion includes cold start (gzip init); later ones are faster',
+                badge: { queued: 'Queued', processing: 'Converting', done: 'Done', failed: 'Failed' },
+                dlGlb: 'GLB', report: '📋 Report',
+                wasmVersion: 'WASM version', buildTime: 'Build time', loadStamp: 'Load stamp',
+                lastConversion: 'Last conversion', spzVersion: 'SPZ version',
+                wasmConvMs: 'WASM convert ms', totalMs: 'Total ms', jsOverhead: 'JS overhead', result: 'Result',
+                device: 'Device', memPeak: 'Mem peak', memCurrent: 'Mem current',
+                allocCount: 'Allocations', freeCount: 'Frees', allocFailed: 'Alloc failures',
+                hotPool: 'Hot pool avail', workUsed: 'Work used', workPeak: 'Work peak', recLimit: 'Rec limit',
+                tier: { low: 'Low', medium: 'Medium', high: 'High' },
+                ok: 'OK', fail: 'FAILED',
+                loading: 'Loading WASM module...',
+                loadOk: 'WASM loaded!',
+                loadFail: 'WASM load failed',
+                converting: 'Converting:', convertOk: 'done',
+                errNoHeader: 'Unrecognized SPZ header (neither v3 gzip nor v4 zstd/NGSP)',
+                errEmptyResult: 'WASM conversion returned empty result',
+                maxParallel: 'Max parallel', recFile: 'Max file',
+            },
+        };
+        let lang = localStorage.getItem('spz2glb_lang') || 'zh';
+        let theme = localStorage.getItem('spz2glb_theme') || 'light';
+        const t = (key) => I18N[lang][key] ?? I18N.zh[key] ?? key;
+
+        function applyI18n() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                el.textContent = t(el.dataset.i18n);
+            });
+            document.getElementById('langToggle').textContent = lang === 'zh' ? 'EN' : '中文';
+            document.getElementById('themeToggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
+        document.documentElement.setAttribute('data-theme', theme);
 
         let spz2glb = null;
         let memManager = null;
@@ -297,7 +417,7 @@
 
                 const badge = document.createElement('span');
                 badge.className = 'status-badge ' + item.status;
-                const labels = { queued: '排队中', processing: '转换中', done: '已完成', failed: '失败' };
+                const labels = t('badge');
                 badge.textContent = labels[item.status] || item.status;
 
                 const actions = document.createElement('span');
@@ -305,13 +425,13 @@
 
                 if (item.status === 'done') {
                     const dlBtn = document.createElement('button');
-                    dlBtn.textContent = 'GLB';
+                    dlBtn.textContent = t('dlGlb');
                     dlBtn.addEventListener('click', () => downloadFile(item.glbBlob, item.file.name.replace(/\.spz$/i, '.glb')));
                     actions.appendChild(dlBtn);
 
                     const rptBtn = document.createElement('button');
                     rptBtn.className = 'report-btn';
-                    rptBtn.textContent = '📋 报告';
+                    rptBtn.textContent = t('report');
                     rptBtn.addEventListener('click', () => {
                         const blob = new Blob([item.reportJson], { type: 'application/json' });
                         downloadFile(blob, item.file.name.replace(/\.spz$/i, '.glb') + '.report.json');
@@ -320,7 +440,7 @@
                 } else if (item.status === 'failed') {
                     const rptBtn = document.createElement('button');
                     rptBtn.className = 'report-btn';
-                    rptBtn.textContent = '📋 报告';
+                    rptBtn.textContent = t('report');
                     rptBtn.addEventListener('click', () => {
                         const blob = new Blob([item.reportJson], { type: 'application/json' });
                         downloadFile(blob, item.file.name.replace(/\.spz$/i, '.glb') + '.report.json');
@@ -362,7 +482,7 @@
             let conversionMs = null;   // 纯 WASM 转换耗时（分段计时，定位波动源）
 
             try {
-                showStatus(`<span class="loading-spinner"></span>转换: ${file.name}`, 'loading');
+                showStatus(`<span class="loading-spinner"></span>${t('converting')} ${file.name}`, 'loading');
 
                 // SPZ 头部预检（转换前）：读文件头 64B，detectSpzVersion 按魔数识别
                 // v3 gzip (1F8B) / v4 zstd (NGSP)。非法文件提前报错，避免进入 WASM 转换。
@@ -370,7 +490,7 @@
                 const spzHead = new Uint8Array(await file.slice(0, Math.min(64, file.size)).arrayBuffer());
                 item.spzDetect = detectSpzVersion(spzHead);
                 if (item.spzDetect.version === 0) {
-                    throw new Error('无法识别 SPZ 文件头（既非 v3 gzip 也非 v4 zstd/NGSP）');
+                    throw new Error(t('errNoHeader'));
                 }
 
                 const tConv = performance.now();
@@ -378,7 +498,7 @@
                 conversionMs = performance.now() - tConv;
 
                 if (!glbResult) {
-                    throw new Error('WASM 转换返回空结果');
+                    throw new Error(t('errEmptyResult'));
                 }
 
                 // 解析 GLB JSON（直接用 WASM 视图，避免 26MB JS 大对象拷贝；
@@ -403,7 +523,7 @@
                 item.glbBlob = glbResult.toBlob('application/octet-stream');
 
                 success = true;
-                showStatus(`✅ ${file.name} 转换成功`, 'success');
+                showStatus(`✅ ${file.name} ${t('convertOk')}`, 'success');
 
                 // 打包完成自动下载：GLB + JSON 报告
                 // （浏览器可能拦截无手势自动下载，需在设置中允许自动下载）
@@ -508,27 +628,27 @@
                 ? window.__SPZ_BUILD_TIME__ : '—';
 
             const rows = [
-                { label: 'WASM 版本', value: version },
-                { label: '构建时间', value: buildTime },
-                { label: '加载时间戳', value: window.spzLoadStamp
+                { label: t('wasmVersion'), value: version },
+                { label: t('buildTime'), value: buildTime },
+                { label: t('loadStamp'), value: window.spzLoadStamp
                     ? new Date(window.spzLoadStamp).toLocaleTimeString('zh-CN', { hour12: false }) + '.' + String(window.spzLoadStamp % 1000).padStart(3, '0')
                     : '—' },
-                { label: '最近转换', value: lastConversion ? lastConversion.name : '—' },
-                { label: 'SPZ 版本', value: lastConversion && lastConversion.spzVersion ? `v${lastConversion.spzVersion} (${lastConversion.compression})` : '—' },
-                { label: 'WASM 转换耗时', value: lastConversion && lastConversion.conversionMs != null ? `${Math.round(lastConversion.conversionMs)} ms` : '—' },
-                { label: '总耗时', value: lastConversion ? `${Math.round(lastConversion.timingMs)} ms` : '—' },
-                { label: 'JS 侧开销', value: lastConversion && lastConversion.conversionMs != null ? `${Math.round(Math.max(0, lastConversion.timingMs - lastConversion.conversionMs))} ms` : '—' },
-                { label: '转换结果', value: lastConversion ? (lastConversion.success ? '成功' : '失败') : '—' },
-                { label: '设备类型', value: `${info.device.type} (${info.device.tier})` },
-                { label: '内存峰值', value: formatSize(stats.peakUsageBytes) },
-                { label: '当前内存', value: formatSize(stats.currentUsageBytes) },
-                { label: '分配次数', value: stats.totalAllocations.toLocaleString() },
-                { label: '释放次数', value: stats.totalFrees.toLocaleString() },
-                { label: '分配失败', value: stats.failedAllocations.toLocaleString(), cls: stats.failedAllocations > 0 ? 'error' : '' },
-                { label: '热池可用', value: stats.hotAvailable.toLocaleString() },
-                { label: '工作区已用', value: `${stats.workUsed}/${stats.workCapacity}`, cls: stats.workUsed > stats.workCapacity * 0.9 ? 'warn' : '' },
-                { label: '工作区峰值', value: stats.workPeak.toLocaleString() },
-                { label: '推荐上限', value: `${info.recommendedMaxFileSize}MB` },
+                { label: t('lastConversion'), value: lastConversion ? lastConversion.name : '—' },
+                { label: t('spzVersion'), value: lastConversion && lastConversion.spzVersion ? `v${lastConversion.spzVersion} (${lastConversion.compression})` : '—' },
+                { label: t('wasmConvMs'), value: lastConversion && lastConversion.conversionMs != null ? `${Math.round(lastConversion.conversionMs)} ms` : '—' },
+                { label: t('totalMs'), value: lastConversion ? `${Math.round(lastConversion.timingMs)} ms` : '—' },
+                { label: t('jsOverhead'), value: lastConversion && lastConversion.conversionMs != null ? `${Math.round(Math.max(0, lastConversion.timingMs - lastConversion.conversionMs))} ms` : '—' },
+                { label: t('result'), value: lastConversion ? (lastConversion.success ? t('ok') : t('fail')) : '—' },
+                { label: t('device'), value: `${info.device.type} (${t('tier')[info.device.tier] || info.device.tier})` },
+                { label: t('memPeak'), value: formatSize(stats.peakUsageBytes) },
+                { label: t('memCurrent'), value: formatSize(stats.currentUsageBytes) },
+                { label: t('allocCount'), value: stats.totalAllocations.toLocaleString() },
+                { label: t('freeCount'), value: stats.totalFrees.toLocaleString() },
+                { label: t('allocFailed'), value: stats.failedAllocations.toLocaleString(), cls: stats.failedAllocations > 0 ? 'error' : '' },
+                { label: t('hotPool'), value: stats.hotAvailable.toLocaleString() },
+                { label: t('workUsed'), value: `${stats.workUsed}/${stats.workCapacity}`, cls: stats.workUsed > stats.workCapacity * 0.9 ? 'warn' : '' },
+                { label: t('workPeak'), value: stats.workPeak.toLocaleString() },
+                { label: t('recLimit'), value: `${info.recommendedMaxFileSize}MB` },
             ];
 
             grid.innerHTML = rows.map(r =>
@@ -541,10 +661,10 @@
             const info = memManager.getInfo();
 
             const deviceIcon = info.device.isMobile ? '📱' : '💻';
-            const tierLabel = { low: '低端', medium: '中端', high: '高端' }[info.device.tier];
+            const tierLabel = t('tier')[info.device.tier] || info.device.tier;
 
-            showStatus(`<span class="loading-spinner"></span>正在加载 WASM 模块...<br>
-                <small style="opacity:0.7">${deviceIcon} ${info.device.type} (${tierLabel}) | 推荐 ≤${info.recommendedMaxFileSize}MB</small>`, 'loading');
+            showStatus(`<span class="loading-spinner"></span>${t('loading')}<br>
+                <small style="opacity:0.7">${deviceIcon} ${info.device.type} (${tierLabel}) | ${t('recFile')} ≤${info.recommendedMaxFileSize}MB</small>`, 'loading');
 
             try {
                 const memConfig = memManager.getWasmMemoryConfig();
@@ -553,30 +673,45 @@
                 window.spzLoadStamp = Date.now();
                 spz2glb = await loadSpz2Glb('./spz2glb.wasm', { memory: memConfig.memory });
                 renderPerfPanel();
-                showStatus(`✅ WASM 加载成功！版本: ${spz2glb.getVersion()} · wasm@${window.spzLoadStamp}<br>
-                    <small style="opacity:0.7">最大并行: ${MAX_PARALLEL} | 建议文件 ≤ ${info.recommendedMaxFileSize}MB</small>`, 'success');
+                showStatus(`✅ ${t('loadOk')} 版本: ${spz2glb.getVersion()} · wasm@${window.spzLoadStamp}<br>
+                    <small style="opacity:0.7">${t('maxParallel')}: ${MAX_PARALLEL} | ${t('recFile')} ≤ ${info.recommendedMaxFileSize}MB</small>`, 'success');
                 setTimeout(() => {
                     if (queue.every(item => item.status !== 'queued' && item.status !== 'processing')) {
                         document.getElementById('statusBox').style.display = 'none';
                     }
                 }, 3000);
             } catch (err) {
-                showStatus('❌ WASM 加载失败: ' + err.message, 'error');
+                showStatus('❌ ' + t('loadFail') + ': ' + err.message, 'error');
             }
         }
 
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
 
+        // 顶部工具栏：日夜切换 + 双语切换（localStorage 持久化）
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            theme = theme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('spz2glb_theme', theme);
+            applyI18n();
+        });
+        document.getElementById('langToggle').addEventListener('click', () => {
+            lang = lang === 'zh' ? 'en' : 'zh';
+            localStorage.setItem('spz2glb_lang', lang);
+            applyI18n();
+            renderFileList();
+            renderPerfPanel();
+        });
+
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', e => {
             e.preventDefault();
             dropZone.style.borderColor = 'var(--primary)';
         });
-        dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#d1d5db'; });
+        dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = 'var(--border-soft)'; });
         dropZone.addEventListener('drop', e => {
             e.preventDefault();
-            dropZone.style.borderColor = '#d1d5db';
+            dropZone.style.borderColor = 'var(--border-soft)';
             const files = e.dataTransfer.files;
             if (files.length > 0) addFilesToQueue(files);
         });
@@ -586,6 +721,7 @@
             fileInput.value = '';
         });
 
+        applyI18n();
         init();
     </script>
 </body>
