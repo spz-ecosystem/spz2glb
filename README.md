@@ -524,9 +524,15 @@ The bundled `index.html` provides a full-featured demo:
 - **Single-file conversion**: Upload one `.spz` file, download a single `.glb`
 - **Multi-file queue** (`MAX_PARALLEL = 1`): Drag-drop or multi-select any number of files; they are queued and processed serially (SPZ→GLB). The WASM converter is single-instance (reserved input buffer + mutex), so concurrency is capped at 1; queued files wait without contaminating their conversion timing.
 - **Supports v3 and v4**: Gzip-compressed (v3) and ZSTD-compressed (v4) SPZ files.
+- **SPZ header pre-check**: Before converting, the JS-side `detectSpzVersion` reads the magic bytes (v3 `1F8B` / v4 `NGSP`) and rejects invalid files early — no wasted WASM conversion. The panel also shows the detected SPZ version (v3 gzip / v4 zstd) of the last conversion.
+- **Segmented timing**: The performance panel splits WASM conversion time vs JS-side overhead, pinpointing where time actually goes.
+- **i18n (zh/en) + dark theme**: Top toolbar language toggle and day/night theme switching, both persisted in localStorage.
+- **Cold-start note**: The panel notes that the first conversion includes a cold start (v3 gzip first-run zlib decompression init) and later ones are faster.
+- **Build/load timestamp + cache-busting**: The panel shows the CI build time and WASM load timestamp so you can confirm you are not on a stale cached binary.
+- **Auto-download & queue auto-clean**: Completed conversions auto-download their GLB + JSON report and auto-clean the queue after a delay; finished items slide out.
 - **JSON report export**: Each completed conversion produces a downloadable JSON report with full SPZ/GLB/KHR metadata and timestamp.
 - **CLI compatibility**: Exported JSON reports can be validated by `spz_verify --report <file.json>`.
-- **Runtime performance panel**: Auto-displayed 11-dimension telemetry (WASM version, device info, memory stats, alloc/free/fail counts, recommended file size limit).
+- **Runtime performance panel**: Auto-displayed telemetry (WASM version, device info, memory stats, alloc/free/fail counts, hot pool, work area usage, recommended file size limit, SPZ version).
 - **Smart memory allocation**: Device-aware tiering automatically adjusts memory budget.
 
 ### JavaScript API
